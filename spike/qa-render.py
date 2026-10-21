@@ -58,12 +58,13 @@ def default_transp(m):
 
 
 # 场景背景：除画面外还带环境光修正（amb 倍率 + 色调）
+# table_y = 桌面/地面在画面高度上的位置（0–1）；None 表示该场景没有可放置的表面
 BACKGROUNDS = {
-    "dark":    dict(dark=True,  amb=0.88, amb_t=np.array([0.80, 0.88, 1.00])),
-    "lab":     dict(dark=False, amb=1.14, amb_t=np.array([0.99, 1.00, 1.04])),
-    "nature":  dict(dark=False, amb=1.18, amb_t=np.array([1.02, 1.00, 0.93])),
-    "cabinet": dict(dark=True,  amb=0.82, amb_t=np.array([1.00, 0.93, 0.80])),
-    "paper":   dict(dark=False, amb=1.28, amb_t=np.array([1.03, 1.01, 0.97])),
+    "dark":    dict(dark=True,  amb=0.88, amb_t=np.array([0.80, 0.88, 1.00]), table_y=None),
+    "lab":     dict(dark=False, amb=1.14, amb_t=np.array([0.99, 1.00, 1.04]), table_y=0.74),
+    "nature":  dict(dark=False, amb=1.18, amb_t=np.array([1.02, 1.00, 0.93]), table_y=0.66),
+    "cabinet": dict(dark=True,  amb=0.82, amb_t=np.array([1.00, 0.93, 0.80]), table_y=0.80),
+    "paper":   dict(dark=False, amb=1.28, amb_t=np.array([1.03, 1.01, 0.97]), table_y=0.84),
 }
 
 
@@ -83,30 +84,88 @@ def draw_bg(kind, W, H):
             t = y / H
             c = tuple(int(250 + (239 - 250) * t) for _ in range(3))
             dr.line([(0, y), (W, y)], fill=c)
+        sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        ds = ImageDraw.Draw(sh)
+        for i in range(int(H * 0.2)):
+            a = int(36 * i / max(1, H * 0.2))
+            ds.line([(0, int(H * 0.8) + i), (W, int(H * 0.8) + i)], fill=(120, 105, 80, a))
+        im = Image.alpha_composite(im.convert("RGBA"), sh).convert("RGB")
     elif kind == "lab":
-        # 墙面 + 实验台面 + 记录纸网格（JS 侧线色 rgba(90,120,150,.10)）
-        dr.rectangle([0, 0, W, int(H * 0.78)], fill=(222, 231, 240))
-        dr.rectangle([0, int(H * 0.78), W, H], fill=(163, 179, 197))
+        # 墙 + 记录纸网格（只画墙上）+ 实验台面（带前缘厚度）+ 下方压暗
+        ty = int(H * 0.74)
+        for y in range(ty):
+            t = y / max(1, ty)
+            dr.line([(0, y), (W, y)], fill=tuple(int(238 + (195 - 238) * t) if t < 0.62 else
+                                                 int(219 + (195 - 219) * (t - 0.62) / 0.38) for _ in range(3)))
         st = max(26, W // 26)
         for x in range(0, W, st):
-            dr.line([(x, 0), (x, H)], fill=(90, 120, 150, 26), width=1)
-        for y in range(0, H, st):
+            dr.line([(x, 0), (x, ty)], fill=(90, 120, 150, 26), width=1)
+        for y in range(0, ty, st):
             dr.line([(0, y), (W, y)], fill=(90, 120, 150, 26), width=1)
-        dr.line([(0, int(H * 0.78)), (W, int(H * 0.78))], fill=(255, 255, 255, 128), width=1)
+        dr.rectangle([0, ty, W, H], fill=(185, 198, 214))
+        dr.rectangle([0, ty, W, ty + int(H * 0.016)], fill=(105, 121, 141))
+        dr.line([(0, ty), (W, ty)], fill=(255, 255, 255, 140), width=1)
+        for i in range(int(H * 0.1)):
+            a = int(56 * i / max(1, H * 0.1)
+                    )
+            dr.line([(0, int(H * 0.9) + i), (W, int(H * 0.9) + i)], fill=(20, 30, 45, a))
     elif kind == "nature":
-        # 天空（上 62%）+ 压低远山 + 地面（66% 以下）
-        dr.rectangle([0, 0, W, int(H * 0.62)], fill=(94, 166, 221))
-        dr.rectangle([0, int(H * 0.62), W, H], fill=(169, 207, 232))
+        # 天空 + 压低远山 + 草地（地面 + 横向浅纹）
+        gy = int(H * 0.66)
+        for y in range(gy):
+            t = y / max(1, gy)
+            if t < 0.7:
+                r, g, b = int(94 + (169 - 94) * t / 0.7), int(166 + (207 - 166) * t / 0.7), int(221 + (232 - 221) * t / 0.7)
+            else:
+                tt = (t - 0.7) / 0.3
+                r, g, b = int(169 + (227 - 169) * tt), int(207 + (236 - 207) * tt), int(232 + (223 - 232) * tt)
+            dr.line([(0, y), (W, y)], fill=(r, g, b))
         pts = [(int(W * i / 5), int(H * (0.54 + 0.06 * math.sin(i * 1.7) + 0.03 * math.cos(i * 2.9))))
                for i in range(6)]
-        dr.polygon(pts + [(W, int(H * 0.66)), (0, int(H * 0.66))], fill=(74, 102, 86, 87))
-        dr.rectangle([0, int(H * 0.66), W, H], fill=(93, 109, 71))
+        dr.polygon(pts + [(W, gy), (0, gy)], fill=(74, 102, 86, 87))
+        for y in range(gy, H):
+            t = (y - gy) / max(1, H - gy)
+            if t < 0.35:
+                tt = t / 0.35
+                r, g, b = int(125 + (104 - 125) * tt), int(142 + (120 - 142) * tt), int(86 + (74 - 86) * tt)
+            else:
+                tt = (t - 0.35) / 0.65
+                r, g, b = int(104 + (61 - 104) * tt), int(120 + (72 - 120) * tt), int(74 + (47 - 74) * tt)
+            dr.line([(0, y), (W, y)], fill=(r, g, b))
+        for i in range(7):
+            y = gy + (H - gy) * (0.12 + 0.13 * i) + (6 if i % 2 else -6)
+            dr.line([(0, int(y)), (W, int(y))], fill=(255, 255, 255, 26), width=1)
     elif kind == "cabinet":
         dr.rectangle([0, 0, W, H], fill=(11, 9, 6))
         dr.ellipse([int(-W * 0.3), int(-H * 0.5), int(W * 1.3), int(H * 0.6)], fill=(58, 46, 30))
-        dr.rectangle([0, int(H * 0.80), W, H], fill=(31, 25, 18))
-        dr.line([(0, int(H * 0.80)), (W, int(H * 0.80))], fill=(255, 220, 160, 41), width=1)
+        sy = int(H * 0.80)
+        dr.rectangle([0, sy, W, H], fill=(31, 25, 18))
+        dr.rectangle([0, sy, W, sy + int(H * 0.012)], fill=(36, 26, 18))
+        dr.line([(0, sy), (W, sy)], fill=(255, 220, 160, 51), width=1)
+        for i in range(9):
+            y = sy + (H - sy) * (0.18 + 0.1 * i)
+            a = max(0, int(51 - i * 10))
+            dr.line([(0, int(y)), (W, int(y))], fill=(255, 220, 170, a), width=1)
+        vg = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        dv = ImageDraw.Draw(vg)
+        cx, cy = W // 2, int(H * 0.46)
+        r0, r1 = min(W, H) * 0.25, max(W, H) * 0.78
+        for rr in range(int(r1), int(r0), -8):
+            a = int(140 * (rr - r0) / max(1, r1 - r0))
+            dv.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=(0, 0, 0, min(140, a)), width=9)
+        im = Image.alpha_composite(im.convert("RGBA"), vg).convert("RGB")
     return im
+
+
+def draw_contact_shadow(dr, cx, floor_y, rx):
+    """接触阴影：几圈同心椭圆由宽淡到窄浓叠出来（复刻 demo 的 drawContactShadow）"""
+    ry = max(3, rx * 0.20)
+    for i in range(1, 7):
+        k = i / 6
+        sc = 1.10 - 0.16 * k
+        a = int(255 * (0.020 + 0.030 * k))
+        dr.ellipse([cx - rx * sc, floor_y - ry * sc + ry * 0.16,
+                    cx + rx * sc, floor_y + ry * sc + ry * 0.16], fill=(0, 0, 0, a))
 
 
 INCL_MAT = {
@@ -130,15 +189,15 @@ INCL_SHAPES = {
 
 INCLUSIONS = {
     "none":     dict(zh="无", note="当前无内含物。"),
-    "rutile":   dict(zh="金红石针", note="金黄针状金红石，石英中最常见的包体。", parts=[dict(shape="needle", n=10, col=(0.87, 0.69, 0.27), mat="solid", alpha=0.96, orient="c", ln=(0.45, 1.05), thk=0.022)]),
-    "tourm":    dict(zh="电气石微晶", note="黑色电气石小晶体。", parts=[dict(shape="octa", n=4, col=(0.09, 0.11, 0.14), mat="solid", alpha=0.97, size=(0.07, 0.14))]),
-    "pyrite":   dict(zh="黄铁矿微晶", note="立方体黄铁矿小晶，萤石里的经典包体。", parts=[dict(shape="cube", n=5, col=(0.80, 0.70, 0.34), mat="metal", alpha=0.97, size=(0.06, 0.11))]),
-    "bubble":   dict(zh="气泡", note="球形气包体：亮斑小而集中。", parts=[dict(shape="ico", n=12, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.035, 0.085))]),
+    "rutile":   dict(zh="金红石针", note="金黄针状金红石，石英中最常见的包体。", parts=[dict(shape="needle", n=10, col=(0.87, 0.69, 0.27), mat="solid", alpha=0.96, orient="c", ln=(0.60, 1.30), thk=0.030)]),
+    "tourm":    dict(zh="电气石微晶", note="黑色电气石小晶体。", parts=[dict(shape="octa", n=4, col=(0.62, 0.68, 0.76), mat="solid", alpha=0.97, size=(0.16, 0.30))]),
+    "pyrite":   dict(zh="黄铁矿微晶", note="立方体黄铁矿小晶，萤石里的经典包体。", parts=[dict(shape="cube", n=5, col=(0.88, 0.79, 0.45), mat="metal", alpha=0.97, size=(0.14, 0.26))]),
+    "bubble":   dict(zh="气泡", note="球形气包体：亮斑小而集中。", parts=[dict(shape="ico", n=12, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.075, 0.150))]),
     "fluid":    dict(zh="多相包体", note="气 + 液 + 微晶同处一个愈合空腔。", parts=[
-        dict(shape="ico", n=5, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.045, 0.075)),
-        dict(shape="octa", n=2, col=(0.16, 0.22, 0.28), mat="solid", alpha=0.96, size=(0.03, 0.06)),
-        dict(shape="needle", n=3, col=(0.86, 0.70, 0.30), mat="solid", alpha=0.94, ln=(0.10, 0.22), thk=0.010)]),
-    "fracture": dict(zh="愈合裂隙", note="薄片状愈合裂隙：银白、反光强。", parts=[dict(shape="plate", n=3, col=(0.84, 0.89, 0.94), mat="solid", alpha=0.55, size=(0.16, 0.30))]),
+        dict(shape="ico", n=5, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.085, 0.135)),
+        dict(shape="octa", n=2, col=(0.58, 0.66, 0.74), mat="solid", alpha=0.96, size=(0.07, 0.12)),
+        dict(shape="needle", n=3, col=(0.86, 0.70, 0.30), mat="solid", alpha=0.94, ln=(0.18, 0.38), thk=0.014)]),
+    "fracture": dict(zh="愈合裂隙", note="薄片状愈合裂隙：银白、反光强。", parts=[dict(shape="plate", n=3, col=(0.88, 0.92, 0.96), mat="solid", alpha=0.72, size=(0.24, 0.44))]),
 }
 
 
@@ -336,7 +395,8 @@ STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0)}
 
 
 def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striations=True,
-           alpha=None, inclusion=None, dens=0.6, light=(-25, 38)):
+           alpha=None, inclusion=None, dens=0.6, light=(-25, 38), yaw=0.0, pitch=0.0,
+           indiv=None, on_table=False):
     D = load()
     m = next(x for x in D["minerals"] if x["id"] == mineral_id)
     hab = next(x for x in m["habits"] if x["id"] == habit_id)
@@ -344,6 +404,8 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
     P = np.array(v["v"], dtype=float).reshape(-1, 3)
     faces = []
     for fi, loop in enumerate(v["f"]):
+        if indiv is not None and v["indiv"][fi] != indiv:
+            continue
         pts = P[loop]
         n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
         n = n / (np.linalg.norm(n) + 1e-12)
@@ -365,6 +427,10 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
     q = Q_VIEW
     if hab.get("view") and hab["view"].get("yaw") is not None:
         q = q_mul(Q_VIEW, q_axis(0, 0, 1, math.radians(hab["view"]["yaw"])))
+        q = q / np.linalg.norm(q)
+    if yaw or pitch:
+        q = q_mul(q, q_axis(0, 0, 1, math.radians(yaw)))
+        q = q_mul(q, q_axis(1, 0, 0, math.radians(pitch)))
         q = q / np.linalg.norm(q)
     R = q_mat(q)
 
@@ -400,23 +466,30 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         k = FOC / max(z, 0.4)
         return (cx + wp[0] * k, cy - wp[1] * k)
 
-    # 内含物画在背景之上、晶体之下（与 JS 的 painter 顺序一致：
-    # 晶面整体以 alpha 盖住包体，所以通透度越低越看得清）
-    if inc and mat["alpha"] < 0.995:
-        inc_items = []
-        for f in inc:
-            wn = R @ f["n"]
-            cw = R @ f["c"]
-            if float(np.dot(wn, eye - cw)) <= 0:
-                continue
-            inc_items.append((cw[2], f, wn, cw))
-        inc_items.sort(key=lambda t: -t[0])
-        di = ImageDraw.Draw(bgim, "RGBA")
-        for _, f, wn, cw in inc_items:
-            col = shade(f["col"], wn, cw, eye, INCL_MAT[f["mat"]])
-            pts = [proj(p) for p in f["pts"]]
-            fill = tuple(int(c * 255) for c in col) + (int(f["alpha"] * 255),)
-            di.polygon(pts, fill=fill, outline=fill, width=1)
+    # ── 放在桌面上：底边贴到桌面线 + 接触阴影（先量外框，太高就整体缩小）──
+    table_y = BACKGROUNDS[bg]["table_y"] if on_table else None
+    if table_y is not None:
+        allwp = [R @ p for p in P]
+
+        def _xy(wp, sc=1.0):
+            k = FOC / max(DIST - wp[2], 0.4) * sc
+            return (cx + wp[0] * k, cy - wp[1] * k)
+        floor_y = table_y * H
+        ys = [_xy(wp)[1] for wp in allwp]
+        half = (max(ys) - min(ys)) / 2
+        room = (floor_y - H * 0.05) / 2                  # 顶部留 5% 余量
+        sc = min(1.0, room / half) if half > 0 else 1.0
+        xys = [_xy(wp, sc) for wp in allwp]
+        cy = floor_y - max(y for _, y in xys)            # 最低顶点贴到桌面线
+        draw_contact_shadow(dr, (min(x for x, _ in xys) + max(x for x, _ in xys)) / 2,
+                            floor_y, max(6.0, (max(x for x, _ in xys) - min(x for x, _ in xys)) * 0.52))
+        # 缩小/平移后 proj 也要跟着变
+        _proj0 = proj
+
+        def proj(p, _sc=sc, _f=_proj0):                 # noqa: F811
+            wp = R @ p
+            k = FOC / max(DIST - wp[2], 0.4) * _sc
+            return (cx + wp[0] * k, cy - wp[1] * k)
 
     items = []
     two_sided = any(f["clip"] for f in faces) or not v["closed"]
@@ -486,12 +559,32 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
                     continue
                 dr.line([pts[i], pts[(i + 1) % len(f["loop"])]],
                         fill=(12, 22, 34, 150 if front else 55), width=SS)
-    # 晶面画在透明层上，再按 mat.alpha 整体盖到「背景+包体」之上
+    # 晶面画在透明层上，再按 mat.alpha 整体盖到「背景+阴影」之上
     # （JS 里是逐面 globalAlpha，等效于整块半透明）
     if mat["alpha"] < 0.995:
         a = img.split()[3].point(lambda v: int(v * mat["alpha"]))
         img.putalpha(a)
     bgim.paste(img, (0, 0), img)
+    # 内含物最后画：在晶体之上，可见度系数 k = 0.30 + 0.70*(1 - alpha)
+    # （旧版把包体画在背景层，会被半透明晶体整体吃掉 45%，这就是"内含物看不见"的根因）
+    if inc and mat["alpha"] < 0.995:
+        inc_items = []
+        for f in inc:
+            wn = R @ f["n"]
+            cw = R @ f["c"]
+            if float(np.dot(wn, eye - cw)) <= 0:
+                continue
+            inc_items.append((cw[2], f, wn, cw))
+        inc_items.sort(key=lambda t: -t[0])
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        do = ImageDraw.Draw(ov, "RGBA")
+        k = 0.30 + 0.70 * (1 - mat["alpha"])
+        for _, f, wn, cw in inc_items:
+            col = shade(f["col"], wn, cw, eye, INCL_MAT[f["mat"]])
+            pts = [proj(p) for p in f["pts"]]
+            fill = tuple(int(c * 255) for c in col) + (int(min(1.0, f["alpha"] * k) * 255),)
+            do.polygon(pts, fill=fill, outline=fill, width=1)
+        bgim.paste(ov, (0, 0), ov)
     return bgim.resize((w, h), Image.LANCZOS)
 
 
@@ -602,6 +695,46 @@ if __name__ == "__main__":
                     fill=(205, 214, 228), font=fnt)
         out.save("render/qa-light.png")
         print("saved render/qa-light.png")
+    elif mode == "twin":
+        # 双晶在多个旋转角度下的外形：检查两个个体是否始终连成一体
+        tiles = [
+            ("quartz", "japan-twin", "1111", None),
+            ("quartz", "japan-twin", "1111", 0),
+            ("fluorite", "spinel-twin", "1", None),
+            ("fluorite", "spinel-twin", "1", 0),
+        ]
+        T = 360
+        yaws = [0, 45, 90, 135]
+        out = Image.new("RGB", (len(yaws) * T, len(tiles) * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for r, (mi, hi, mk, iv) in enumerate(tiles):
+            for c, yw in enumerate(yaws):
+                im = render(mi, hi, mk, T, T, luster="glass", yaw=yw, indiv=iv)
+                out.paste(im, (c * T, r * T))
+                lab = f"{mi} {hi}" + (f" 仅个体{'A' if iv == 0 else 'B'}" if iv is not None else " 双晶")
+                dr.text((c * T + 12, r * T + 8), f"{lab} yaw={yw}",
+                        fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-twin.png")
+        print("saved render/qa-twin.png")
+    elif mode == "table":
+        # 「放在桌面上」：五套场景 × 贴合 + 接触阴影，检查是否浮空/是否被切顶
+        T = 380
+        tiles = [
+            ("fluorite", "cube", "1", "lab", "萤石 · 实验台"),
+            ("quartz", "prismatic", "111", "nature", "石英 · 草地"),
+            ("fluorite", "spinel-twin", "1", "cabinet", "萤石尖晶石律 · 藏品柜"),
+            ("quartz", "japan-twin", "1111", "paper", "石英日本律 · 纸面"),
+        ]
+        out = Image.new("RGB", (2 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (mi, hi, mk, bgk, lab) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster="glass", bg=bgk, on_table=True)
+            out.paste(im, ((i % 2) * T, (i // 2) * T))
+            dr.text(((i % 2) * T + 12, (i // 2) * T + 8), lab, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-table.png")
+        print("saved render/qa-table.png")
     elif mode == "sheet":
         tiles = [
             ("fluorite", "spinel-twin", "1", "glass"),

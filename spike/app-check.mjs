@@ -89,12 +89,14 @@ run(`selectMineral("quartz"); state.habitId = "prismatic"; state.mask = 7; rebui
 check("石英标准柱状 18 面", run(`GEO.faces.length`) === 18, String(run(`GEO.faces.length`)));
 check("r 与 z 是不同单形", run(`new Set(GEO.faces.map(f=>f.form)).size`) === 3);
 
-// 隐藏两个单形 → 剩柱面，必须是完整六方柱（6 个四边形）
+// 隐藏两个单形 → 只剩六方柱。柱是开形（没有上下底面），必须靠补盖面才能画出来
 run(`state.mask = 1; rebuildGeometry(); draw();`);
 const nf = run(`GEO.faces.length`);
 const quads = run(`GEO.faces.filter(f=>f.pts.length===4).length`);
-check("只看柱面 = 完整六棱柱 6 面", nf === 6 && quads === 6, `faces=${nf} quads=${quads}`);
-check("隐藏后按双面渲染（几何闭合判断）", run(`!variant().closed`) === true || nf === 6);
+const caps = run(`GEO.faces.filter(f=>f.clip===1).length`);
+const onlyPrism = run(`new Set(GEO.faces.filter(f=>f.clip!==1).map(f=>f.form)).size`) === 1;
+check("只看柱面 = 六棱柱 6 个侧面 + 2 个补盖（开形）", nf === 8 && quads === 6 && caps === 2 && onlyPrism, `faces=${nf} quads=${quads} caps=${caps}`);
+check("柱面单独存在时是不闭合开形", run(`!variant().closed`) === true);
 
 // 柱 + 一个菱面体
 run(`state.mask = 3; rebuildGeometry(); draw();`);
@@ -104,6 +106,37 @@ check("柱 + r = 12 面", run(`GEO.faces.length`) === 12, String(run(`GEO.faces.
 run(`selectMineral("quartz"); state.habitId = "japan-twin"; state.mask = 7; rebuildGeometry(); draw();`);
 check("日本律双晶面数与数据一致（并集，≥36 面）", run(`GEO.faces.length`) === run(`variant().counts.f`) && run(`variant().counts.f`) >= 36, String(run(`GEO.faces.length`)));
 check("两个个体都存在", run(`new Set(GEO.faces.map(f=>f.indiv)).size`) === 2);
+check("日本律双晶夹角 = 84°33′（84.55°，文献值）", Math.abs(run(`habit().twin.angle`) - 84.55) < 1e-9, String(run(`habit().twin.angle`)));
+
+// 萤石尖晶石律：两个立方体沿 [111] 互相穿插（贯穿双晶，不是接触双晶）
+run(`selectMineral("fluorite"); state.habitId = "spinel-twin"; state.mask = 1; rebuildGeometry(); draw();`);
+check("萤石尖晶石律是贯穿双晶（mode=axis, axis=[111]）",
+  run(`habit().twin.mode`) === "axis" && JSON.stringify(run(`habit().twin.axis`)) === "[1,1,1]",
+  JSON.stringify(run(`habit().twin`)));
+check("萤石尖晶石律双晶面数 ≥ 24（两块穿插后表面被切碎）", run(`GEO.faces.length`) >= 24, String(run(`GEO.faces.length`)));
+check("萤石尖晶石律 <100> 夹角 109°28′（arccos(−1/3)）", Math.abs(run(`habit().twin.angle`) - 109.4712) < 0.01, String(run(`habit().twin.angle`)));
+
+// 「放在桌面上」：贴合桌面线 + 接触阴影（fitToTable 是纯函数，可直接单测）
+{
+  const base = `{ cx: 640, cy: 430, scale: 1, vw: 1280, vh: 860, pan: [0,0] }`;
+  const boxOf = (expr) => run(`(() => { const o = ${expr}; return projectedBox(makeProject(o)); })()`);
+  run(`selectMineral("quartz"); state.habitId = "prismatic"; state.mask = 7; rebuildGeometry(); draw();`);
+  const tblY = run(`BACKGROUNDS.lab.table.y`) * 860;
+  const fitted = boxOf(`fitToTable(${base}, BACKGROUNDS.lab.table)`);
+  check("放在桌面上：晶体底边贴在实验台桌面线上", Math.abs(fitted.ymax - tblY) < 2, `ymax=${fitted.ymax.toFixed(1)} table=${tblY.toFixed(1)}`);
+  check("放在桌面上：不高出画面上沿 5%", fitted.ymin > 860 * 0.04, `ymin=${fitted.ymin.toFixed(1)}`);
+  check("深空背景没有桌面（table = undefined）", run(`BACKGROUNDS.dark.table`) === undefined);
+  const cabY = run(`BACKGROUNDS.cabinet.table.y`) * 860;
+  const cab = boxOf(`fitToTable(${base}, BACKGROUNDS.cabinet.table)`);
+  check("藏品柜展台也能贴合", Math.abs(cab.ymax - cabY) < 2, `ymax=${cab.ymax.toFixed(1)} table=${cabY.toFixed(1)}`);
+  // 勾选状态由 UI 开关驱动：面板同步 + 场景禁用判断
+  run(`state.bg = "dark"; renderBackgrounds();`);
+  check("深空场景下勾选框被禁用", run(`document.getElementById("onTable").disabled`) === true);
+  run(`state.bg = "lab"; renderBackgrounds();`);
+  check("实验台场景下勾选框可用", run(`document.getElementById("onTable").disabled`) === false);
+  run(`state.onTable = true; state.bg = "lab"; draw();`);
+  check("画布仍能绘制（贴合路径不报错）", counts.fill > 0, `fill=${counts.fill}`);
+}
 
 // 逐矿检查：任何外形在"全部显示"下都必须是闭合体（欧拉 = 2）
 const report = run(`

@@ -241,6 +241,9 @@
     <div class="sec">
       <h3>场景 <span style="text-transform:none;letter-spacing:0">Scene</span></h3>
       <div class="row wrap" id="bgs"></div>
+      <div class="row" style="margin-top:6px">
+        <label style="flex:1"><input type="checkbox" id="onTable"> 放在桌面上（贴合 + 接触阴影）</label>
+      </div>
       <div class="swarning" id="bgHint"></div>
     </div>
 
@@ -428,7 +431,9 @@ const defaultTransp = (m) => {
 const defaultAlpha = (m) => (transpById(defaultTransp(m)) || { alpha: 1 }).alpha;
 
 /* 场景背景。除画背景外还带一组环境光修正（amb 倍率 + ambT 色调）：
-   同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似 */
+   同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似。
+   table.y ＝ 桌面/地面在画面高度上的位置（0–1）。带 table 的背景会把晶体放上去，
+   并按接触阴影画一团软阴影；不需要物理、不需要 WebGL（见 README「放在桌上」一节）。 */
 const BACKGROUNDS = {
   dark: {
     zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
@@ -439,65 +444,84 @@ const BACKGROUNDS = {
     },
   },
   lab: {
-    zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04],
+    zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04], table: { y: 0.74 },
     draw(g, w, h) {
-      const sky = g.createLinearGradient(0, 0, 0, h);
+      const ty = h * 0.74;
+      const sky = g.createLinearGradient(0, 0, 0, ty);
       sky.addColorStop(0, "#eef3f8"); sky.addColorStop(0.62, "#dbe4ee"); sky.addColorStop(1, "#c3cedb");
-      g.fillStyle = sky; g.fillRect(0, 0, w, h);
-      const gy = h * 0.78;                                    // 实验台面
-      const desk = g.createLinearGradient(0, gy, 0, h);
-      desk.addColorStop(0, "#a3b3c5"); desk.addColorStop(1, "#7d8fa3");
-      g.fillStyle = desk; g.fillRect(0, gy, w, h - gy);
-      g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, gy); g.lineTo(w, gy); g.stroke();
-      g.strokeStyle = "rgba(90,120,150,.10)"; g.lineWidth = 1;   // 记录纸网格
+      g.fillStyle = sky; g.fillRect(0, 0, w, ty);
+      g.strokeStyle = "rgba(90,120,150,.10)"; g.lineWidth = 1;   // 记录纸网格（只画在墙上）
       const st = Math.max(26, w / 26);
-      for (let x = 0; x <= w; x += st) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
-      for (let y = 0; y <= h; y += st) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      for (let x = 0; x <= w; x += st) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, ty); g.stroke(); }
+      for (let y = 0; y <= ty; y += st) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      const desk = g.createLinearGradient(0, ty, 0, h);          // 实验台面
+      desk.addColorStop(0, "#b9c6d6"); desk.addColorStop(1, "#7f91a6");
+      g.fillStyle = desk; g.fillRect(0, ty, w, h - ty);
+      g.fillStyle = "#69798d"; g.fillRect(0, ty, w, h * 0.016);  // 台面厚度（前缘）
+      g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, ty + 0.5); g.lineTo(w, ty + 0.5); g.stroke();
+      const sh = g.createLinearGradient(0, h * 0.9, 0, h);       // 桌腿方向的压暗
+      sh.addColorStop(0, "rgba(20,30,45,0)"); sh.addColorStop(1, "rgba(20,30,45,.22)");
+      g.fillStyle = sh; g.fillRect(0, h * 0.9, w, h * 0.1);
     },
   },
   nature: {
-    zh: "自然界", dark: false, amb: 1.18, ambT: [1.02, 1.00, 0.93],
+    zh: "自然界", dark: false, amb: 1.18, ambT: [1.02, 1.00, 0.93], table: { y: 0.66 },
     draw(g, w, h) {
-      const sky = g.createLinearGradient(0, 0, 0, h * 0.72);
+      const gy = h * 0.66;
+      const sky = g.createLinearGradient(0, 0, 0, gy);
       sky.addColorStop(0, "#5ea6dd"); sky.addColorStop(0.7, "#a9cfe8"); sky.addColorStop(1, "#e3ecdf");
-      g.fillStyle = sky; g.fillRect(0, 0, w, h);
+      g.fillStyle = sky; g.fillRect(0, 0, w, gy);
       g.fillStyle = "rgba(74,102,86,.34)";                    // 远山（压低，别挡住晶体）
-      g.beginPath(); g.moveTo(0, h * 0.66);
+      g.beginPath(); g.moveTo(0, gy);
       for (let i = 0; i <= 5; i++) {
         g.lineTo(w * i / 5, h * (0.54 + 0.06 * Math.sin(i * 1.7) + 0.03 * Math.cos(i * 2.9)));
       }
-      g.lineTo(w, h * 0.66); g.closePath(); g.fill();
-      const grd = g.createLinearGradient(0, h * 0.72, 0, h);   // 地面
-      grd.addColorStop(0, "#74834f"); grd.addColorStop(1, "#3d482f");
-      g.fillStyle = grd; g.fillRect(0, h * 0.66, w, h * 0.34);
+      g.lineTo(w, gy); g.closePath(); g.fill();
+      const grd = g.createLinearGradient(0, gy, 0, h);   // 地面
+      grd.addColorStop(0, "#7d8e56"); grd.addColorStop(0.35, "#68784a"); grd.addColorStop(1, "#3d482f");
+      g.fillStyle = grd; g.fillRect(0, gy, w, h - gy);
+      g.strokeStyle = "rgba(255,255,255,.10)"; g.lineWidth = 1;   // 草地质感：几道横向浅纹
+      for (let i = 0; i < 7; i++) {
+        const y = gy + (h - gy) * (0.12 + 0.13 * i) + (i % 2 ? 6 : -6);
+        g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+      }
     },
   },
   cabinet: {
-    zh: "藏品柜", dark: true, amb: 0.82, ambT: [1.00, 0.93, 0.80],
+    zh: "藏品柜", dark: true, amb: 0.82, ambT: [1.00, 0.93, 0.80], table: { y: 0.80 },
     draw(g, w, h) {
+      const sy = h * 0.80;
       g.fillStyle = "#0b0906"; g.fillRect(0, 0, w, h);
       const sp = g.createRadialGradient(w * 0.5, -h * 0.12, 0, w * 0.5, -h * 0.12, h * 0.95);
       sp.addColorStop(0, "rgba(255,236,196,.34)"); sp.addColorStop(0.45, "rgba(255,226,170,.10)");
       sp.addColorStop(1, "rgba(0,0,0,0)");
       g.fillStyle = sp; g.fillRect(0, 0, w, h);
-      const sy = h * 0.80;                                    // 展台
-      const st = g.createLinearGradient(0, sy, 0, h);
-      st.addColorStop(0, "#2a2118"); st.addColorStop(1, "#14100b");
+      const st = g.createLinearGradient(0, sy, 0, h);           // 木展台
+      st.addColorStop(0, "#3a2c1e"); st.addColorStop(1, "#18120c");
       g.fillStyle = st; g.fillRect(0, sy, w, h - sy);
-      g.strokeStyle = "rgba(255,220,160,.16)"; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(0, sy); g.lineTo(w, sy); g.stroke();
+      g.fillStyle = "#241a12"; g.fillRect(0, sy, w, h * 0.012); // 台沿
+      g.strokeStyle = "rgba(255,220,160,.20)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, sy + 0.5); g.lineTo(w, sy + 0.5); g.stroke();
+      for (let i = 0; i < 9; i++) {                            // 木纹
+        const y = sy + (h - sy) * (0.18 + 0.1 * i);
+        g.strokeStyle = `rgba(255,220,170,${0.05 - i * 0.004})`; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+      }
       const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.25, w * 0.5, h * 0.46, Math.max(w, h) * 0.78);
       vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.55)");
       g.fillStyle = vg; g.fillRect(0, 0, w, h);
     },
   },
   paper: {
-    zh: "纸面", dark: false, amb: 1.28, ambT: [1.03, 1.01, 0.97],
+    zh: "纸面", dark: false, amb: 1.28, ambT: [1.03, 1.01, 0.97], table: { y: 0.84 },
     draw(g, w, h) {
       const grd = g.createRadialGradient(w * 0.5, h * 0.34, 0, w * 0.5, h * 0.34, w * 0.72);
       grd.addColorStop(0, "#fdfbf6"); grd.addColorStop(1, "#efe9dd");
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
+      const sh = g.createLinearGradient(0, h * 0.8, 0, h);      // 纸面自身的柔和压暗
+      sh.addColorStop(0, "rgba(120,105,80,0)"); sh.addColorStop(1, "rgba(120,105,80,.14)");
+      g.fillStyle = sh; g.fillRect(0, h * 0.8, w, h * 0.2);
     },
   },
 };
@@ -517,6 +541,7 @@ const state = {
   transp: null,        // 通透度档位：opaque / transl / clear / custom
   alpha: null,         // 实际通透度 0–1
   bg: "dark",
+  onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
   inclusion: null,     // null = 跟随矿物默认
   incDensity: 0.6,
   lightAz: -25, lightEl: 38,
@@ -528,7 +553,9 @@ const state = {
 
 const mineral = () => DATA.minerals.find(m => m.id === state.mineralId);
 const habit = () => { const m = mineral(); return m.habits.find(h => h.id === state.habitId) || m.habits[0]; };
-const maskKey = () => { const h = habit(); return h.forms.map((_, i) => (state.mask >> i) & 1 ? "1" : "0").join(""); };
+// 掩码字符串必须与 make-app.mjs:285 的键完全一致：mask.toString(2).padStart(n,"0")（高位在前）。
+// 早先按"第 i 位对应第 i 个单形"拼字符串，3 个以上单形时会与二进制键错位（mask=3 → "110" 其实是 mask 6 的形状）。
+const maskKey = () => state.mask.toString(2).padStart(habit().forms.length, "0");
 const variant = () => {
   const h = habit();
   const k = maskKey();
@@ -712,36 +739,36 @@ const INCLUSIONS = {
   rutile: {
     zh: "金红石针", en: "Rutile needle",
     note: "石英中最常见的包体：金黄针状金红石，多沿 c 轴排列，转动时如丝如发。",
-    parts: [{ shape: "needle", n: 10, col: [0.87, 0.69, 0.27], mat: "solid", alpha: 0.96, orient: "c", len: [0.45, 1.05], thk: 0.022 }],
+    parts: [{ shape: "needle", n: 10, col: [0.90, 0.72, 0.26], mat: "solid", alpha: 0.98, orient: "c", len: [0.60, 1.30], thk: 0.030 }],
   },
   tourm: {
     zh: "电气石微晶", en: "Tourmaline",
     note: "黑色电气石小晶体，石英与萤石中都常见。",
-    parts: [{ shape: "octa", n: 4, col: [0.09, 0.11, 0.14], mat: "solid", alpha: 0.97, size: [0.07, 0.14] }],
+    parts: [{ shape: "octa", n: 4, col: [0.13, 0.16, 0.21], mat: "solid", alpha: 0.98, size: [0.16, 0.30] }],
   },
   pyrite: {
     zh: "黄铁矿微晶", en: "Pyrite",
     note: "立方体黄铁矿小晶，萤石里的经典包体。",
-    parts: [{ shape: "cube", n: 5, col: [0.80, 0.70, 0.34], mat: "metal", alpha: 0.97, size: [0.06, 0.11] }],
+    parts: [{ shape: "cube", n: 5, col: [0.84, 0.73, 0.32], mat: "metal", alpha: 0.98, size: [0.14, 0.26] }],
   },
   bubble: {
     zh: "气泡", en: "Gas bubble",
     note: "球形气包体：亮斑小而集中，是「亮珠」而不是面。",
-    parts: [{ shape: "ico", n: 12, col: [0.93, 0.97, 1.00], mat: "bubble", alpha: 0.92, size: [0.035, 0.085] }],
+    parts: [{ shape: "ico", n: 12, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.075, 0.150] }],
   },
   fluid: {
     zh: "多相包体", en: "Multiphase",
     note: "气 + 液 + 微晶同处一个愈合空腔：方解石、绿柱石里常见。",
     parts: [
-      { shape: "ico",  n: 5, col: [0.93, 0.97, 1.00], mat: "bubble", alpha: 0.92, size: [0.045, 0.075] },
-      { shape: "octa", n: 2, col: [0.16, 0.22, 0.28], mat: "solid",  alpha: 0.96, size: [0.03, 0.06] },
-      { shape: "needle", n: 3, col: [0.86, 0.70, 0.30], mat: "solid", alpha: 0.94, len: [0.10, 0.22], thk: 0.010 },
+      { shape: "ico",  n: 5, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.085, 0.135] },
+      { shape: "octa", n: 2, col: [0.18, 0.25, 0.32], mat: "solid",  alpha: 0.97, size: [0.07, 0.12] },
+      { shape: "needle", n: 3, col: [0.88, 0.72, 0.30], mat: "solid", alpha: 0.96, len: [0.18, 0.38], thk: 0.016 },
     ],
   },
   fracture: {
     zh: "愈合裂隙", en: "Healed fracture",
     note: "薄片状愈合裂隙：银白色、反光强，是「面」而不是点。",
-    parts: [{ shape: "plate", n: 3, col: [0.84, 0.89, 0.94], mat: "solid", alpha: 0.55, size: [0.16, 0.30] }],
+    parts: [{ shape: "plate", n: 3, col: [0.86, 0.91, 0.96], mat: "solid", alpha: 0.72, size: [0.24, 0.44] }],
   },
 };
 
@@ -778,12 +805,12 @@ function buildInclusions() {
     for (let k = 0; k < n; k++) {
       let made = null;
       for (let tries = 0; tries < 24 && !made; tries++) {
-        const c = vscl(unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]), R0 * (0.04 + rnd() * 0.16));
+        const c = vscl(unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]), R0 * (0.05 + rnd() * 0.26));
         const u = part.orient === "c"
           ? unit(vlin(unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]), cAxis, 0.55))
           : unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]);
         // 缩到能完全放进晶体为止（针状包体最容易探出晶面）
-        for (const s of [1, 0.82, 0.66, 0.52, 0.4]) {
+        for (const s of [1, 0.82, 0.66, 0.52, 0.4, 0.3]) {
           const f = buildPart(part, rnd, R0 * s, c, u);
           if (f.every(fc => fc.pts.every(p => inside(p)))) { made = f; break; }
         }
@@ -792,9 +819,13 @@ function buildInclusions() {
     }
   }
 }
-/* 内含物画在晶体之前：被半透明晶面整体盖住，于是"通透度越低越看得清" */
+/* 内含物画在晶体之上（而不是之前）。
+   早先画在背景层、再被半透明晶层整体盖住，包体被自己的晶体吃掉 45%，
+   于是"基本上看不到"。现在按"越透明越看得清"给一个随通透度增长的系数，
+   不透明时直接不画（看不见里面的东西，物理上正确）。 */
 function paintInclusions(g, opts, project, M) {
   if (!INC.length || M.alpha > 0.995) return;
+  const k = 0.30 + 0.70 * (1 - M.alpha);      // 全透明 → 0.83，半透明 → 0.64
   const R = project.R, DIST = project.DIST, eye = [0, 0, DIST];
   const list = [];
   for (const f of INC) {
@@ -809,7 +840,7 @@ function paintInclusions(g, opts, project, M) {
     pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
     g.closePath();
     const m2 = { ...(INCL_MAT[it.f.mat] || INCL_MAT.solid), ambK: M.ambK, ambT: M.ambT };
-    g.fillStyle = rgbStr(shadeFace(it.f.col, it.wn, it.cw, eye, m2), it.f.alpha);
+    g.fillStyle = rgbStr(shadeFace(it.f.col, it.wn, it.cw, eye, m2), Math.min(1, it.f.alpha * k));
     g.fill();
   }
 }
@@ -973,8 +1004,6 @@ function paintFaces(g, opts, project, M) {
   }
   list.sort((a, b) => b.depth - a.depth);
 
-  paintInclusions(g, opts, project, M);
-
   for (const it of list) {
     const pts = it.f.pts.map(project);
     g.beginPath();
@@ -1011,13 +1040,62 @@ function paintFaces(g, opts, project, M) {
 }
 
 /* 主绘制：先画背景，再按不透明画到离屏，最后整体按通透度合成（避免每片半透明叠加出接缝） */
+/* 把晶体的投影外框量出来（屏幕像素） */
+function projectedBox(project) {
+  let xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+  for (const p of GEO.P) {
+    const s = project(p);
+    if (s[0] < xmin) xmin = s[0];
+    if (s[0] > xmax) xmax = s[0];
+    if (s[1] < ymin) ymin = s[1];
+    if (s[1] > ymax) ymax = s[1];
+  }
+  return { xmin, xmax, ymin, ymax };
+}
+
+/* 接触阴影：几圈同心椭圆由宽淡到窄浓叠出来。
+   不需要物理引擎——晶体是刚体、桌面是平面，"放在桌上"只是一次几何贴合 + 一团软阴影。 */
+function drawContactShadow(g, cx, floorY, rx) {
+  const ry = Math.max(3, rx * 0.20);
+  for (let i = 1; i <= 6; i++) {
+    const k = i / 6;
+    g.beginPath();
+    g.ellipse(cx, floorY + ry * 0.16, rx * (1.10 - 0.16 * k), ry * (1.10 - 0.16 * k), 0, 0, Math.PI * 2);
+    g.fillStyle = `rgba(0,0,0,${(0.020 + 0.030 * k).toFixed(3)})`;
+    g.fill();
+  }
+}
+
+/* 放在桌面上：按桌面线调整投影参数（返回新的 opts）。
+   不需要物理引擎——晶体是刚体、桌面是平面，"放在桌上"只是一次几何贴合 + 一团软阴影：
+   ① 量一遍当前投影的像素外框；② 高出桌面线以上可用空间就整体缩小；③ 把底边平移到桌面线。 */
+function fitToTable(opts, tbl) {
+  const floorY = tbl.y * opts.vh;
+  let b = projectedBox(makeProject({ ...opts, cy: 0 }));
+  const half = (b.ymax - b.ymin) / 2;
+  const room = (floorY - opts.vh * 0.05) / 2;           // 顶部留 5% 余量，别顶出画面
+  let o = half > room ? { ...opts, scale: opts.scale * room / half } : opts;
+  b = projectedBox(makeProject({ ...o, cy: 0 }));
+  return { ...o, cy: floorY - b.ymax };                 // 底边（最低顶点）贴到桌面线
+}
+
 function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
-  const project = makeProject(opts);
   const dpr = opts.dpr || 1;
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
   if (!opts.noBg) BG.draw(g, opts.vw, opts.vh);          // 程序化背景：渐变/展台/远山/纸面（导出时由调用方先画，故可跳过）
+  // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
+  const tbl = (state.onTable && !opts.noTable) ? BG.table : null;
+  let project;
+  if (tbl) {
+    opts = fitToTable(opts, tbl);
+    const b = projectedBox(makeProject(opts));
+    drawContactShadow(g, (b.xmin + b.xmax) / 2, tbl.y * opts.vh, Math.max(6, (b.xmax - b.xmin) * 0.52));
+    project = makeProject(opts);
+  } else {
+    project = makeProject(opts);
+  }
   if (M.alpha < 0.995) {
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.round(opts.vw * dpr));
@@ -1037,6 +1115,7 @@ function paint(g, opts) {
   } else {
     paintFaces(g, opts, project, M);
   }
+  paintInclusions(g, opts, project, M);   // 在晶体之上：半透明才看得见，越透明越清晰
   if (state.axes) drawAxes(g, project.R, project, opts.scale);
 }
 
@@ -1281,11 +1360,17 @@ function renderBackgrounds() {
     box.appendChild(b);
   }
   const B = BACKGROUNDS[state.bg] || BACKGROUNDS.dark;
+  const cb = document.getElementById("onTable");
+  if (cb) {
+    cb.checked = state.onTable;
+    cb.disabled = !B.table;
+    cb.onchange = () => { state.onTable = cb.checked; draw(); };
+  }
   const hints = {
-    dark: "纯色渐变：最干净，适合看几何。",
-    lab: "浅灰实验台 + 记录纸网格，环境光略强。",
-    nature: "天空远山，环境光偏暖。",
-    cabinet: "深色展柜 + 顶部射灯：最暗，反差最大。",
+    dark: "纯色渐变：最干净，适合看几何（无桌面）。",
+    lab: "浅灰实验台 + 记录纸网格，环境光略强。勾选「放在桌面上」会贴合台面并加接触阴影。",
+    nature: "天空远山草地，环境光偏暖。勾选后晶体坐在地面上。",
+    cabinet: "深色木展柜 + 顶部射灯：最暗，反差最大。",
     paper: "近白纸面：出图最好看，像标本照片。",
   };
   document.getElementById("bgHint").textContent = hints[state.bg] || "";
@@ -1592,11 +1677,11 @@ function buildExportCanvas() {
   let crystCx, crystCy, crystScale, textTop;
   let textX = textColX;
   if (landscape) {
-    // 横版：晶体占左侧 46%，文字右侧纵列
+    // 横版：晶体占左侧 46%，文字右侧纵列。noTable：导出是图鉴卡，不是场景图
     crystCx = w * 0.25; crystCy = h * 0.5;
     crystScale = Math.min(h / 1000, w / 1000) * 1.05;
     textTop = h * 0.10;
-    paint(g, { cx: crystCx, cy: crystCy, scale: state.zoom * crystScale, vw: w, vh: h, pan: [0, 0] });
+    paint(g, { cx: crystCx, cy: crystCy, scale: state.zoom * crystScale, vw: w, vh: h, pan: [0, 0], noTable: true });
     g.strokeStyle = line; g.lineWidth = 1.4 * u;
     g.beginPath(); g.moveTo(textColX - w * 0.025, h * 0.10); g.lineTo(textColX - w * 0.025, h * 0.90); g.stroke();
     let y = textTop;
@@ -1614,7 +1699,7 @@ function buildExportCanvas() {
   const crystTop = h * 0.055;
   const crystH = Math.max(h * 0.30, h - textH - h * 0.16);   // 文字多时让出空间，避免压到底边
   const scaleCrystal = Math.min(crystH / (h * 0.92), w / (h * 0.9)) * 0.92;
-  paint(g, { cx: w / 2, cy: crystTop + crystH / 2, scale: state.zoom * scaleCrystal * 1.06, vw: w, vh: h, pan: [0, 0], noBg: true, bg: state.exp.bg });
+  paint(g, { cx: w / 2, cy: crystTop + crystH / 2, scale: state.zoom * scaleCrystal * 1.06, vw: w, vh: h, pan: [0, 0], noBg: true, noTable: true, bg: state.exp.bg });
 
   // 分隔线 + 文字：文字块整体不越底边（竖版长画布最容易被挤出界）
   let y = Math.min(crystTop + crystH + 10 * u, h * 0.965 - textH - 30 * u);

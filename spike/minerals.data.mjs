@@ -32,8 +32,8 @@ export const MINERALS = [
       { zh: "蓝色", en: "Blue",      hex: "#4a7fc1" },
     ],
     intro: {
-      zh: "等轴晶系最典型的矿物，立方体、八面体与两者的聚形都常见；{111} 贯穿双晶是「尖晶石律」的标准案例。",
-      en: "The textbook cubic mineral: cube, octahedron and their combination all occur; the {111} penetration twin is the type example of the spinel law.",
+      zh: "等轴晶系最典型的矿物，立方体、八面体与两者的聚形都常见；尖晶石律是两个立方体沿 [111] 互相穿插，是「贯穿双晶」的标准案例。",
+      en: "The textbook cubic mineral: cube, octahedron and their combination all occur; the spinel law is two cubes interpenetrating along [111], the type example of a penetration twin.",
     },
     habits: [
       { id: "cube", zh: "立方体", en: "Cube", forms: [{ hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" }] },
@@ -47,9 +47,11 @@ export const MINERALS = [
       },
       {
         id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
-        note: "双晶面 {111}：两个体以该面互为镜像（尖晶石律）",
-        twin: { mode: "contact", plane: [1, 1, 1], angle: 109.471 },
-        forms: [{ hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" }],
+        note: "尖晶石律：两个立方体沿共有的 [111] 体对角线互相穿插。Handbook of Mineralogy：「Twinning: common on {111}, interpenetrant, flattened」。双晶操作是绕 [111] 的 180° 二次轴；因立方体自身绕该轴有 120° 对称，等价于两个体相对转动 60°。萤石是 centrosymmetric（m-3m），所以「{111} 镜面」与「[111] 二次轴」两种说法是同一个双晶（σ·C₂ = 反演，反演是 m-3m 的对称操作）。两个体的 <100> 棱方向夹角 arccos(−1/3) = 109°28′",
+        twin: { mode: "axis", axis: [1, 1, 1], angle: 109.471 },
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" },
+        ],
       },
     ],
   },
@@ -173,13 +175,13 @@ export const MINERALS = [
       },
       {
         id: "japan-twin", zh: "日本律双晶", en: "Japan twin",
-        note: "双晶面 {11-22}；两晶体 c 轴夹角 84°33′（计算 84.54°）",
-        twin: { mode: "contact", plane: [1, 1, -2, 2], angle: 84.543 },
+        note: "双晶面（结合面）{11-22}；两个体 c 轴夹角 84°33′＝84.55°（按 α-石英 a=4.9134、c=5.4052 Å 反算得 84.52°，文献实测 84°33′）。注意：绕 c 轴的双晶是道芬律 <0001>，不是日本律。s 面必须真的长出来（r/z 收到 k=0.80 给它让位），否则两块只在一个棱上相接。真实日本律两体常不等大（生长边界起伏），此处按理想对称形展示",
+        twin: { mode: "contact", plane: [1, 1, -2, 2], angle: 84.55 },
         forms: [
           { hkl: [1, 0, 0], k: 0.30, idx: "{10-10}", zh: "六方柱", en: "Prism" },
-          { hkl: [1, 0, 1], k: 0.95, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
-          { hkl: [0, 1, 1], k: 0.95, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
-          { hkl: [1, 1, 2], k: 0.99, idx: "{11-22}", zh: "s 面（双晶面）", en: "s face (composition plane)" },
+          { hkl: [1, 0, 1], k: 0.80, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
+          { hkl: [0, 1, 1], k: 0.80, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
+          { hkl: [1, 1, 2], k: 1.5, idx: "{11-22}", zh: "s 面（双晶面）", en: "s face (composition plane)" },
         ],
       },
     ],

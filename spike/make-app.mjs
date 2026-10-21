@@ -103,24 +103,61 @@ function buildGeometry(mineral, habit, mask) {
 
   // 双晶：整体做双晶操作得到个体 B，然后求并集（共享部分只留外表面）
   if (habit.twin && habit.twin.mode === "contact") {
-    // ── 接触双晶：两个完整个体沿双晶面（真实晶面）贴合，各在一侧 ──
-    // 关键：双晶面取"该晶面所在平面"（距中心 d），不是过中心的平面；
-    // 这样 A 整体在 n·x ≤ d，B = 以该面镜像后落在 n·x ≥ d，两块都完整、等长。
+    // ── 接触双晶：两个完整个体沿双晶面贴合，各在一侧 ──
+    // 关键 1：镜面必须取"该晶面所在平面"（距中心 d），不能取过中心的平面——
+    //         过中心平面对立方体/八面体会自映射，得到恒等变换（等于没孪晶）。
+    // 关键 2：双晶面必须是该晶形的真实晶面（支撑平面上有 ≥3 个互异顶点）。
+    //         · 是真实晶面 → δ=0，两块在面上严格贴合，两片重合的结合面是并集内部面，删掉；
+    //         · 不是真实晶面 → δ>0，让两块重叠一片厚 δ 的板再求并集，
+    //           否则两块只在一个顶点/棱上相接，旋转时看起来是两块分开的晶体。
+    //         δ 平移不改变两块的长度：A 占 n·x∈[−e,d]，B 占 [d−δ, 2d+e−δ]，都是 d+e。
     const hkl = habit.twin.plane;
     const h3 = hkl.length === 4 ? [hkl[0], hkl[1], hkl[3]] : hkl;
     const n = faceNormal(h3, res.L).n;
-    const d = Math.max(...polys.flatMap(f => f.pts.map(p => dot(n, p))));  // 支撑距离
-    const T = (p) => {                                  // 以 n·x = d 为镜面反射
+    const allA = polys.flatMap(f => f.pts);
+    const d = Math.max(...allA.map(p => dot(n, p)));            // 支撑距离
+    const uniq = new Map();
+    for (const p of allA) if (Math.abs(dot(n, p) - d) < 1e-4) uniq.set(p.map(x => x.toFixed(6)).join(","), 1);
+    const isFacet = uniq.size >= 3;
+    const delta = isFacet ? 0 : (habit.twin.delta ?? 0.06);
+    const T = (p) => {                                          // 以 n·x = d 镜像，再沿 −n 平移 delta
       const s2 = 2 * (dot(n, p) - d);
-      return [p[0] - n[0] * s2, p[1] - n[1] * s2, p[2] - n[2] * s2];
+      return [p[0] - n[0] * (s2 + delta), p[1] - n[1] * (s2 + delta), p[2] - n[2] * (s2 + delta)];
     };
     const nR = (v) => { const s2 = 2 * dot(n, v); return [v[0] - n[0] * s2, v[1] - n[1] * s2, v[2] - n[2] * s2]; };
-    const eps = 2e-4;
-    const sideB = polys.map(f => ({
-      pts: f.pts.map(p => { const q = T(p); return [q[0] + n[0] * eps, q[1] + n[1] * eps, q[2] + n[2] * eps]; }),
+    const sideB0 = polys.map(f => ({
+      pts: f.pts.map(T),
       n: nR(f.n), form: f.form, indiv: 1, clip: f.clip,
     }));
-    polys = [...polys, ...sideB];
+    const tol = 1e-6;
+    const onPlaneA = (f) => f.pts.every(p => Math.abs(dot(n, p) - d) < tol);
+    const onPlaneB = (f) => f.pts.every(p => Math.abs(dot(n, p) - (d - delta)) < tol);
+    let A = polys, B = sideB0;
+    if (delta === 0) {
+      // 两块严格贴合：结合面上的两片晶面都在并集内部，必须删掉，否则会盖在另一个个体上
+      A = polys.filter(f => !onPlaneA(f));
+      B = sideB0.filter(f => !onPlaneB(f));
+      polys = [...A, ...B];
+    } else {
+      // 重叠并集：(∂A − B内部) ∪ (∂B − A内部)
+      const planesB = planesA.map(pl => {
+        const nB = nR(pl.n);
+        return { n: nB, D: pl.D - delta * dot(nB, n) };
+      });
+      const eps2 = 1e-7;
+      const inB = (p) => planesB.every(pl => dot(pl.n, p) - pl.D < -eps2);
+      const inA = (p) => planesA.every(pl => dot(pl.n, p) - pl.D < -eps2);
+      const out = [];
+      for (const f of polys) {
+        if (f.pts.every(inB)) continue;                    // 整片埋进 B 内部
+        for (const pts of subtractConvex(f.pts, planesB)) out.push({ ...f, pts: orient(pts, f.n) });
+      }
+      for (const f of sideB0) {
+        if (f.pts.every(inA)) continue;                    // 整片埋进 A 内部
+        for (const pts of subtractConvex(f.pts, planesA)) out.push({ ...f, pts: orient(pts, f.n) });
+      }
+      polys = out;
+    }
   } else if (habit.twin) {
     // ── 贯穿双晶：两个完整个体互相穿插，边界取并集 ──
     const T = habit.twin.mode === "mirror"
@@ -222,8 +259,25 @@ for (const m of MINERALS) {
     const opsh = pointGroup(m.pointGroup, Lh);
     const variants = {};
     const n = h.forms.length;
+    // 接触双晶的双晶面必须是该晶形的真实晶面，否则两个体只在一个顶点/棱上相接。
+    // 所以把"双晶面对应的那个单形"强制纳入每个变体。
+    let forceMask = 0;
+    if (h.twin && h.twin.mode === "contact" && h.twin.plane) {
+      const tp = h.twin.plane.length === 4 ? [h.twin.plane[0], h.twin.plane[1], h.twin.plane[3]] : h.twin.plane;
+      h.forms.forEach((f, i) => {
+        const fh = f.hkl.length === 4 ? [f.hkl[0], f.hkl[1], f.hkl[3]] : f.hkl;
+        let r = null, ok = true;
+        for (let j = 0; j < 3; j++) {
+          if (Math.abs(tp[j]) < 1e-12 && Math.abs(fh[j]) < 1e-12) continue;
+          if (Math.abs(tp[j]) < 1e-12 || Math.abs(fh[j]) < 1e-12) { ok = false; break; }
+          const t = fh[j] / tp[j];
+          if (r === null) r = t; else if (Math.abs(t - r) > 1e-9) { ok = false; break; }
+        }
+        if (ok && r !== null) forceMask |= (1 << i);
+      });
+    }
     const masks = [];
-    for (let mask = 1; mask < (1 << n); mask++) masks.push(mask);
+    for (let mask = 1; mask < (1 << n); mask++) masks.push(mask | forceMask);
     // 单形多于 4 个时只算"全部"与"去掉一个"，避免体积爆炸
     const use = n <= 4 ? masks : [masks[masks.length - 1], ...masks.filter(x => x !== (1 << n) - 1)];
     for (const mask of use) {
@@ -248,7 +302,12 @@ for (const m of MINERALS) {
     mg.habits.push({
       id: h.id, zh: h.zh, en: h.en,
       note: h.note ?? null,
-      twin: h.twin ? { angle: h.twin.angle, mode: h.twin.mode } : null,
+      twin: h.twin ? {
+        angle: h.twin.angle, mode: h.twin.mode,
+        axis: h.twin.axis ?? null,     // 贯穿双晶：二次轴方向（萤石尖晶石律 [111]）
+        plane: h.twin.plane ?? null,   // 接触双晶：结合面（石英日本律 {11-22}）
+        delta: h.twin.delta ?? null,
+      } : null,
       forms: h.forms.map((f, i) => ({
         idx: f.idx, zh: f.zh, en: f.en,
         // 单形的“面数”取该单形本身的晶面数（并集会把一片晶面切成多块多边形，不能直接数）
