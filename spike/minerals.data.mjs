@@ -19,7 +19,7 @@ export const SYSTEMS = [
 export const MINERALS = [
   {
     id: "fluorite",
-  luster: "glass",
+  luster: "glass", inclusion: "pyrite",
     zh: "萤石", en: "Fluorite", formula: "CaF₂",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 5.4626 Å（Webmineral / Dana）",
@@ -55,7 +55,7 @@ export const MINERALS = [
   },
   {
     id: "garnet",
-  luster: "adamantine",
+  luster: "adamantine", inclusion: "rutile",
     zh: "石榴石", en: "Garnet", formula: "Fe₃Al₂(SiO₄)₃",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "铁铝榴石 a = 11.526 Å（Dana）",
@@ -83,7 +83,7 @@ export const MINERALS = [
   },
   {
     id: "scheelite",
-  luster: "adamantine",
+  luster: "adamantine", inclusion: "fracture",
     zh: "白钨矿", en: "Scheelite", formula: "CaWO₄",
     system: "tetragonal", pointGroup: "4/m",
     confidence: "high", source: "a = 5.2429、c = 11.3736 Å（Dana）",
@@ -103,7 +103,7 @@ export const MINERALS = [
   },
   {
     id: "beryl",
-  luster: "glass",
+  luster: "glass", inclusion: "fluid",
     zh: "绿柱石", en: "Beryl", formula: "Be₃Al₂Si₆O₁₈",
     system: "hexagonal", pointGroup: "6/mmm",
     confidence: "high", source: "a = 9.215、c = 9.192 Å（Dana）",
@@ -130,7 +130,7 @@ export const MINERALS = [
   },
   {
     id: "quartz",
-  luster: "glass",
+  luster: "glass", inclusion: "rutile",
     zh: "石英", en: "Quartz", formula: "SiO₂",
     system: "trigonal", pointGroup: "32",
     confidence: "high", source: "a = 4.9134、c = 5.4052 Å（Dana）",
@@ -186,7 +186,7 @@ export const MINERALS = [
   },
   {
     id: "calcite",
-  luster: "adamantine",
+  luster: "adamantine", inclusion: "fluid",
     zh: "方解石", en: "Calcite", formula: "CaCO₃",
     system: "trigonal", pointGroup: "-3m",
     confidence: "high", source: "a = 4.990、c = 17.061 Å（Dana）；{10-14} 面角 74°55′",
@@ -218,7 +218,7 @@ export const MINERALS = [
   },
   {
     id: "aragonite",
-  luster: "glass",
+  luster: "glass", inclusion: "fluid",
     zh: "文石", en: "Aragonite", formula: "CaCO₃",
     system: "orthorhombic", pointGroup: "mmm",
     confidence: "high", source: "a = 4.9614、b = 7.9671、c = 5.7404 Å（Dana）",
@@ -272,7 +272,7 @@ export const MINERALS = [
   },
   {
     id: "albite",
-  luster: "glass",
+  luster: "glass", inclusion: "tourm",
     zh: "斜长石（钠长石）", en: "Albite", formula: "NaAlSi₃O₈",
     system: "triclinic", pointGroup: "-1",
     confidence: "medium", source: "a = 8.137、b = 12.785、c = 7.174 Å，α = 94.26°、β = 116.60°、γ = 87.67°（待复核）",

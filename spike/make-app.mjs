@@ -121,7 +121,7 @@ function buildGeometry(mineral, habit, mask) {
       n: nR(f.n), form: f.form, indiv: 1, clip: f.clip,
     }));
     polys = [...polys, ...sideB];
-  } else if (habit.twin) {  } else if (habit.twin) {
+  } else if (habit.twin) {
     // ── 贯穿双晶：两个完整个体互相穿插，边界取并集 ──
     const T = habit.twin.mode === "mirror"
       ? (() => { const hkl = habit.twin.plane; const h3 = hkl.length === 4 ? [hkl[0], hkl[1], hkl[3]] : hkl; return twinMatrix(h3, res.L); })()
@@ -213,6 +213,7 @@ for (const m of MINERALS) {
     system: m.system, pointGroup: m.pointGroup,
     cell: m.cell, cellText: m.cellText, intro: m.intro, colors: m.colors,
     luster: m.luster ?? "glass",
+    inclusion: m.inclusion ?? null,
     confidence: m.confidence, source: m.source,
     habits: [],
   };

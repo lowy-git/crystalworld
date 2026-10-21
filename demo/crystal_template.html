@@ -132,6 +132,32 @@
   .sw.on{box-shadow:0 0 0 2px #0b1220,0 0 0 4px var(--accent)}
   .swarning{font-size:10.5px;color:var(--ink3);margin-top:5px;line-height:1.5}
 
+  /* 标签 + 控件的一行（下拉/滑杆） */
+  .srow{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:11.5px;color:var(--ink3)}
+  .srow > span{flex:0 0 66px}
+  .srow .val{color:var(--ink2);font-weight:600;font-size:11px;margin-left:auto}
+  .srow select,.srow input[type=range]{flex:1;min-width:0}
+  select{
+    appearance:none;background:#12213a;color:var(--ink2);border:1px solid var(--line);
+    border-radius:7px;padding:6px 8px;font-size:12px;font-family:inherit;cursor:pointer;
+  }
+  select:hover:not(:disabled){border-color:#33507a;color:var(--ink)}
+  select:disabled{opacity:.42;cursor:not-allowed}
+  input[type=range]{appearance:none;height:16px;background:transparent;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:#26405f;border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{
+    appearance:none;width:12px;height:12px;margin-top:-4.5px;border-radius:50%;
+    background:var(--accent);border:1px solid #9fd0ff;
+  }
+  input[type=range]:disabled{opacity:.42;cursor:not-allowed}
+  input[type=range]:disabled::-webkit-slider-thumb{background:#3a5273;border-color:#3a5273}
+
+  /* 浅色背景下，舞台上的浮层文字要换成深色才看得见 */
+  body.lightbg .hud .t1{color:#101820}
+  body.lightbg .hud .t1 span,body.lightbg .hud .t2,body.lightbg .hud .t3{color:#3d4a58}
+  body.lightbg .hint{color:#4a5a6b}
+  body.lightbg .hint kbd{background:rgba(255,255,255,.7);border-color:#b9c4d0;color:#33414f}
+
   .note{
     font-size:11.5px;color:var(--ink2);line-height:1.65;background:#0e1a2b;
     border:1px solid var(--line);border-left:2px solid #3a5f8a;border-radius:6px;padding:8px 10px;
@@ -213,9 +239,32 @@
     </div>
 
     <div class="sec">
+      <h3>场景 <span style="text-transform:none;letter-spacing:0">Scene</span></h3>
+      <div class="row wrap" id="bgs"></div>
+      <div class="swarning" id="bgHint"></div>
+    </div>
+
+    <div class="sec">
       <h3>质感 <span style="text-transform:none;letter-spacing:0">Lustre</span></h3>
-      <div class="row" id="lusters"></div>
+      <div class="row wrap" id="lusters"></div>
       <div class="swarning" id="lusterHint"></div>
+      <div class="srow"><span>通透度</span><select id="transp"></select></div>
+      <div class="srow"><span>透明度 <b id="alphaVal" class="val"></b></span><input type="range" id="alphaR" min="12" max="100" step="1"></div>
+      <div class="swarning" id="transpHint"></div>
+    </div>
+
+    <div class="sec">
+      <h3>内含物 <span style="text-transform:none;letter-spacing:0">Inclusion</span></h3>
+      <div class="srow"><span>类型</span><select id="incSel"></select></div>
+      <div class="srow"><span>密度 <b id="incDensVal" class="val"></b></span><input type="range" id="incDens" min="0" max="100" step="5"></div>
+      <div class="swarning" id="incHint"></div>
+    </div>
+
+    <div class="sec">
+      <h3>光照 <span style="text-transform:none;letter-spacing:0">Light</span></h3>
+      <div class="srow"><span>方位角 <b id="lightAzVal" class="val"></b></span><input type="range" id="lightAz" min="-180" max="180" step="1"></div>
+      <div class="srow"><span>高度角 <b id="lightElVal" class="val"></b></span><input type="range" id="lightEl" min="-30" max="88" step="1"></div>
+      <div class="swarning">光源固定在世界坐标：转动晶体时，反射内容会随之扫过各晶面。真实阴影、环境贴图反射要等 WebGL。</div>
     </div>
 
     <div class="sec">
@@ -270,8 +319,11 @@
         </div>
         <h4 style="margin-top:16px">背景 Background</h4>
         <div class="row" id="expBg">
-          <button class="btn on" data-bg="dark">深色</button>
-          <button class="btn" data-bg="light">浅色</button>
+          <button class="btn on" data-bg="dark">深空</button>
+          <button class="btn" data-bg="lab">实验室</button>
+          <button class="btn" data-bg="nature">自然界</button>
+          <button class="btn" data-bg="cabinet">藏品柜</button>
+          <button class="btn" data-bg="paper">纸面</button>
           <button class="btn" data-bg="none">透明</button>
         </div>
         <h4 style="margin-top:16px">画幅 Aspect</h4>
@@ -345,19 +397,110 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const Q_VIEW = qNorm(qMul(qAxis(0, 1, 0, 0.52), qAxis(1, 0, 0, -Math.PI / 2 + 0.16)));
 const Q_AXES = qNorm(qAxis(1, 0, 0, -Math.PI / 2));
 const TINTS = [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76], [0.97, 0.84, 0.55]];
-const LIGHT_V = unit([-0.34, 0.62, 0.72]);
-/* 光泽模型：amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、alpha 通透度、back 背面透出度、
-   fres 掠射角提亮、ior 折射率（决定 R0=((n-1)/(n+1))^2 镜面反射率）、envI 环境反射强度、
-   metal 金属（R0=1 且反射带本体色，无漫反射） */
+/* 光泽＝表面对光的反射特性，与"能不能看穿"是两件独立的事：
+   amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、fres 掠射角提亮、
+   ior 折射率（决定 R0=((n-1)/(n+1))^2 镜面反射率）、envI 环境反射强度、
+   metal 金属（R0=1、反射带本体色、无漫反射）、opaqueOnly 该光泽天然不透光 */
 const LUSTERS = {
-  opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,   alpha: 1,    back: 1,   fres: .06, ior: 1.60, envI: .10 },
-  glass:       { zh: "玻璃",   amb: .40, diff: .55, spec: .75, shin: 14,  alpha: .78,  back: .55, fres: .34, ior: 1.54, envI: .52 },
-  adamantine:  { zh: "金刚",   amb: .22, diff: .38, spec: 1.0, shin: 22,  alpha: .95,  back: .62, fres: .48, ior: 2.42, envI: 1.00 },
-  metallic:    { zh: "金属",   amb: .04, diff: .07, spec: .85, shin: 10,  alpha: 1,    back: 1,   fres: .34, ior: 1.00, envI: .95, metal: 1 },
-  waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .22, shin: 6,   alpha: .96,  back: .72, fres: .14, ior: 1.50, envI: .22 },
-  transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16,  alpha: .45,  back: .30, fres: .52, ior: 1.54, envI: .45 },
+  opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,  fres: .06, ior: 1.60, envI: .10 },
+  glass:       { zh: "玻璃",   amb: .40, diff: .55, spec: .75, shin: 14, fres: .34, ior: 1.54, envI: .52 },
+  adamantine:  { zh: "金刚",   amb: .22, diff: .38, spec: 1.0, shin: 22, fres: .48, ior: 2.42, envI: 1.00 },
+  metallic:    { zh: "金属",   amb: .04, diff: .07, spec: .85, shin: 10, fres: .34, ior: 1.00, envI: .95, metal: 1, opaqueOnly: 1 },
+  waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .22, shin: 6,  fres: .14, ior: 1.50, envI: .22 },
+  transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16, fres: .52, ior: 1.54, envI: .45 },
 };
 const DEFAULT_LUSTER = "glass";
+
+/* 通透度：独立控制。金属光泽天然不透明（金属不透光），其余任意组合都合法：
+   金刚 + 全透明 = 钻石；玻璃 + 全透明 = 石英；金刚 + 不透明 = 石榴石 */
+const TRANSP = [
+  { id: "opaque", zh: "不透明", alpha: 1.00 },
+  { id: "transl",  zh: "半透明", alpha: 0.55 },
+  { id: "clear",   zh: "全透明", alpha: 0.26 },
+];
+const transpById = (id) => TRANSP.find(t => t.id === id) || null;
+const defaultTransp = (m) => {
+  const L = m.luster || DEFAULT_LUSTER;
+  if (L === "metallic" || L === "opaque") return "opaque";
+  if (L === "adamantine" || L === "transparent") return "clear";
+  return "transl";
+};
+const defaultAlpha = (m) => (transpById(defaultTransp(m)) || { alpha: 1 }).alpha;
+
+/* 场景背景。除画背景外还带一组环境光修正（amb 倍率 + ambT 色调）：
+   同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似 */
+const BACKGROUNDS = {
+  dark: {
+    zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
+    draw(g, w, h) {
+      const grd = g.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.38, w * 0.78);
+      grd.addColorStop(0, "#16283f"); grd.addColorStop(0.55, "#0c1522"); grd.addColorStop(1, "#070c14");
+      g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    },
+  },
+  lab: {
+    zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04],
+    draw(g, w, h) {
+      const sky = g.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#eef3f8"); sky.addColorStop(0.62, "#dbe4ee"); sky.addColorStop(1, "#c3cedb");
+      g.fillStyle = sky; g.fillRect(0, 0, w, h);
+      const gy = h * 0.78;                                    // 实验台面
+      const desk = g.createLinearGradient(0, gy, 0, h);
+      desk.addColorStop(0, "#a3b3c5"); desk.addColorStop(1, "#7d8fa3");
+      g.fillStyle = desk; g.fillRect(0, gy, w, h - gy);
+      g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, gy); g.lineTo(w, gy); g.stroke();
+      g.strokeStyle = "rgba(90,120,150,.10)"; g.lineWidth = 1;   // 记录纸网格
+      const st = Math.max(26, w / 26);
+      for (let x = 0; x <= w; x += st) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+      for (let y = 0; y <= h; y += st) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+    },
+  },
+  nature: {
+    zh: "自然界", dark: false, amb: 1.18, ambT: [1.02, 1.00, 0.93],
+    draw(g, w, h) {
+      const sky = g.createLinearGradient(0, 0, 0, h * 0.72);
+      sky.addColorStop(0, "#5ea6dd"); sky.addColorStop(0.7, "#a9cfe8"); sky.addColorStop(1, "#e3ecdf");
+      g.fillStyle = sky; g.fillRect(0, 0, w, h);
+      g.fillStyle = "rgba(74,102,86,.34)";                    // 远山（压低，别挡住晶体）
+      g.beginPath(); g.moveTo(0, h * 0.66);
+      for (let i = 0; i <= 5; i++) {
+        g.lineTo(w * i / 5, h * (0.54 + 0.06 * Math.sin(i * 1.7) + 0.03 * Math.cos(i * 2.9)));
+      }
+      g.lineTo(w, h * 0.66); g.closePath(); g.fill();
+      const grd = g.createLinearGradient(0, h * 0.72, 0, h);   // 地面
+      grd.addColorStop(0, "#74834f"); grd.addColorStop(1, "#3d482f");
+      g.fillStyle = grd; g.fillRect(0, h * 0.66, w, h * 0.34);
+    },
+  },
+  cabinet: {
+    zh: "藏品柜", dark: true, amb: 0.82, ambT: [1.00, 0.93, 0.80],
+    draw(g, w, h) {
+      g.fillStyle = "#0b0906"; g.fillRect(0, 0, w, h);
+      const sp = g.createRadialGradient(w * 0.5, -h * 0.12, 0, w * 0.5, -h * 0.12, h * 0.95);
+      sp.addColorStop(0, "rgba(255,236,196,.34)"); sp.addColorStop(0.45, "rgba(255,226,170,.10)");
+      sp.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = sp; g.fillRect(0, 0, w, h);
+      const sy = h * 0.80;                                    // 展台
+      const st = g.createLinearGradient(0, sy, 0, h);
+      st.addColorStop(0, "#2a2118"); st.addColorStop(1, "#14100b");
+      g.fillStyle = st; g.fillRect(0, sy, w, h - sy);
+      g.strokeStyle = "rgba(255,220,160,.16)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, sy); g.lineTo(w, sy); g.stroke();
+      const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.25, w * 0.5, h * 0.46, Math.max(w, h) * 0.78);
+      vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.55)");
+      g.fillStyle = vg; g.fillRect(0, 0, w, h);
+    },
+  },
+  paper: {
+    zh: "纸面", dark: false, amb: 1.28, ambT: [1.03, 1.01, 0.97],
+    draw(g, w, h) {
+      const grd = g.createRadialGradient(w * 0.5, h * 0.34, 0, w * 0.5, h * 0.34, w * 0.72);
+      grd.addColorStop(0, "#fdfbf6"); grd.addColorStop(1, "#efe9dd");
+      g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    },
+  },
+};
 
 const state = {
   system: "all",
@@ -371,6 +514,12 @@ const state = {
   inputMode: "mouse",
   colorMode: "form",
   luster: null,
+  transp: null,        // 通透度档位：opaque / transl / clear / custom
+  alpha: null,         // 实际通透度 0–1
+  bg: "dark",
+  inclusion: null,     // null = 跟随矿物默认
+  incDensity: 0.6,
+  lightAz: -25, lightEl: 38,
   twinTint: false,
   uniform: null,       // {hex}
   exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
@@ -435,6 +584,7 @@ function rebuildGeometry() {
     if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
   }
   GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))) };
+  buildInclusions();
 }
 
 /* 晶格轴（crystal 坐标，与顶点同坐标系） */
@@ -477,16 +627,217 @@ const inside = (p) => {
   return false;
 };
 
-const mat = () => LUSTERS[state.luster || mineral().luster || DEFAULT_LUSTER] || LUSTERS.glass;
+/* ============ 内含物 / 包体 ============ */
+/* 做法：把包体当成晶体内部的小多面体，画在晶体"下面"（painter 算法），
+   再被半透明的晶面整体盖住。于是：通透度越低越看得清，不透明时自动不可见
+   ——与真实观察一致，且随晶体一起转动。 */
+const vadd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const vscl = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const vlin = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const perp = (u) => unit(cross(u, Math.abs(u[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1]));
+const mulberry32 = (a) => () => {
+  a = a + 0x6D2B79F5 | 0;
+  let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+};
+const strHash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+/* 包体自身也是小晶体，用同一套 shadeFace 打光（另给一张小材质表） */
+const INCL_MAT = {
+  solid:  { amb: .30, diff: .55, spec: .55, shin: 18, fres: .30, ior: 1.60, envI: .45 },
+  metal:  { amb: .05, diff: .10, spec: .80, shin: 10, fres: .34, ior: 1.00, envI: .90, metal: 1 },
+  bubble: { amb: .58, diff: .28, spec: .95, shin: 42, fres: .62, ior: 1.34, envI: .72 },
+};
+
+/* 形状库：顶点集按单位半径给出，再缩放平移 */
+const OCTA = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const CUBE = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+const PHI = (1 + Math.sqrt(5)) / 2;
+const ICO = [[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],[0,-1,-PHI],[0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]];
+const FACES_OCTA = [[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+const FACES_CUBE = [[0,3,2,1],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]];
+const FACES_ICO = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+                   [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+
+/* loops → 面（法向朝外：按质心相对包体中心的方向校正绕序，与手写绕序无关） */
+function solidFaces(loops, col, mat, alpha, center) {
+  return loops.map(pts => {
+    let n = unit(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
+    const c = pts.reduce((a, p) => vadd(a, vscl(p, 1 / pts.length)), [0, 0, 0]);
+    if (center && dot(n, sub(c, center)) < 0) { pts = pts.slice().reverse(); n = vscl(n, -1); }
+    return { pts, n, c, col, mat, alpha };
+  });
+}
+function polySolid(V, F, c, s, col, mat, alpha) {
+  return solidFaces(F.map(f => f.map(i => vadd(c, vscl(V[i], s)))), col, mat, alpha, c);
+}
+/* 针状：六方柱 + 双锥尖（金红石针的典型轮廓） */
+function needleSolid(c, u, L, r, col, mat, alpha) {
+  const p1 = perp(u), p2 = cross(u, p1), N = 6, loops = [];
+  const ring = (t, rr) => {
+    const out = [];
+    for (let i = 0; i < N; i++) {
+      const th = i * 2 * Math.PI / N;
+      out.push(vadd(vadd(c, vscl(u, t * L)), vscl(vadd(vscl(p1, Math.cos(th)), vscl(p2, Math.sin(th))), rr)));
+    }
+    return out;
+  };
+  const b = ring(-0.5, r), t2 = ring(0.5, r * 0.34);
+  for (let i = 0; i < N; i++) { const j = (i + 1) % N; loops.push([b[i], b[j], t2[j], t2[i]]); }
+  for (let i = 1; i < N - 1; i++) loops.push([b[0], b[i + 1], b[i]]);
+  for (let i = 1; i < N - 1; i++) loops.push([t2[0], t2[i], t2[i + 1]]);
+  return solidFaces(loops, col, mat, alpha, c);
+}
+/* 愈合裂隙：极薄的六方片 */
+function plateSolid(c, u, s, col, mat, alpha) {
+  const p1 = perp(u), p2 = cross(u, p1), N = 6, th = s * 0.05, loops = [];
+  const ring = (t) => {
+    const out = [];
+    for (let i = 0; i < N; i++) {
+      const a = i * 2 * Math.PI / N, rr = s * (0.62 + 0.38 * Math.abs(Math.cos(a * 1.5)));
+      out.push(vadd(vadd(c, vscl(u, t * th)), vscl(vadd(vscl(p1, Math.cos(a)), vscl(p2, Math.sin(a))), rr)));
+    }
+    return out;
+  };
+  const a0 = ring(-0.5), a1 = ring(0.5);
+  for (let i = 0; i < N; i++) { const j = (i + 1) % N; loops.push([a0[i], a0[j], a1[j], a1[i]]); }
+  for (let i = 1; i < N - 1; i++) loops.push([a0[0], a0[i + 1], a0[i]]);
+  for (let i = 1; i < N - 1; i++) loops.push([a1[0], a1[i], a1[i + 1]]);
+  return solidFaces(loops, col, mat, alpha, c);
+}
+
+const INCLUSIONS = {
+  none: { zh: "无", note: "当前无内含物。" },
+  rutile: {
+    zh: "金红石针", en: "Rutile needle",
+    note: "石英中最常见的包体：金黄针状金红石，多沿 c 轴排列，转动时如丝如发。",
+    parts: [{ shape: "needle", n: 10, col: [0.87, 0.69, 0.27], mat: "solid", alpha: 0.96, orient: "c", len: [0.45, 1.05], thk: 0.022 }],
+  },
+  tourm: {
+    zh: "电气石微晶", en: "Tourmaline",
+    note: "黑色电气石小晶体，石英与萤石中都常见。",
+    parts: [{ shape: "octa", n: 4, col: [0.09, 0.11, 0.14], mat: "solid", alpha: 0.97, size: [0.07, 0.14] }],
+  },
+  pyrite: {
+    zh: "黄铁矿微晶", en: "Pyrite",
+    note: "立方体黄铁矿小晶，萤石里的经典包体。",
+    parts: [{ shape: "cube", n: 5, col: [0.80, 0.70, 0.34], mat: "metal", alpha: 0.97, size: [0.06, 0.11] }],
+  },
+  bubble: {
+    zh: "气泡", en: "Gas bubble",
+    note: "球形气包体：亮斑小而集中，是「亮珠」而不是面。",
+    parts: [{ shape: "ico", n: 12, col: [0.93, 0.97, 1.00], mat: "bubble", alpha: 0.92, size: [0.035, 0.085] }],
+  },
+  fluid: {
+    zh: "多相包体", en: "Multiphase",
+    note: "气 + 液 + 微晶同处一个愈合空腔：方解石、绿柱石里常见。",
+    parts: [
+      { shape: "ico",  n: 5, col: [0.93, 0.97, 1.00], mat: "bubble", alpha: 0.92, size: [0.045, 0.075] },
+      { shape: "octa", n: 2, col: [0.16, 0.22, 0.28], mat: "solid",  alpha: 0.96, size: [0.03, 0.06] },
+      { shape: "needle", n: 3, col: [0.86, 0.70, 0.30], mat: "solid", alpha: 0.94, len: [0.10, 0.22], thk: 0.010 },
+    ],
+  },
+  fracture: {
+    zh: "愈合裂隙", en: "Healed fracture",
+    note: "薄片状愈合裂隙：银白色、反光强，是「面」而不是点。",
+    parts: [{ shape: "plate", n: 3, col: [0.84, 0.89, 0.94], mat: "solid", alpha: 0.55, size: [0.16, 0.30] }],
+  },
+};
+
+let INC = [];
+function buildPart(part, rnd, R0, c, u) {
+  if (part.shape === "needle") {
+    const L = R0 * (part.len[0] + rnd() * (part.len[1] - part.len[0]));
+    return needleSolid(c, u, L, R0 * part.thk, part.col, part.mat, part.alpha);
+  }
+  if (part.shape === "plate") {
+    const s = R0 * (part.size[0] + rnd() * (part.size[1] - part.size[0]));
+    return plateSolid(c, u, s, part.col, part.mat, part.alpha);
+  }
+  const s = R0 * (part.size[0] + rnd() * (part.size[1] - part.size[0]));
+  if (part.shape === "octa") return polySolid(OCTA, FACES_OCTA, c, s, part.col, part.mat, part.alpha);
+  if (part.shape === "cube") return polySolid(CUBE, FACES_CUBE, c, s, part.col, part.mat, part.alpha);
+  return polySolid(ICO, FACES_ICO, c, s * 0.72, part.col, part.mat, part.alpha);
+}
+function buildInclusions() {
+  INC = [];
+  if (!GEO) return;
+  // state.inclusion 为 null 表示"跟随矿物默认"（换矿物时要跟着变）
+  const inc = state.inclusion == null ? (mineral().inclusion || "none") : state.inclusion;
+  if (!inc || inc === "none") return;
+  const spec = INCLUSIONS[inc];
+  if (!spec) return;
+  const rnd = mulberry32(strHash(`${state.mineralId}|${state.habitId}|${state.inclusion}`));
+  const R0 = GEO.extent * 0.5;
+  const dens = state.incDensity == null ? 0.6 : state.incDensity;
+  const cAx = axesVectors().find(a => a.label === "c");
+  const cAxis = cAx ? unit(cAx.v) : [0, 0, 1];
+  for (const part of spec.parts) {
+    const n = Math.max(0, Math.round(part.n * dens));
+    for (let k = 0; k < n; k++) {
+      let made = null;
+      for (let tries = 0; tries < 24 && !made; tries++) {
+        const c = vscl(unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]), R0 * (0.04 + rnd() * 0.16));
+        const u = part.orient === "c"
+          ? unit(vlin(unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]), cAxis, 0.55))
+          : unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]);
+        // 缩到能完全放进晶体为止（针状包体最容易探出晶面）
+        for (const s of [1, 0.82, 0.66, 0.52, 0.4]) {
+          const f = buildPart(part, rnd, R0 * s, c, u);
+          if (f.every(fc => fc.pts.every(p => inside(p)))) { made = f; break; }
+        }
+      }
+      if (made) for (const fc of made) INC.push(fc);
+    }
+  }
+}
+/* 内含物画在晶体之前：被半透明晶面整体盖住，于是"通透度越低越看得清" */
+function paintInclusions(g, opts, project, M) {
+  if (!INC.length || M.alpha > 0.995) return;
+  const R = project.R, DIST = project.DIST, eye = [0, 0, DIST];
+  const list = [];
+  for (const f of INC) {
+    const wn = mv(R, f.n), cw = mv(R, f.c);
+    if (dot(wn, sub(eye, cw)) <= 0) continue;
+    list.push({ f, wn, cw, depth: DIST - cw[2] });
+  }
+  list.sort((a, b) => b.depth - a.depth);
+  for (const it of list) {
+    const pts = it.f.pts.map(project);
+    g.beginPath();
+    pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+    g.closePath();
+    const m2 = { ...(INCL_MAT[it.f.mat] || INCL_MAT.solid), ambK: M.ambK, ambT: M.ambT };
+    g.fillStyle = rgbStr(shadeFace(it.f.col, it.wn, it.cw, eye, m2), it.f.alpha);
+    g.fill();
+  }
+}
+
+const mat = (bgId) => {
+  const id = state.luster || mineral().luster || DEFAULT_LUSTER;
+  const L = LUSTERS[id] || LUSTERS.glass;
+  const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.dark;
+  // 金属光泽天然不透明；其余按通透度档位/滑杆取值
+  const alpha = L.opaqueOnly ? 1 : (state.alpha == null ? defaultAlpha(mineral()) : state.alpha);
+  return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
+};
 
 /* 程序化"影棚环境"：方向固定在世界/观察空间，晶体转动时反射内容随之扫过各个晶面——
    这正是真实晶体在固定光源下的观感。不是贴图，是几个方向光斑加天地渐变。
    第一个与 LIGHT_V 同向，保证高光和环境反射对得上（不会出现"高光在左、亮斑在右"的撕裂） */
+let LIGHT_V = unit([-0.34, 0.62, 0.72]);   // 主光方向（可变：光照滑杆改它）
 const ENV_LIGHTS = [
-  { dir: unit([-0.34, 0.62, 0.72]), col: [1.00, 0.98, 0.93], sharp: 3.5, inten: 0.75 },  // 主柔光箱：大面积柔光，提供整体的"上左下亮"反射梯度
+  { dir: LIGHT_V.slice(), col: [1.00, 0.98, 0.93], sharp: 3.5, inten: 0.75 },  // 主柔光箱：大面积柔光，提供整体的"上左下亮"反射梯度
   { dir: unit([0.72, 0.28, 0.62]),  col: [0.60, 0.72, 1.00], sharp: 26, inten: 0.50 },  // 高位冷侧亮块：较窄，制造锐利的亮斑
   { dir: unit([0.10, -0.85, 0.50]), col: [0.95, 0.78, 0.58], sharp: 2,  inten: 0.26 },  // 下方暖反光板
 ];
+/* 光源方位/高度 → 主光方向。主柔光箱跟着主光一起转，否则高光与环境反射会错位 */
+function setLight(azDeg, elDeg) {
+  const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180, ce = Math.cos(el);
+  LIGHT_V = unit([ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)]);
+  ENV_LIGHTS[0].dir = LIGHT_V.slice();
+}
 function envSample(r) {
   const out = [0, 0, 0];
   for (const L of ENV_LIGHTS) {
@@ -516,8 +867,10 @@ function shadeFace(base, n, cw, eye, M) {
   const refl = F * M.envI;
   // 掠射角提亮：保留的"晶体感"项，量已调小，避免与 Schlick 双重计分
   const fres = Math.pow(1 - Math.abs(d), 3) * (M.fres || 0) * 0.45;
+  // 环境光受场景背景调制：藏品柜里更暗、自然光下更亮
+  const ambK = M.ambK == null ? 1 : M.ambK, ambT = M.ambT || [1, 1, 1];
   return [0, 1, 2].map(i =>
-    clamp(base[i] * (M.amb + M.diff * lam)                       // 漫反射 + 环境光
+    clamp(base[i] * (M.amb * ambK * ambT[i] + M.diff * lam)       // 漫反射 + 环境光
       + (tint ? tint[i] : 1) * sp                                 // 锐利高光
       + (M.metal ? base[i] : 1) * refl * env[i]                   // 环境反射（金属带本体色）
       + fres * (0.55 + 0.45 * base[i]), 0, 1));
@@ -601,7 +954,8 @@ function drawStriations(g, it, pts, R, project) {
   g.restore();
 }
 
-/* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成 */
+/* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成。
+   内含物先画（在晶体下面），于是会被半透明的晶面整体盖住：通透度越低越看得清 */
 function paintFaces(g, opts, project, M) {
   const { vw, vh } = opts;
   if (!GEO) return;
@@ -618,6 +972,8 @@ function paintFaces(g, opts, project, M) {
     list.push({ f, wn, cw, depth: DIST - cw[2], front });
   }
   list.sort((a, b) => b.depth - a.depth);
+
+  paintInclusions(g, opts, project, M);
 
   for (const it of list) {
     const pts = it.f.pts.map(project);
@@ -654,12 +1010,14 @@ function paintFaces(g, opts, project, M) {
 
 }
 
-/* 主绘制：先按不透明画到离屏，再整体按光泽的通透度合成（避免每片半透明叠加出接缝） */
+/* 主绘制：先画背景，再按不透明画到离屏，最后整体按通透度合成（避免每片半透明叠加出接缝） */
 function paint(g, opts) {
   if (!GEO) return;
-  const M = mat();
+  const M = mat(opts.bg);
   const project = makeProject(opts);
   const dpr = opts.dpr || 1;
+  const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
+  if (!opts.noBg) BG.draw(g, opts.vw, opts.vh);          // 程序化背景：渐变/展台/远山/纸面（导出时由调用方先画，故可跳过）
   if (M.alpha < 0.995) {
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.round(opts.vw * dpr));
@@ -667,6 +1025,7 @@ function paint(g, opts) {
     const g2 = off.getContext("2d");
     if (g2) {
       g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g2.clearRect(0, 0, opts.vw, opts.vh);
       paintFaces(g2, opts, project, M);
       g.save();
       g.globalAlpha = M.alpha;
@@ -909,6 +1268,118 @@ function renderLusters() {
     `该矿物典型光泽：<b>${LUSTERS[def].zh}</b>。玻璃/金刚＝高光锐利、略有通透；金属＝带色高光；蜡状＝柔和高光。`;
 }
 
+/* 背景：程序化场景。除画面外还带环境光修正（藏品柜更暗、自然光更亮） */
+function renderBackgrounds() {
+  const box = document.getElementById("bgs");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const [id, B] of Object.entries(BACKGROUNDS)) {
+    const b = document.createElement("button");
+    b.className = "btn" + (state.bg === id ? " on" : "");
+    b.textContent = B.zh;
+    b.onclick = () => { state.bg = id; renderBackgrounds(); draw(); };
+    box.appendChild(b);
+  }
+  const B = BACKGROUNDS[state.bg] || BACKGROUNDS.dark;
+  const hints = {
+    dark: "纯色渐变：最干净，适合看几何。",
+    lab: "浅灰实验台 + 记录纸网格，环境光略强。",
+    nature: "天空远山，环境光偏暖。",
+    cabinet: "深色展柜 + 顶部射灯：最暗，反差最大。",
+    paper: "近白纸面：出图最好看，像标本照片。",
+  };
+  document.getElementById("bgHint").textContent = hints[state.bg] || "";
+}
+
+/* 通透度：与光泽完全独立的两个栏位。金属光泽天然不透明，滑条会禁用 */
+function renderTransp() {
+  const sel = document.getElementById("transp");
+  if (!sel) return;
+  const m = mineral();
+  const lid = state.luster || m.luster || DEFAULT_LUSTER;
+  const metal = !!(LUSTERS[lid] || {}).opaqueOnly;
+  const def = defaultTransp(m);
+  if (state.transp == null) { state.transp = def; state.alpha = (transpById(def) || {}).alpha; }
+  sel.innerHTML = "";
+  for (const t of TRANSP) {
+    const o = document.createElement("option");
+    o.value = t.id; o.textContent = t.zh;
+    if (state.transp === t.id) o.selected = true;
+    sel.appendChild(o);
+  }
+  const oc = document.createElement("option");
+  oc.value = "custom"; oc.textContent = "自定义";
+  if (state.transp === "custom") oc.selected = true;
+  sel.appendChild(oc);
+  sel.disabled = metal;
+  const ar = document.getElementById("alphaR");
+  ar.disabled = metal;
+  ar.value = Math.round((state.alpha == null ? 1 : state.alpha) * 100);
+  const al = document.getElementById("alphaVal");
+  if (al) al.textContent = Math.round((state.alpha == null ? 1 : state.alpha) * 100) + "%";
+  document.getElementById("transpHint").innerHTML = metal
+    ? "金属光泽天然不透明（金属不透光），因此这里不可调。"
+    : `当前：<b>${state.transp === "custom" ? "自定义" : (transpById(state.transp) || {}).zh}</b>，通透度 ${Math.round(state.alpha * 100)}%。通透度越低，内含物越清楚。`;
+}
+
+function renderInclusions() {
+  const sel = document.getElementById("incSel");
+  if (!sel) return;
+  // state.inclusion === null 表示"跟随矿物默认"：换矿物时自动跟着换，
+  // 因此这里绝不把默认值写回 state（写回就再也跟不动了）
+  const cur = state.inclusion == null ? (mineral().inclusion || "none") : state.inclusion;
+  sel.innerHTML = "";
+  for (const [id, spec] of Object.entries(INCLUSIONS)) {
+    const o = document.createElement("option");
+    o.value = id; o.textContent = spec.zh;
+    if (cur === id) o.selected = true;
+    sel.appendChild(o);
+  }
+  const den = document.getElementById("incDens");
+  den.value = Math.round((state.incDensity == null ? 0.6 : state.incDensity) * 100);
+  const dlab = document.getElementById("incDensVal");
+  if (dlab) dlab.textContent = Math.round((state.incDensity == null ? 0.6 : state.incDensity) * 100) + "%";
+  const spec = INCLUSIONS[cur] || INCLUSIONS.none;
+  document.getElementById("incHint").innerHTML =
+    `${spec.note}<br>包体画在晶体内部、被晶面整体盖住，因此<b>只在半透明/全透明时可见</b>；且随晶体一起转动。`;
+}
+
+function renderLight() {
+  const az = document.getElementById("lightAz"), el = document.getElementById("lightEl");
+  if (!az || !el) return;
+  az.value = state.lightAz; el.value = state.lightEl;
+  const av = document.getElementById("lightAzVal"), ev = document.getElementById("lightElVal");
+  if (av) av.textContent = state.lightAz + "°";
+  if (ev) ev.textContent = state.lightEl + "°";
+}
+
+document.getElementById("transp").onchange = (e) => {
+  const v = e.target.value;
+  state.transp = v;
+  const t = transpById(v);
+  state.alpha = t ? t.alpha : state.alpha;
+  renderTransp(); draw();
+};
+document.getElementById("alphaR").oninput = (e) => {
+  state.alpha = Number(e.target.value) / 100;
+  state.transp = "custom";
+  renderTransp(); draw();
+};
+document.getElementById("incSel").onchange = (e) => {
+  state.inclusion = e.target.value;
+  buildInclusions(); renderInclusions(); draw();
+};
+document.getElementById("incDens").oninput = (e) => {
+  state.incDensity = Number(e.target.value) / 100;
+  buildInclusions(); renderInclusions(); draw();
+};
+document.getElementById("lightAz").oninput = (e) => {
+  state.lightAz = Number(e.target.value); setLight(state.lightAz, state.lightEl); renderLight(); draw();
+};
+document.getElementById("lightEl").oninput = (e) => {
+  state.lightEl = Number(e.target.value); setLight(state.lightAz, state.lightEl); renderLight(); draw();
+};
+
 function renderSwatches() {
   const box = document.getElementById("swatches");
   box.innerHTML = "";
@@ -948,6 +1419,10 @@ function syncPanels() {
     document.getElementById("optTwin").checked = state.twinTint;
   }
   renderLusters();
+  renderBackgrounds();
+  renderTransp();
+  renderInclusions();
+  renderLight();
   renderSwatches();
 
   const kv = document.getElementById("dataKV");
@@ -1053,20 +1528,13 @@ function buildExportCanvas() {
   const off = document.createElement("canvas");
   off.width = w; off.height = h;
   const g = off.getContext("2d");
-  const dark = bg !== "light";
+  const BG = BACKGROUNDS[bg] || null;                 // 导出背景＝场景背景（共用同一套绘制）
+  const dark = BG ? BG.dark : bg === "dark";
   const ink = bg === "none" ? "#12161c" : (dark ? "#eaf2fb" : "#10151c");
   const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
   const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
 
-  if (bg === "dark") {
-    const grd = g.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.38, w * 0.75);
-    grd.addColorStop(0, "#16283f"); grd.addColorStop(0.55, "#0c1522"); grd.addColorStop(1, "#070c14");
-    g.fillStyle = grd; g.fillRect(0, 0, w, h);
-  } else if (bg === "light") {
-    const grd = g.createRadialGradient(w * 0.5, h * 0.36, 0, w * 0.5, h * 0.36, w * 0.7);
-    grd.addColorStop(0, "#fbf8f2"); grd.addColorStop(1, "#e9e3d7");
-    g.fillStyle = grd; g.fillRect(0, 0, w, h);
-  }
+  if (BG) BG.draw(g, w, h);
 
   // 晶体区域
   const m = mineral(), hb = habit(), v = variant();
@@ -1146,7 +1614,7 @@ function buildExportCanvas() {
   const crystTop = h * 0.055;
   const crystH = Math.max(h * 0.30, h - textH - h * 0.16);   // 文字多时让出空间，避免压到底边
   const scaleCrystal = Math.min(crystH / (h * 0.92), w / (h * 0.9)) * 0.92;
-  paint(g, { cx: w / 2, cy: crystTop + crystH / 2, scale: state.zoom * scaleCrystal * 1.06, vw: w, vh: h, pan: [0, 0] });
+  paint(g, { cx: w / 2, cy: crystTop + crystH / 2, scale: state.zoom * scaleCrystal * 1.06, vw: w, vh: h, pan: [0, 0], noBg: true, bg: state.exp.bg });
 
   // 分隔线 + 文字：文字块整体不越底边（竖版长画布最容易被挤出界）
   let y = Math.min(crystTop + crystH + 10 * u, h * 0.965 - textH - 30 * u);
@@ -1195,6 +1663,12 @@ function downloadCanvas(canvas, name) {
 }
 
 document.getElementById("openExport").onclick = () => {
+  // 导出背景默认跟随当前场景背景（"所见即所得"）
+  if (BACKGROUNDS[state.bg]) {
+    state.exp.bg = state.bg;
+    const box = document.getElementById("expBg");
+    [...box.children].forEach(b => b.classList.toggle("on", b.dataset.bg === state.bg));
+  }
   document.getElementById("modal").classList.add("show");
   initExportFields();
   refreshPreview();

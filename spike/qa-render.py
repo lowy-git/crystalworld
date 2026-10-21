@@ -14,6 +14,15 @@ LIGHT = np.array([-0.34, 0.62, 0.72])
 LIGHT = LIGHT / np.linalg.norm(LIGHT)
 
 
+def set_light(az_deg, el_deg):
+    """方位角/高度角 → 主光方向（与 demo/crystal_template.html 的 setLight 一致）"""
+    global LIGHT, ENV_LIGHTS
+    az, el = math.radians(az_deg), math.radians(el_deg)
+    ce = math.cos(el)
+    LIGHT = _u([ce * math.sin(az), math.sin(el), ce * math.cos(az)])
+    ENV_LIGHTS[0]["dir"] = LIGHT.copy()
+
+
 def _font(size=16):
     """QA 图要写中文标签，PIL 默认字体不含 CJK，优先挂系统微软雅黑。"""
     from PIL import ImageFont
@@ -27,13 +36,211 @@ def _font(size=16):
     return ImageFont.load_default()
 
 LUSTERS = {
-    "opaque":     dict(amb=0.50, diff=0.60, spec=0.05, shin=4,   alpha=1.00, back=1.00, fres=0.06, ior=1.60, envI=0.10),
-    "glass":      dict(amb=0.40, diff=0.55, spec=0.75, shin=14,  alpha=0.78, back=0.55, fres=0.34, ior=1.54, envI=0.52),
-    "adamantine": dict(amb=0.22, diff=0.38, spec=1.00, shin=22,  alpha=0.95, back=0.62, fres=0.48, ior=2.42, envI=1.00),
-    "metallic":   dict(amb=0.04, diff=0.07, spec=0.85, shin=10,  alpha=1.00, back=1.00, fres=0.34, ior=1.00, envI=0.95, metal=1),
-    "waxy":       dict(amb=0.58, diff=0.50, spec=0.22, shin=6,   alpha=0.96, back=0.72, fres=0.14, ior=1.50, envI=0.22),
-    "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, alpha=0.45, back=0.30, fres=0.52, ior=1.54, envI=0.45),
+    "opaque":      dict(amb=0.50, diff=0.60, spec=0.05, shin=4,  fres=0.06, ior=1.60, envI=0.10),
+    "glass":       dict(amb=0.40, diff=0.55, spec=0.75, shin=14, fres=0.34, ior=1.54, envI=0.52),
+    "adamantine":  dict(amb=0.22, diff=0.38, spec=1.00, shin=22, fres=0.48, ior=2.42, envI=1.00),
+    "metallic":    dict(amb=0.04, diff=0.07, spec=0.85, shin=10, fres=0.34, ior=1.00, envI=0.95, metal=1, opaqueOnly=1),
+    "waxy":        dict(amb=0.58, diff=0.50, spec=0.22, shin=6,  fres=0.14, ior=1.50, envI=0.22),
+    "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, fres=0.52, ior=1.54, envI=0.45),
 }
+
+# 通透度：与光泽完全独立（金属光泽天然不透明）
+TRANSP = {"opaque": 1.00, "transl": 0.55, "clear": 0.26}
+
+
+def default_transp(m):
+    lu = m.get("luster", "glass")
+    if lu in ("metallic", "opaque"):
+        return "opaque"
+    if lu in ("adamantine", "transparent"):
+        return "clear"
+    return "transl"
+
+
+# 场景背景：除画面外还带环境光修正（amb 倍率 + 色调）
+BACKGROUNDS = {
+    "dark":    dict(dark=True,  amb=0.88, amb_t=np.array([0.80, 0.88, 1.00])),
+    "lab":     dict(dark=False, amb=1.14, amb_t=np.array([0.99, 1.00, 1.04])),
+    "nature":  dict(dark=False, amb=1.18, amb_t=np.array([1.02, 1.00, 0.93])),
+    "cabinet": dict(dark=True,  amb=0.82, amb_t=np.array([1.00, 0.93, 0.80])),
+    "paper":   dict(dark=False, amb=1.28, amb_t=np.array([1.03, 1.01, 0.97])),
+}
+
+
+def draw_bg(kind, W, H):
+    """程序化背景（复刻 demo/crystal_template.html 的 BACKGROUNDS[kind].draw）"""
+    im = Image.new("RGB", (W, H))
+    dr = ImageDraw.Draw(im, "RGBA")
+    if kind == "dark":
+        for y in range(H):
+            t = y / H
+            r = int(22 + (7 - 22) * t)
+            g = int(40 + (12 - 40) * t)
+            b = int(63 + (20 - 63) * t)
+            dr.line([(0, y), (W, y)], fill=(r, g, b))
+    elif kind == "paper":
+        for y in range(H):
+            t = y / H
+            c = tuple(int(250 + (239 - 250) * t) for _ in range(3))
+            dr.line([(0, y), (W, y)], fill=c)
+    elif kind == "lab":
+        # 墙面 + 实验台面 + 记录纸网格（JS 侧线色 rgba(90,120,150,.10)）
+        dr.rectangle([0, 0, W, int(H * 0.78)], fill=(222, 231, 240))
+        dr.rectangle([0, int(H * 0.78), W, H], fill=(163, 179, 197))
+        st = max(26, W // 26)
+        for x in range(0, W, st):
+            dr.line([(x, 0), (x, H)], fill=(90, 120, 150, 26), width=1)
+        for y in range(0, H, st):
+            dr.line([(0, y), (W, y)], fill=(90, 120, 150, 26), width=1)
+        dr.line([(0, int(H * 0.78)), (W, int(H * 0.78))], fill=(255, 255, 255, 128), width=1)
+    elif kind == "nature":
+        # 天空（上 62%）+ 压低远山 + 地面（66% 以下）
+        dr.rectangle([0, 0, W, int(H * 0.62)], fill=(94, 166, 221))
+        dr.rectangle([0, int(H * 0.62), W, H], fill=(169, 207, 232))
+        pts = [(int(W * i / 5), int(H * (0.54 + 0.06 * math.sin(i * 1.7) + 0.03 * math.cos(i * 2.9))))
+               for i in range(6)]
+        dr.polygon(pts + [(W, int(H * 0.66)), (0, int(H * 0.66))], fill=(74, 102, 86, 87))
+        dr.rectangle([0, int(H * 0.66), W, H], fill=(93, 109, 71))
+    elif kind == "cabinet":
+        dr.rectangle([0, 0, W, H], fill=(11, 9, 6))
+        dr.ellipse([int(-W * 0.3), int(-H * 0.5), int(W * 1.3), int(H * 0.6)], fill=(58, 46, 30))
+        dr.rectangle([0, int(H * 0.80), W, H], fill=(31, 25, 18))
+        dr.line([(0, int(H * 0.80)), (W, int(H * 0.80))], fill=(255, 220, 160, 41), width=1)
+    return im
+
+
+INCL_MAT = {
+    "solid":  dict(amb=0.30, diff=0.55, spec=0.55, shin=18, fres=0.30, ior=1.60, envI=0.45),
+    "metal":  dict(amb=0.05, diff=0.10, spec=0.80, shin=10, fres=0.34, ior=1.00, envI=0.90, metal=1),
+    "bubble": dict(amb=0.58, diff=0.28, spec=0.95, shin=42, fres=0.62, ior=1.34, envI=0.72),
+}
+
+PHI = (1 + math.sqrt(5)) / 2
+INCL_SHAPES = {
+    "octa": (np.array([[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]], dtype=float),
+             [(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)]),
+    "cube": (np.array([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], dtype=float),
+             [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]),
+    "ico":  (np.array([[-1, PHI, 0], [1, PHI, 0], [-1, -PHI, 0], [1, -PHI, 0], [0, -1, PHI], [0, 1, PHI],
+                       [0, -1, -PHI], [0, 1, -PHI], [PHI, 0, -1], [PHI, 0, 1], [-PHI, 0, -1], [-PHI, 0, 1]], dtype=float),
+             [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4), (11, 10, 2),
+              (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5),
+              (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)]),
+}
+
+INCLUSIONS = {
+    "none":     dict(zh="无", note="当前无内含物。"),
+    "rutile":   dict(zh="金红石针", note="金黄针状金红石，石英中最常见的包体。", parts=[dict(shape="needle", n=10, col=(0.87, 0.69, 0.27), mat="solid", alpha=0.96, orient="c", ln=(0.45, 1.05), thk=0.022)]),
+    "tourm":    dict(zh="电气石微晶", note="黑色电气石小晶体。", parts=[dict(shape="octa", n=4, col=(0.09, 0.11, 0.14), mat="solid", alpha=0.97, size=(0.07, 0.14))]),
+    "pyrite":   dict(zh="黄铁矿微晶", note="立方体黄铁矿小晶，萤石里的经典包体。", parts=[dict(shape="cube", n=5, col=(0.80, 0.70, 0.34), mat="metal", alpha=0.97, size=(0.06, 0.11))]),
+    "bubble":   dict(zh="气泡", note="球形气包体：亮斑小而集中。", parts=[dict(shape="ico", n=12, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.035, 0.085))]),
+    "fluid":    dict(zh="多相包体", note="气 + 液 + 微晶同处一个愈合空腔。", parts=[
+        dict(shape="ico", n=5, col=(0.93, 0.97, 1.00), mat="bubble", alpha=0.92, size=(0.045, 0.075)),
+        dict(shape="octa", n=2, col=(0.16, 0.22, 0.28), mat="solid", alpha=0.96, size=(0.03, 0.06)),
+        dict(shape="needle", n=3, col=(0.86, 0.70, 0.30), mat="solid", alpha=0.94, ln=(0.10, 0.22), thk=0.010)]),
+    "fracture": dict(zh="愈合裂隙", note="薄片状愈合裂隙：银白、反光强。", parts=[dict(shape="plate", n=3, col=(0.84, 0.89, 0.94), mat="solid", alpha=0.55, size=(0.16, 0.30))]),
+}
+
+
+def _perp(u):
+    a = np.array([1.0, 0, 0]) if abs(u[0]) < 0.9 else np.array([0.0, 0, 1])
+    return _u(np.cross(u, a))
+
+
+def _solid_faces(loops, col, matname, alpha, center):
+    out = []
+    for pts in loops:
+        pts = np.array(pts, dtype=float)
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+        n = n / (np.linalg.norm(n) + 1e-12)
+        c = pts.mean(0)
+        if center is not None and float(np.dot(n, c - center)) < 0:
+            pts = pts[::-1]
+            n = -n
+        out.append(dict(pts=pts, n=n, c=c, col=col, mat=matname, alpha=alpha))
+    return out
+
+
+def _ring(c, u, p1, p2, t, rr, N=6):
+    return [c + u * (t) + rr * (p1 * math.cos(i * 2 * math.pi / N) + p2 * math.sin(i * 2 * math.pi / N))
+            for i in range(N)]
+
+
+def build_inclusions(m, planes, extent, inc, dens=0.6, seed=0):
+    """与 demo 的 buildInclusions 同规则：随机位置 → 缩到能完全放进晶体内部为止"""
+    if not inc or inc == "none":
+        return []
+    spec = INCLUSIONS[inc]
+    rng = np.random.default_rng(seed)
+    R0 = extent * 0.5
+    cax = np.array([0.0, 0.0, 1.0])
+    out = []
+
+    def inside(p):
+        for group in planes:
+            if all(float(np.dot(pl_n, p)) - pl_d <= 1e-6 for (pl_n, pl_d) in group):
+                return True
+        return False
+
+    for part in spec["parts"]:
+        for _ in range(max(0, round(part["n"] * dens))):
+            made = None
+            for _try in range(24):
+                c = _u([rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)]) * R0 * (0.04 + rng.uniform(0, 0.16))
+                d = _u([rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)])
+                if part.get("orient") == "c":
+                    u = _u(d * 0.45 + cax * 0.55)
+                else:
+                    u = d
+                for s in (1, 0.82, 0.66, 0.52, 0.4):
+                    f = _build_part(part, R0 * s, c, u, inside)
+                    if f:
+                        made = f
+                        break
+                if made:
+                    break
+            if made:
+                out.extend(made)
+            else:
+                # 兜底：贴着中心放一个最小的（与 demo 的 buildInclusions 行为一致）
+                for s in (0.4, 0.3, 0.22, 0.16):
+                    f = _build_part(part, R0 * s, np.zeros(3), cax if part.get("orient") == "c" else d, inside)
+                    if f:
+                        out.extend(f)
+                        break
+    return out
+
+
+def _build_part(part, R0, c, u, inside):
+    shape = part["shape"]
+    if shape == "needle":
+        L = R0 * (part["ln"][0] + np.random.uniform(0, 1) * (part["ln"][1] - part["ln"][0]))
+        r = R0 * part["thk"]
+        p1, p2 = _perp(u), np.cross(u, _perp(u))
+        b, t2 = _ring(c, u, p1, p2, -0.5 * L, r), _ring(c, u, p1, p2, 0.5 * L, r * 0.34)
+        loops = [[b[i], b[(i + 1) % 6], t2[(i + 1) % 6], t2[i]] for i in range(6)]
+        loops += [[b[0], b[i + 1], b[i]] for i in range(1, 5)]
+        loops += [[t2[0], t2[i], t2[i + 1]] for i in range(1, 5)]
+    elif shape == "plate":
+        s = R0 * (part["size"][0] + np.random.uniform(0, 1) * (part["size"][1] - part["size"][0]))
+        p1, p2 = _perp(u), np.cross(u, _perp(u))
+        th = s * 0.05
+        a0 = _ring(c, u, p1, p2, -0.5 * th, s * (1 + 0 * 0), 6)
+        a1 = _ring(c, u, p1, p2, 0.5 * th, s * (1 + 0 * 0), 6)
+        loops = [[a0[i], a0[(i + 1) % 6], a1[(i + 1) % 6], a1[i]] for i in range(6)]
+        loops += [[a0[0], a0[i + 1], a0[i]] for i in range(1, 5)]
+        loops += [[a1[0], a1[i], a1[i + 1]] for i in range(1, 5)]
+    else:
+        s = R0 * (part["size"][0] + np.random.uniform(0, 1) * (part["size"][1] - part["size"][0]))
+        V, F = INCL_SHAPES[shape]
+        sc = s * (0.72 if shape == "ico" else 1.0)
+        loops = [[c + sc * V[i] for i in f] for f in F]
+    faces = _solid_faces(loops, part["col"], part["mat"], part["alpha"], c)
+    if not all(inside(p) for f in faces for p in f["pts"]):
+        return None
+    return faces
+
+
 TINTS = [(0.55, 0.74, 0.97), (0.97, 0.62, 0.82), (0.55, 0.92, 0.76), (0.97, 0.84, 0.55)]
 CLIP_TINT = (0.58, 0.62, 0.68)
 
@@ -41,6 +248,11 @@ CLIP_TINT = (0.58, 0.62, 0.68)
 def load():
     html = open("demo/crystal.html", encoding="utf-8").read()
     return json.loads(re.search(r"const DATA = (\{.*?\});\n", html, re.S).group(1))
+
+
+def load_kernel():
+    """占位：内核面由 variant 几何直接导出（见 build_inclusions 调用处）"""
+    return None
 
 
 def q_mul(a, b):
@@ -103,7 +315,9 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     h = h / (np.linalg.norm(h) + 1e-9)
     sp = (max(0.0, float(np.dot(n, h))) ** mat["shin"]) * mat["spec"]
     b = np.array(base, dtype=float)
-    col = b * (mat["amb"] + mat["diff"] * lam)
+    amb = mat["amb"] * mat.get("ambK", 1.0)
+    amb_t = mat.get("ambT", np.ones(3))
+    col = b * (amb + mat["diff"] * lam) * amb_t
     spec_col = b * 0.65 + 0.35 if tint_spec else np.array([1.0, 1.0, 1.0])
     col = col + spec_col * sp
     d = float(np.dot(n, v))
@@ -121,7 +335,8 @@ def shade(base, n, c, eye, mat, tint_spec=False):
 STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0)}
 
 
-def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0.11), striations=True):
+def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striations=True,
+           alpha=None, inclusion=None, dens=0.6, light=(-25, 38)):
     D = load()
     m = next(x for x in D["minerals"] if x["id"] == mineral_id)
     hab = next(x for x in m["habits"] if x["id"] == habit_id)
@@ -153,14 +368,55 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0
         q = q / np.linalg.norm(q)
     R = q_mat(q)
 
-    mat = LUSTERS[luster or m.get("luster", "glass")]
+    set_light(light[0], light[1])
+    BG = BACKGROUNDS[bg]
+    mat = dict(LUSTERS[luster or m.get("luster", "glass")])
+    if alpha is None:
+        alpha = 1.0 if mat.get("opaqueOnly") else TRANSP[default_transp(m)]
+    mat["alpha"] = alpha
+    mat["ambK"] = BG["amb"]
+    mat["ambT"] = BG["amb_t"]
+    # 每个个体（indiv）一组半空间 → 与 demo 的 inside() 同规则（双晶是并集）
+    plane_groups = {}
+    for f in faces:
+        if f["form"] < 0:
+            continue
+        plane_groups.setdefault(f["indiv"], []).append(
+            (f["n"], float(np.dot(f["n"], f["pts"][0]))))
+    inc = build_inclusions(m, list(plane_groups.values()), float(np.abs(P).max()),
+                           inclusion if inclusion is not None else m.get("inclusion"), dens)
     show_edges = True
     W, H = w * SS, h * SS
+    bgim = draw_bg(bg, W, H).convert("RGBA")
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img, "RGBA")
     cx, cy = W / 2, H / 2
     FOC = 3.05 * min(W, H) * 0.5
     eye = np.array([0.0, 0.0, DIST])
+
+    def proj(p):
+        wp = R @ p
+        z = DIST - wp[2]
+        k = FOC / max(z, 0.4)
+        return (cx + wp[0] * k, cy - wp[1] * k)
+
+    # 内含物画在背景之上、晶体之下（与 JS 的 painter 顺序一致：
+    # 晶面整体以 alpha 盖住包体，所以通透度越低越看得清）
+    if inc and mat["alpha"] < 0.995:
+        inc_items = []
+        for f in inc:
+            wn = R @ f["n"]
+            cw = R @ f["c"]
+            if float(np.dot(wn, eye - cw)) <= 0:
+                continue
+            inc_items.append((cw[2], f, wn, cw))
+        inc_items.sort(key=lambda t: -t[0])
+        di = ImageDraw.Draw(bgim, "RGBA")
+        for _, f, wn, cw in inc_items:
+            col = shade(f["col"], wn, cw, eye, INCL_MAT[f["mat"]])
+            pts = [proj(p) for p in f["pts"]]
+            fill = tuple(int(c * 255) for c in col) + (int(f["alpha"] * 255),)
+            di.polygon(pts, fill=fill, outline=fill, width=1)
 
     items = []
     two_sided = any(f["clip"] for f in faces) or not v["closed"]
@@ -181,16 +437,11 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0
 
     for depth, f, wn, cw, front in items:
         base = CLIP_TINT if f["form"] < 0 else TINTS[f["form"] % len(TINTS)]
-        col = shade(base, wn, cw, eye, mat, tint_spec=(mat is LUSTERS["metallic"]))
+        col = shade(base, wn, cw, eye, mat, tint_spec=(mat.get("metal", 0) == 1))
         alpha = 0.92 if not front else 1.0
         if not front:
             col = col * 0.5
-        pts = []
-        for p in f["pts"]:
-            wp = R @ p
-            z = DIST - wp[2]
-            k = FOC / max(z, 0.4)
-            pts.append((cx + wp[0] * k, cy - wp[1] * k))
+        pts = [proj(p) for p in f["pts"]]
         fill = tuple(int(c * 255) for c in col) + (int(alpha * 255),)
         dr.polygon(pts, fill=fill, outline=fill, width=SS)
         if striations and front and f["form"] == 0 and mineral_id in STRIPE:
@@ -235,8 +486,8 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0
                     continue
                 dr.line([pts[i], pts[(i + 1) % len(f["loop"])]],
                         fill=(12, 22, 34, 150 if front else 55), width=SS)
-    bgim = Image.new("RGB", (W, H), tuple(int(c * 255) for c in bg))
-    layer = img if mat["alpha"] >= 0.995 else Image.eval(img, lambda v: v)
+    # 晶面画在透明层上，再按 mat.alpha 整体盖到「背景+包体」之上
+    # （JS 里是逐面 globalAlpha，等效于整块半透明）
     if mat["alpha"] < 0.995:
         a = img.split()[3].point(lambda v: int(v * mat["alpha"]))
         img.putalpha(a)
@@ -244,9 +495,32 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0
     return bgim.resize((w, h), Image.LANCZOS)
 
 
+def _debug_inc(mineral_id="quartz", habit_id="prismatic", inclusion="rutile", dens=1.0):
+    """打印 inc 生成/绘制链路各环节计数（排查包体不显示时用）"""
+    D = load()
+    m = next(x for x in D["minerals"] if x["id"] == mineral_id)
+    hab = next(x for x in m["habits"] if x["id"] == habit_id)
+    v = hab["variants"][sorted(hab["variants"])[-1]]
+    P = np.array(v["v"], dtype=float).reshape(-1, 3)
+    pg = {}
+    for fi, loop in enumerate(v["f"]):
+        if v["form"][fi] < 0:
+            continue
+        pts = P[loop]
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0]); n = n / np.linalg.norm(n)
+        pg.setdefault(v["indiv"][fi], []).append((n, float(np.dot(n, pts[0]))))
+    inc = build_inclusions(m, list(pg.values()), float(np.abs(P).max()), inclusion, dens)
+    R = q_mat(Q_VIEW)
+    eye = np.array([0.0, 0.0, DIST])
+    front = [f for f in inc if float(np.dot(R @ f["n"], eye - R @ f["c"])) > 0]
+    print(f"inc total={len(inc)} front={len(front)} alpha_gate={TRANSP[default_transp(m)]}")
+    return inc
+
+
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "lustre":
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "lustre":
         # 用多面习惯（36 面聚形 / 24 面双晶）才看得出光泽差异——面太少时高光只落在一两个面上
         tiles = [
             ("garnet", "combined", "111", "glass",       "石榴石聚形 · 玻璃光泽"),
@@ -266,9 +540,69 @@ if __name__ == "__main__":
             dr.text(((i % 3) * T + 12, (i // 3) * T + 8), label, fill=(205, 214, 228), font=fnt)
         out.save("render/qa-lustre.png")
         print("saved render/qa-lustre.png")
-if __name__ == "__main__":
-    sheet = len(sys.argv) > 1 and sys.argv[1] == "sheet"
-    if sheet:
+    elif mode == "scene":
+        # 五套背景 × 同一晶体：核对环境光/色调是否影响晶体观感
+        bgs = ["dark", "lab", "nature", "cabinet", "paper"]
+        T = 420
+        out = Image.new("RGB", (3 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, bgk in enumerate(bgs):
+            im = render("quartz", "prismatic", "111", T, T, luster="glass", bg=bgk)
+            out.paste(im, ((i % 3) * T, (i // 3) * T))
+            dr.text(((i % 3) * T + 12, (i // 3) * T + 8), f"石英 · 背景 {bgk}",
+                    fill=(205, 214, 228), font=fnt)
+        for i, bgk in enumerate(bgs):
+            im = render("fluorite", "cube", "1", T, T, luster="glass", bg=bgk)
+            out.paste(im, ((i % 3) * T, (i // 3 + 1) * T))
+            dr.text(((i % 3) * T + 12, (i // 3 + 1) * T + 8), f"萤石 · 背景 {bgk}",
+                    fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-scene.png")
+        print("saved render/qa-scene.png")
+    elif mode == "incl":
+        # 六种内含物（玻璃光泽半透明，否则看不见）
+        kinds = ["rutile", "tourm", "pyrite", "bubble", "fluid", "fracture"]
+        T = 400
+        out = Image.new("RGB", (3 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, k in enumerate(kinds):
+            im = render("quartz", "prismatic", "111", T, T, luster="glass", inclusion=k)
+            out.paste(im, ((i % 3) * T, (i // 3) * T))
+            dr.text(((i % 3) * T + 12, (i // 3) * T + 8), f"石英 · {INCLUSIONS[k]['zh']}",
+                    fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-incl.png")
+        print("saved render/qa-incl.png")
+    elif mode == "transp":
+        # 通透度滑杆 0.26→1.0 阶梯（含金红石针）
+        T = 360
+        steps = [("全透明", 0.26), ("半透明", 0.55), ("近实", 0.80), ("不透明", 1.00)]
+        out = Image.new("RGB", (2 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (lab, a) in enumerate(steps):
+            im = render("quartz", "prismatic", "111", T, T, luster="glass", alpha=a,
+                        inclusion="rutile")
+            out.paste(im, ((i % 2) * T, (i // 2) * T))
+            dr.text(((i % 2) * T + 12, (i // 2) * T + 8), f"alpha={a:.2f} {lab}",
+                    fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-transp.png")
+        print("saved render/qa-transp.png")
+    elif mode == "light":
+        # 光照方位/高度：同一晶体四组角度
+        T = 400
+        combos = [(-25, 38, "默认 右上前"), (150, 20, "左后下"), (-90, 70, "正面高"), (60, 8, "侧下方")]
+        out = Image.new("RGB", (2 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (az, el, lab) in enumerate(combos):
+            im = render("quartz", "prismatic", "111", T, T, luster="glass", light=(az, el))
+            out.paste(im, ((i % 2) * T, (i // 2) * T))
+            dr.text(((i % 2) * T + 12, (i // 2) * T + 8), f"az={az} el={el} {lab}",
+                    fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-light.png")
+        print("saved render/qa-light.png")
+    elif mode == "sheet":
         tiles = [
             ("fluorite", "spinel-twin", "1", "glass"),
             ("quartz", "japan-twin", "111", "glass"),

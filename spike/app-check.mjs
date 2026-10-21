@@ -154,6 +154,64 @@ for (const lu of ["opaque", "glass", "adamantine", "metallic", "waxy", "transpar
   check(`光泽可切换：${lu}`, ok);
 }
 run(`state.luster = null; draw();`);
+// —— 本轮新增：背景 / 光照 / 通透度与光泽解耦 / 内含物 ——
+const bgKeys = run(`Object.keys(BACKGROUNDS)`);
+for (const b of bgKeys) {
+  const ok = (() => { try { run(`state.bg = "${b}"; draw();`); return true; } catch (e) { return false; } })();
+  check(`背景可切换：${b}`, ok);
+}
+run(`state.bg = "paper"; document.getElementById("openExport").onclick();`);
+check("导出背景跟随当前场景背景", run(`state.exp.bg`) === "paper", run(`state.exp.bg`));
+for (const b of [...bgKeys, "none"]) {
+  const ok = (() => { try { run(`state.exp.bg = "${b}"; buildExportCanvas();`); return true; } catch (e) { return false; } })();
+  check(`导出背景可用：${b}`, ok);
+}
+check("光照方位/高度 → 主光方向", (() => {
+  run(`setLight(90, 0);`);
+  const v = run(`LIGHT_V`);
+  run(`setLight(-25, 38);`);
+  return Math.abs(v[0] - 1) < 1e-6 && Math.abs(v[1]) < 1e-6 && Math.abs(v[2]) < 1e-6;
+})());
+check("主柔光箱与主光同向（高光与环境反射不错位）", (() => {
+  run(`setLight(37, 12);`);
+  const same = run(`JSON.stringify(ENV_LIGHTS[0].dir) === JSON.stringify(LIGHT_V)`);
+  run(`setLight(-25, 38);`);
+  return same === true || same === "true";
+})());
+// 光泽与通透度是两件事：金属光泽强制不透明并禁用滑杆，其余可自由组合
+run(`state.luster = "metallic"; state.alpha = 0.3; state.transp = "clear"; renderTransp();`);
+check("金属光泽天然不透明（滑杆禁用）",
+  run(`mat().alpha`) === 1 && run(`document.getElementById("transp").disabled`) === true,
+  `alpha=${run(`mat().alpha`)}`);
+run(`state.luster = "glass"; renderTransp();`);
+check("玻璃光泽可全透明（与光泽解耦）", run(`mat().alpha`) === 0.3, `alpha=${run(`mat().alpha`)}`);
+run(`state.alpha = null; state.transp = null; renderTransp(); draw();`);
+// 内含物：默认矿物带包体；密度可调；必须在晶体内部；不透明时不绘制
+run(`selectMineral("quartz");`);
+check("石英默认含金红石针", run(`INC.length`) > 0
+  && run(`(state.inclusion == null ? mineral().inclusion : state.inclusion)`) === "rutile",
+  `INC=${run(`INC.length`)}`);
+check("包体密度可调（0 = 清空）", (() => {
+  run(`state.incDensity = 0; buildInclusions();`);
+  const a = run(`INC.length`);
+  run(`state.incDensity = 1; buildInclusions();`);
+  const b = run(`INC.length`);
+  return a === 0 && b > 0;
+})());
+check("包体全部落在晶体内部", run(`INC.every(f => f.pts.every(p => inside(p)))`) === true);
+{
+  let painted = 0;
+  const cg = new Proxy({}, { get: (t, k) => (k === "fill" ? () => { painted++; } : () => {}), set: () => true });
+  sandbox.__cg = cg;
+  const P = `makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 })`;
+  run(`state.alpha = 1; paintInclusions(__cg, { vw: 800, vh: 600 }, ${P}, mat());`);
+  const opaque = painted === 0;
+  run(`state.alpha = 0.5; paintInclusions(__cg, { vw: 800, vh: 600 }, ${P}, mat());`);
+  const see = painted > 0;
+  check("不透明时内含物不绘制、半透明时可见", opaque && see, `fill=${painted}`);
+}
+run(`state.alpha = null; state.transp = null; state.luster = null; state.incDensity = 0.6; buildInclusions(); renderTransp(); draw();`);
+
 for (const a of ["4:3", "9:16", "16:9"]) {
   const r = run(`state.exp.aspect = "${a}"; (() => { const q = buildExportCanvas(); return q.width + "x" + q.height; })();`);
   const inside = (() => {
