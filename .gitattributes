@@ -1,0 +1,9 @@
+# 统一行尾：仓库内存 LF，检出时按平台转换
+* text=auto eol=lf
+
+# 二进制不参与行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

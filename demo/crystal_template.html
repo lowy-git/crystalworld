@@ -1,0 +1,1231 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>晶形工坊 · Crystal Forms</title>
+<style>
+  :root{
+    --bg:#0b1220; --bg2:#111c2e; --panel:#0f1a2b; --line:#22344d;
+    --ink:#e8f0fa; --ink2:#9fb3c9; --ink3:#6b8099;
+    --accent:#5fb0f0; --accent2:#f0b25f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(1200px 700px at 50% 40%,#16253c 0%,#0a1120 55%,#070c14 100%);
+    color:var(--ink);
+    font:14px/1.5 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    overflow:hidden;
+  }
+  #app{display:grid;grid-template-columns:302px 1fr 252px;height:100vh}
+  .panel{
+    background:linear-gradient(180deg,rgba(15,26,43,.96),rgba(11,19,31,.96));
+    border-color:var(--line);overflow-y:auto;padding:16px 14px 40px;
+    scrollbar-width:thin;scrollbar-color:#2a3d57 transparent;
+  }
+  .panel.left{border-right:1px solid var(--line)}
+  .panel.right{border-left:1px solid var(--line)}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:#2a3d57;border-radius:4px}
+
+  .brand{display:flex;align-items:baseline;gap:8px;margin:2px 0 14px}
+  .brand b{font:600 17px/1 "Noto Serif SC","Songti SC",serif;letter-spacing:.06em}
+  .brand span{font-size:11px;color:var(--ink3);letter-spacing:.14em;text-transform:uppercase}
+
+  .sec{margin:0 0 16px}
+  .sec > h3{
+    font-size:11px;font-weight:600;letter-spacing:.16em;color:var(--ink3);
+    text-transform:uppercase;margin:0 0 8px;display:flex;justify-content:space-between;
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    border:1px solid var(--line);background:#12213a;color:var(--ink2);
+    padding:5px 9px;border-radius:7px;cursor:pointer;font-size:12px;line-height:1.3;
+    transition:.14s;white-space:nowrap;
+  }
+  .chip small{color:var(--ink3);font-size:10px;margin-left:4px}
+  .chip:hover{border-color:#33507a;color:var(--ink)}
+  .chip.on{background:#1b3b60;border-color:var(--accent);color:#eaf4ff;box-shadow:0 0 0 1px rgba(95,176,240,.25) inset}
+
+  .mlist{display:flex;flex-direction:column;gap:5px}
+  .mitem{
+    display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;
+    padding:8px 10px;border-radius:8px;border:1px solid transparent;cursor:pointer;transition:.14s;
+  }
+  .mitem:hover{background:#132136}
+  .mitem.on{background:#152c48;border-color:#2f5686}
+  .mitem .z{font-size:13.5px;font-weight:600}
+  .mitem .e{font-size:10.5px;color:var(--ink3);letter-spacing:.04em}
+  .mitem .fx{font-size:10.5px;color:var(--ink3);font-style:italic;justify-self:end}
+  .mitem.on .e,.mitem.on .fx{color:#7f9fbe}
+
+  .hlist{display:flex;flex-direction:column;gap:5px}
+  .hitem{
+    text-align:left;border:1px solid var(--line);background:#101d31;color:var(--ink2);
+    padding:7px 9px;border-radius:8px;cursor:pointer;transition:.14s;font-size:12.5px;
+    display:flex;justify-content:space-between;gap:8px;align-items:center;
+  }
+  .hitem:hover{border-color:#33507a;color:var(--ink)}
+  .hitem.on{background:#1b3b60;border-color:var(--accent);color:#eaf4ff}
+  .hitem i{font-style:normal;font-size:10px;color:var(--ink3)}
+  .hitem.on i{color:#8fb6d8}
+
+  .flist{display:flex;flex-direction:column;gap:4px}
+  .fitem{
+    display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;
+    padding:6px 8px;border-radius:7px;cursor:pointer;transition:.12s;border:1px solid transparent;
+  }
+  .fitem:hover{background:#121f33}
+  .fitem .dot{width:11px;height:11px;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
+  .fitem .nm{font-size:12.5px;color:var(--ink2)}
+  .fitem.on .nm{color:var(--ink)}
+  .fitem .fc{font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .fitem.off .nm{color:#4d6076;text-decoration:line-through}
+
+  .stage{position:relative;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;touch-action:none}
+  .hud{
+    position:absolute;left:18px;top:14px;pointer-events:none;
+  }
+  .hud .t1{font:600 20px/1.25 "Noto Serif SC","Songti SC",serif;letter-spacing:.05em}
+  .hud .t1 span{font:400 12px/1.3 "Noto Sans SC",sans-serif;color:var(--ink3);letter-spacing:.12em;margin-left:8px}
+  .hud .t2{margin-top:5px;font-size:11.5px;color:var(--ink2);letter-spacing:.03em}
+  .hud .t3{margin-top:2px;font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .hint{
+    position:absolute;left:18px;bottom:14px;font-size:11px;color:#5c7189;line-height:1.7;
+    pointer-events:none;max-width:min(560px,60ch);
+  }
+  .hint kbd{
+    font:10.5px/1 ui-monospace,monospace;background:#16263c;border:1px solid #2a3d57;
+    border-radius:4px;padding:2px 5px;color:#9fb3c9;
+  }
+  .warn{
+    position:absolute;right:16px;top:14px;max-width:270px;font-size:11px;line-height:1.6;
+    color:#f0c98a;background:rgba(60,44,14,.72);border:1px solid #6b5320;border-radius:8px;
+    padding:7px 10px;opacity:0;transition:.25s;
+  }
+  .warn.show{opacity:1}
+
+  .row{display:flex;gap:6px;margin-bottom:8px}
+  .row.wrap{flex-wrap:wrap}
+  .btn{
+    flex:1;border:1px solid var(--line);background:#12213a;color:var(--ink2);
+    padding:7px 8px;border-radius:7px;cursor:pointer;font-size:12px;transition:.14s;
+    font-family:inherit;
+  }
+  .btn:hover{border-color:#33507a;color:var(--ink);background:#152945}
+  .btn.on{background:#1b3b60;border-color:var(--accent);color:#eaf4ff}
+  .btn.primary{background:linear-gradient(180deg,#2f7fc4,#24618f);border-color:#3f93d8;color:#fff}
+  .btn.primary:hover{background:linear-gradient(180deg,#3a8fd6,#2a6ea2)}
+
+  .opt{display:flex;flex-direction:column;gap:6px}
+  .ck{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);cursor:pointer;padding:2px 0}
+  .ck input{appearance:none;width:14px;height:14px;border-radius:4px;border:1px solid #3a5273;background:#0e1a2b;cursor:pointer;position:relative}
+  .ck input:checked{background:var(--accent);border-color:var(--accent)}
+  .ck input:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #06101d;border-width:0 2px 2px 0;transform:rotate(40deg)}
+  .ck:hover{color:var(--ink)}
+
+  .swatches{display:flex;gap:6px;flex-wrap:wrap}
+  .sw{width:26px;height:26px;border-radius:7px;border:1px solid rgba(255,255,255,.16);cursor:pointer;transition:.14s;position:relative}
+  .sw:hover{transform:translateY(-1px)}
+  .sw.on{box-shadow:0 0 0 2px #0b1220,0 0 0 4px var(--accent)}
+  .swarning{font-size:10.5px;color:var(--ink3);margin-top:5px;line-height:1.5}
+
+  .note{
+    font-size:11.5px;color:var(--ink2);line-height:1.65;background:#0e1a2b;
+    border:1px solid var(--line);border-left:2px solid #3a5f8a;border-radius:6px;padding:8px 10px;
+  }
+  .note b{color:#cfe0f2;font-weight:600}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px;color:var(--ink2)}
+  .kv dt{color:var(--ink3)}
+  .kv dd{margin:0;font-variant-numeric:tabular-nums}
+
+  /* modal */
+  .modal{
+    position:fixed;inset:0;background:rgba(4,8,14,.72);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:20;
+  }
+  .modal.show{display:flex}
+  .sheet{
+    width:min(720px,92vw);max-height:88vh;overflow-y:auto;background:#0e1826;
+    border:1px solid #29405e;border-radius:14px;padding:22px 24px 18px;
+    box-shadow:0 24px 80px rgba(0,0,0,.6);
+  }
+  .sheet h2{font:600 16px/1 "Noto Serif SC",serif;letter-spacing:.05em;margin:0 0 4px}
+  .sheet p.sub{margin:0 0 18px;color:var(--ink3);font-size:11.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px 26px}
+  .grid2 h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+  .sheet .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #1e3049}
+  .sheet .foot .btn{flex:0 0 auto;padding:9px 16px}
+  .progress{font-size:11px;color:var(--ink3);align-self:center;margin-right:auto}
+
+#lusters { flex-wrap: wrap; }
+.prev { background: #0a1220; border: 1px solid #22314a; border-radius: 10px; padding: 10px;
+        display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.prev canvas { max-width: 100%; border-radius: 6px; box-shadow: 0 6px 22px rgba(0,0,0,.45); }
+.prev .pi { font-size: 11px; color: #7c93ad; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="panel left">
+    <div class="brand"><b>晶形工坊</b><span>Crystal Forms</span></div>
+
+    <div class="sec">
+      <h3>晶系 <span style="text-transform:none;letter-spacing:0">Crystal system</span></h3>
+      <div class="chips" id="systems"></div>
+    </div>
+
+    <div class="sec">
+      <h3>矿物 <span style="text-transform:none;letter-spacing:0">Mineral</span></h3>
+      <div class="mlist" id="minerals"></div>
+    </div>
+
+    <div class="sec">
+      <h3>外形 <span style="text-transform:none;letter-spacing:0">Habit</span></h3>
+      <div class="hlist" id="habits"></div>
+    </div>
+
+    <div class="sec">
+      <h3>单形 <span style="text-transform:none;letter-spacing:0">Forms</span></h3>
+      <div class="flist" id="forms"></div>
+      <div class="swarning" id="formHint">取消勾选后，其余单形会重新闭合为完整晶形（不是简单挖掉面）。</div>
+    </div>
+  </aside>
+
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud"></div>
+    <div class="warn" id="warn"></div>
+    <div class="hint" id="hint"></div>
+  </main>
+
+  <aside class="panel right">
+    <div class="sec">
+      <h3>染色 <span style="text-transform:none;letter-spacing:0">Colour</span></h3>
+      <div class="row">
+        <button class="btn on" id="modeForm">单形配色</button>
+        <button class="btn" id="modeMineral">矿物单色</button>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="swarning" id="colorHint"></div>
+    </div>
+
+    <div class="sec">
+      <h3>质感 <span style="text-transform:none;letter-spacing:0">Lustre</span></h3>
+      <div class="row" id="lusters"></div>
+      <div class="swarning" id="lusterHint"></div>
+    </div>
+
+    <div class="sec">
+      <h3>显示 <span style="text-transform:none;letter-spacing:0">Display</span></h3>
+      <div class="opt">
+        <label class="ck"><input type="checkbox" id="optEdges" checked> 棱线 Arrises</label>
+          <label class="ck"><input type="checkbox" id="optStri" checked> 晶纹 Striations</label>
+        <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
+        <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
+        <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>操作 <span style="text-transform:none;letter-spacing:0">Input</span></h3>
+      <div class="row">
+        <button class="btn on" id="modeMouse">鼠标</button>
+        <button class="btn" id="modeTouch">触屏</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>视角 <span style="text-transform:none;letter-spacing:0">View</span></h3>
+      <div class="row"><button class="btn" id="resetView">复位视角</button></div>
+      <div class="row"><button class="btn" id="resetAxes">重置晶轴</button></div>
+      <div class="swarning">复位视角＝习惯的斜视；重置晶轴＝回到 a₁ 向右、c 向上的标准晶轴朝向。</div>
+    </div>
+
+    <div class="sec">
+      <h3>导出 <span style="text-transform:none;letter-spacing:0">Export</span></h3>
+      <div class="row"><button class="btn primary" id="openExport">导出图片…</button></div>
+    </div>
+
+    <div class="sec">
+      <h3>数据 <span style="text-transform:none;letter-spacing:0">Data</span></h3>
+      <dl class="kv" id="dataKV"></dl>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h2>导出图片</h2>
+    <p class="sub">画面所见即所得；勾选需要叠加的文字，尺寸与背景可选。</p>
+    <div class="grid2">
+      <div>
+        <h4>尺寸 Size</h4>
+        <div class="row" id="expSize">
+          <button class="btn" data-w="900">900 px</button>
+          <button class="btn on" data-w="1400">1400 px</button>
+          <button class="btn" data-w="2000">2000 px</button>
+        </div>
+        <h4 style="margin-top:16px">背景 Background</h4>
+        <div class="row" id="expBg">
+          <button class="btn on" data-bg="dark">深色</button>
+          <button class="btn" data-bg="light">浅色</button>
+          <button class="btn" data-bg="none">透明</button>
+        </div>
+        <h4 style="margin-top:16px">画幅 Aspect</h4>
+        <div class="row" id="expAspect">
+          <button class="btn on" data-a="4:3">4:3 常规</button>
+          <button class="btn" data-a="9:16">9:16 竖版</button>
+          <button class="btn" data-a="16:9">16:9 横版</button>
+        </div>
+        <h4 style="margin-top:16px">字号 Type size</h4>
+        <div class="row" id="expScale">
+          <button class="btn" data-s="0.86">小</button>
+          <button class="btn on" data-s="1">中</button>
+          <button class="btn" data-s="1.18">大</button>
+        </div>
+      </div>
+      <div>
+        <h4>叠加文字 Annotations</h4>
+        <div class="opt" id="expFields"></div>
+      </div>
+    </div>
+    <h4 style="margin-top:16px">预览 Preview</h4>
+    <div class="prev">
+      <canvas id="expPrev" width="520" height="390"></canvas>
+      <div class="pi" id="expPrevInfo">—</div>
+    </div>
+    <div class="foot">
+      <span class="progress" id="expProgress"></span>
+      <button class="btn" id="expCopy">复制图像</button>
+      <button class="btn" id="expDataUrl">复制数据</button>
+      <button class="btn" id="expClose">关闭</button>
+      <button class="btn primary" id="expSave">保存 PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/ null;
+
+/* ============ 数学 ============ */
+const qMul = (a, b) => [
+  a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+  a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+  a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+  a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0],
+];
+const qAxis = (ax, ay, az, ang) => {
+  const l = Math.hypot(ax, ay, az) || 1, s = Math.sin(ang / 2);
+  return [Math.cos(ang / 2), ax / l * s, ay / l * s, az / l * s];
+};
+const qNorm = (q) => { const l = Math.hypot(...q) || 1; return q.map(x => x / l); };
+const qToMat = (q) => {
+  const [w, x, y, z] = q;
+  return [
+    [1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
+    [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+    [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)],
+  ];
+};
+const mv = (M, v) => [
+  M[0][0]*v[0] + M[0][1]*v[1] + M[0][2]*v[2],
+  M[1][0]*v[0] + M[1][1]*v[1] + M[1][2]*v[2],
+  M[2][0]*v[0] + M[2][1]*v[1] + M[2][2]*v[2],
+];
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const unit = (a) => { const l = Math.hypot(...a) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+/* ============ 状态 ============ */
+const Q_VIEW = qNorm(qMul(qAxis(0, 1, 0, 0.52), qAxis(1, 0, 0, -Math.PI / 2 + 0.16)));
+const Q_AXES = qNorm(qAxis(1, 0, 0, -Math.PI / 2));
+const TINTS = [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76], [0.97, 0.84, 0.55]];
+const LIGHT_V = unit([-0.34, 0.62, 0.72]);
+/* 光泽模型：amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、alpha 通透度、back 背面透出度 */
+const LUSTERS = {
+  opaque:      { zh: "不透明", amb: .54, diff: .62, spec: .05, shin: 8,   alpha: 1,    back: 1,   fres: .06 },
+  glass:       { zh: "玻璃",   amb: .44, diff: .56, spec: .60, shin: 80,  alpha: .88,  back: .55, fres: .40 },
+  adamantine:  { zh: "金刚",   amb: .30, diff: .50, spec: .98, shin: 150, alpha: .95,  back: .62, fres: .58 },
+  metallic:    { zh: "金属",   amb: .28, diff: .54, spec: .85, shin: 42,  alpha: 1,    back: 1,   fres: .50, tintSpec: true },
+  waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .18, shin: 14,  alpha: .96,  back: .72, fres: .14 },
+  transparent: { zh: "透明",   amb: .40, diff: .44, spec: .40, shin: 70,  alpha: .50,  back: .30, fres: .62 },
+};
+const DEFAULT_LUSTER = "glass";
+
+const state = {
+  system: "all",
+  mineralId: DATA.minerals[0].id,
+  habitId: null,
+  mask: 0,
+  quat: Q_VIEW.slice(),
+  zoom: 1,
+  pan: [0, 0],
+  axes: true, edges: true, spin: false,
+  inputMode: "mouse",
+  colorMode: "form",
+  luster: null,
+  twinTint: false,
+  uniform: null,       // {hex}
+  exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
+  striations: true,
+};
+
+const mineral = () => DATA.minerals.find(m => m.id === state.mineralId);
+const habit = () => { const m = mineral(); return m.habits.find(h => h.id === state.habitId) || m.habits[0]; };
+const maskKey = () => { const h = habit(); return h.forms.map((_, i) => (state.mask >> i) & 1 ? "1" : "0").join(""); };
+const variant = () => {
+  const h = habit();
+  const k = maskKey();
+  if (h.variants[k]) return h.variants[k];
+  // 回退：若该组合未预生成，逐个恢复被隐藏的单形直到找到
+  for (let i = 0; i < h.forms.length; i++) {
+    const k2 = k.slice(0, i) + "1" + k.slice(i + 1);
+    if (h.variants[k2]) {
+      if (window.__notified !== k) { window.__notified = k; setTimeout(() => toast("该组合未预生成，已就近显示"), 0); }
+      return h.variants[k2];
+    }
+  }
+  return h.variants[Object.keys(h.variants).sort().pop()];
+};
+const systemName = (id) => {
+  const s = DATA.systems.find(x => x.id === id);
+  return s ? s.zh : id;
+};
+
+/* ============ 几何装配 ============ */
+let GEO = null;
+function rebuildGeometry() {
+  const v = variant();
+  if (!v) { GEO = null; return; }
+  const P = [];
+  for (let i = 0; i < v.v.length; i += 3) P.push([v.v[i], v.v[i + 1], v.v[i + 2]]);
+  const faces = v.f.map((loop, fi) => {
+    const pts = loop.map(i => P[i]);
+    const n = unit(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
+    const c = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length, a[2] + p[2] / pts.length], [0, 0, 0]);
+    return { pts, n, c, loop, form: v.form[fi], indiv: v.indiv[fi], clip: v.clip[fi] };
+  });
+  // 每个个体的平面（用于轴向遮挡判断）
+  const planesByIndiv = {};
+  for (const f of faces) {
+    (planesByIndiv[f.indiv] ||= []).push({ n: f.n, d: dot(f.n, f.pts[0]) });
+  }
+  const planes = Object.values(planesByIndiv);
+  // 真棱：被两个面共用、且两面不共面（> 5°）。并集在 T 型接点处会有只用一次的边，
+  // 那些是剖分缝而不是晶棱，描出来就会像“内部结构”。
+  const edgeMap = new Map();
+  faces.forEach((f, fi) => {
+    const L = f.loop;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i], b = L[(i + 1) % L.length];
+      const k = a < b ? a + "," + b : b + "," + a;
+      if (!edgeMap.has(k)) edgeMap.set(k, []);
+      edgeMap.get(k).push(fi);
+    }
+  });
+  const realEdges = new Set();
+  for (const [k, list] of edgeMap) {
+    if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
+  }
+  GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))) };
+}
+
+/* 晶格轴（crystal 坐标，与顶点同坐标系） */
+function axesVectors() {
+  const m = mineral();
+  const { a, b, c, alpha, beta, gamma } = m.cell;
+  const A = [a, 0, 0];
+  const B = [b * Math.cos(gamma * Math.PI / 180), b * Math.sin(gamma * Math.PI / 180), 0];
+  const cx = c * Math.cos(beta * Math.PI / 180);
+  const cy = c * (Math.cos(alpha * Math.PI / 180) - Math.cos(beta * Math.PI / 180) * Math.cos(gamma * Math.PI / 180)) /
+             Math.sin(gamma * Math.PI / 180);
+  const C = [cx, cy, Math.sqrt(Math.max(c * c - cx * cx - cy * cy, 1e-9))];
+  const out = [{ v: A, label: "a₁", col: "#ffb454" }, { v: B, label: "a₂", col: "#ffb454" }];
+  const hex = Math.abs(gamma - 120) < 0.5;
+  if (hex) out.push({ v: [-A[0] - B[0], -A[1] - B[1], -A[2] - B[2]], label: "a₃", col: "#ffb454" });
+  out.push({ v: C, label: "c", col: "#67e8b0" });
+  return out;
+}
+
+/* ============ 渲染 ============ */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d", { alpha: true });
+let W = 0, H = 0, DPR = 1;
+
+function resize() {
+  const st = document.getElementById("stage");
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = st.clientWidth; H = st.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  draw();
+}
+
+const inside = (p) => {
+  if (!GEO) return false;
+  for (const planes of GEO.planes) {
+    let ok = true;
+    for (const pl of planes) if (dot(pl.n, p) - pl.d > 1e-6) { ok = false; break; }
+    if (ok) return true;
+  }
+  return false;
+};
+
+const mat = () => LUSTERS[state.luster || mineral().luster || DEFAULT_LUSTER] || LUSTERS.glass;
+
+function shadeFace(base, n, cw, eye, M) {
+  const lam = Math.max(0, dot(n, LIGHT_V));
+  const v = unit(sub(eye, cw));
+  const hv = unit([LIGHT_V[0] + v[0], LIGHT_V[1] + v[1], LIGHT_V[2] + v[2]]);
+  const sp = Math.pow(Math.max(0, dot(n, hv)), M.shin) * M.spec;
+  const tint = M.tintSpec ? [0.35 + 0.65 * base[0], 0.35 + 0.65 * base[1], 0.35 + 0.65 * base[2]] : null;
+  // 掠射角提亮（Fresnel）：玻璃/金刚石在斜看时边缘发亮，这一项最能拉开"塑料感"与"晶体感"
+  const fres = Math.pow(1 - Math.abs(dot(n, v)), 3) * (M.fres || 0);
+  return [0, 1, 2].map(i =>
+    clamp(base[i] * (M.amb + M.diff * lam) + (tint ? tint[i] : 1) * sp + fres * (0.55 + 0.45 * base[i]), 0, 1));
+}
+const rgbStr = (c, a = 1) => `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${a})`;
+const hexToRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+
+const CLIP_TINT = [0.58, 0.62, 0.68];
+function faceColor(f) {
+  if (f.form < 0) return CLIP_TINT;                       // 边界盒截断面
+  let base;
+  if (state.colorMode === "mineral" && state.uniform) {
+    const c = hexToRgb(state.uniform);
+    base = [c[0], c[1], c[2]];
+  } else {
+    base = TINTS[f.form % TINTS.length];
+  }
+  if (f.indiv === 1 && state.twinTint) base = [base[2] * 0.96, base[0] * 0.96, base[1] * 0.96];
+  return base;
+}
+
+/* 投影：晶体系 → 屏幕 */
+function makeProject(opts) {
+  const { cx, cy, scale, vw, vh } = opts;
+  const pan = opts.pan || [0, 0];
+  const R = qToMat(state.quat);
+  const DIST = 7.0, FOC = 3.05 * scale * Math.min(vw, vh) * 0.5;
+  const project = (p) => {
+    const w = mv(R, p);
+    const z = DIST - w[2];
+    const k = FOC / Math.max(z, 0.4);
+    return [cx + w[0] * k + pan[0], cy - w[1] * k + pan[1], z];
+  };
+  project.R = R; project.DIST = DIST;
+  return project;
+}
+
+/* 晶纹：石英柱面沿 c 轴的横向纹，萤石立方面对角纹。方向取自晶轴，随晶体一起转 */
+const STRIATION = {
+  quartz:   { form: 0, axis: "c",    step: 4.0, light: 0.13, dark: 0.10 },
+  fluorite: { form: 0, axis: "diag", step: 5.0, light: 0.12, dark: 0.09 },
+};
+function drawStriations(g, it, pts, R, project) {
+  const spec = STRIATION[mineral().id];
+  if (!spec || it.f.form !== spec.form) return;
+  const ax = spec.axis === "c" ? mv(R, [0, 0, 1]) : mv(R, [1, 1, 1]);
+  const d = cross(ax, it.wn);
+  const dl = Math.hypot(d[0], d[1], d[2]);
+  if (dl < 1e-6) return;
+  const dir = [d[0] / dl, d[1] / dl, d[2] / dl];
+  const c = it.f.c;
+  const p0 = project(c);
+  const p1 = project([c[0] + dir[0] * 0.35, c[1] + dir[1] * 0.35, c[2] + dir[2] * 0.35]);
+  let dx = p1[0] - p0[0], dy = p1[1] - p0[1];
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len; dy /= len;
+  let xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const rad = Math.hypot(maxX - minX, maxY - minY) / 2 + 2;
+  g.save();
+  g.beginPath();
+  pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+  g.closePath();
+  g.clip();
+  const step = spec.step;
+  g.lineWidth = 1;
+  for (let t = -rad; t <= rad; t += step) {
+    const ox = cx - dy * t, oy = cy + dx * t;      // 沿法线方向平移
+    g.strokeStyle = `rgba(255,255,255,${spec.light})`;
+    g.beginPath();
+    g.moveTo(ox - dx * rad, oy - dy * rad);
+    g.lineTo(ox + dx * rad, oy + dy * rad);
+    g.stroke();
+    g.strokeStyle = `rgba(0,0,0,${spec.dark})`;
+    g.beginPath();
+    g.moveTo(ox - dx * rad + dx, oy - dy * rad + dy);
+    g.lineTo(ox + dx * rad + dx, oy + dy * rad + dy);
+    g.stroke();
+  }
+  g.restore();
+}
+
+/* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成 */
+function paintFaces(g, opts, project, M) {
+  const { vw, vh } = opts;
+  if (!GEO) return;
+  const R = project.R, DIST = project.DIST;
+  const eye = [0, 0, DIST];
+  const cx = opts.cx, cy = opts.cy;
+  const twoSided = GEO.faces.some(f => f.clip === 1) || !variant().closed;
+  const list = [];
+  for (const f of GEO.faces) {
+    const wn = mv(R, f.n);
+    const cw = mv(R, f.c);
+    const front = dot(wn, sub(eye, cw)) > 0;
+    if (!front && !twoSided) continue;
+    list.push({ f, wn, cw, depth: DIST - cw[2], front });
+  }
+  list.sort((a, b) => b.depth - a.depth);
+
+  for (const it of list) {
+    const pts = it.f.pts.map(project);
+    g.beginPath();
+    pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+    g.closePath();
+    let col = faceColor(it.f);
+    let alpha = 1;
+    if (!it.front) { col = [col[0] * 0.5, col[1] * 0.5, col[2] * 0.5]; alpha = 0.92; }
+    g.fillStyle = rgbStr(shadeFace(col, it.wn, it.cw, eye, M), alpha);
+    g.fill();
+    g.strokeStyle = g.fillStyle;
+    g.lineWidth = 1;
+    g.stroke();                         // 同色描边补缝（并集在 T 型接点处有亚像素裂缝）
+    if (state.striations && it.front) drawStriations(g, it, pts, R, project);
+    if (!state.edges) continue;
+    const L = it.f.loop;
+    g.beginPath();
+    let any = false;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i], b = L[(i + 1) % L.length];
+      const key = a < b ? a + "," + b : b + "," + a;
+      if (!GEO.realEdges.has(key)) continue;
+      const p0 = pts[i], p1 = pts[(i + 1) % L.length];
+      g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]);
+      any = true;
+    }
+    if (any) {
+      g.lineWidth = it.front ? 1.15 : 0.8;
+      g.strokeStyle = it.front ? "rgba(12,22,34,.6)" : "rgba(12,22,34,.26)";
+      g.stroke();
+    }
+  }
+
+}
+
+/* 主绘制：先按不透明画到离屏，再整体按光泽的通透度合成（避免每片半透明叠加出接缝） */
+function paint(g, opts) {
+  if (!GEO) return;
+  const M = mat();
+  const project = makeProject(opts);
+  const dpr = opts.dpr || 1;
+  if (M.alpha < 0.995) {
+    const off = document.createElement("canvas");
+    off.width = Math.max(1, Math.round(opts.vw * dpr));
+    off.height = Math.max(1, Math.round(opts.vh * dpr));
+    const g2 = off.getContext("2d");
+    if (g2) {
+      g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintFaces(g2, opts, project, M);
+      g.save();
+      g.globalAlpha = M.alpha;
+      try { g.drawImage(off, 0, 0, opts.vw, opts.vh); } catch (err) { /* 桩环境 */ }
+      g.restore();
+    } else {
+      paintFaces(g, opts, project, M);
+    }
+  } else {
+    paintFaces(g, opts, project, M);
+  }
+  if (state.axes) drawAxes(g, project.R, project, opts.scale);
+}
+
+function drawAxes(g, R, project, scale) {
+  const ax = axesVectors();
+  const L = (GEO ? GEO.extent : 1) * 1.42 + 0.18;
+  g.save();
+  g.lineCap = "round";
+  for (const a of ax) {
+    const d = unit(a.v);
+    const end = [d[0] * L, d[1] * L, d[2] * L];
+    const N = 44;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const p = [d[0] * L * t, d[1] * L * t, d[2] * L * t];
+      pts.push({ p, s: project(p), hid: inside(p) });
+    }
+    // 隐藏段虚线，可见段实线
+    let i = 0;
+    while (i < N) {
+      const hid = pts[i].hid;
+      let j = i;
+      while (j < N && pts[j].hid === hid) j++;
+      g.beginPath();
+      g.setLineDash(hid ? [3.5, 4] : []);
+      g.lineWidth = hid ? 1.25 : 1.9;
+      g.strokeStyle = hid
+        ? "rgba(255,180,84,.42)"
+        : (a.col === "#67e8b0" ? "rgba(103,232,176,.95)" : "rgba(255,180,84,.95)");
+      g.moveTo(pts[i].s[0], pts[i].s[1]);
+      for (let k = i + 1; k <= j; k++) g.lineTo(pts[k].s[0], pts[k].s[1]);
+      g.stroke();
+      i = j;
+    }
+    g.setLineDash([]);
+    // 箭头
+    const s0 = project([d[0] * L * 0.965, d[1] * L * 0.965, d[2] * L * 0.965]);
+    const s1 = project(end);
+    const ang = Math.atan2(s1[1] - s0[1], s1[0] - s0[0]);
+    const ah = 7.5 * (scale > 1.4 ? 1.4 : 1);
+    g.beginPath();
+    g.moveTo(s1[0], s1[1]);
+    g.lineTo(s1[0] - ah * Math.cos(ang - 0.42), s1[1] - ah * Math.sin(ang - 0.42));
+    g.lineTo(s1[0] - ah * Math.cos(ang + 0.42), s1[1] - ah * Math.sin(ang + 0.42));
+    g.closePath();
+    g.fillStyle = a.col === "#67e8b0" ? "rgba(103,232,176,.95)" : "rgba(255,180,84,.95)";
+    g.fill();
+    // 标签
+    const lp = [s1[0] + 10 * Math.cos(ang), s1[1] + 10 * Math.sin(ang)];
+    g.font = `600 ${Math.round(11.5 * Math.max(1, scale * 0.9))}px "Noto Sans SC",system-ui,sans-serif`;
+    g.textAlign = "left"; g.textBaseline = "middle";
+    g.fillStyle = "rgba(255,196,120,.96)";
+    g.fillText(a.label, lp[0], lp[1]);
+  }
+  g.restore();
+}
+
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  paint(ctx, { cx: W / 2, cy: H / 2, scale: state.zoom, vw: W, vh: H, pan: state.pan, dpr: DPR });
+}
+
+/* ============ 动画 ============ */
+let spinning = false;
+function loop() {
+  if (state.spin) {
+    state.quat = qNorm(qMul(qAxis(0, 1, 0, 0.0075), state.quat));
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ============ 交互 ============ */
+let drag = null;
+cv.addEventListener("pointerdown", (e) => {
+  cv.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey, id: e.pointerId };
+});
+cv.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan) {
+    state.pan = [state.pan[0] + dx, state.pan[1] + dy];
+  } else {
+    const k = state.inputMode === "touch" ? 0.0125 : 0.0085;
+    state.quat = qNorm(qMul(qMul(qAxis(0, 1, 0, dx * k), qAxis(1, 0, 0, dy * k)), state.quat));
+  }
+  draw();
+});
+cv.addEventListener("pointerup", () => { drag = null; });
+cv.addEventListener("pointercancel", () => { drag = null; });
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
+cv.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  state.zoom = clamp(state.zoom * Math.exp(-e.deltaY * 0.0012), 0.45, 3.2);
+  draw();
+}, { passive: false });
+
+// 双指缩放
+const touches = new Map();
+cv.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") touches.set(e.pointerId, [e.clientX, e.clientY]); });
+cv.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "touch") return;
+  touches.set(e.pointerId, [e.clientX, e.clientY]);
+  if (touches.size === 2) {
+    const [a, b] = [...touches.values()];
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (pinch) state.zoom = clamp(state.zoom * d / pinch, 0.45, 3.2);
+    pinch = d;
+    draw();
+  }
+});
+cv.addEventListener("pointerup", (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = 0; });
+let pinch = 0;
+
+/* ============ UI ============ */
+function renderSystems() {
+  const box = document.getElementById("systems");
+  box.innerHTML = "";
+  const mk = (id, label, n) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (state.system === id ? " on" : "");
+    b.innerHTML = `${label}${n != null ? `<small>${n}</small>` : ""}`;
+    b.onclick = () => { state.system = id; renderSystems(); renderMinerals(); };
+    box.appendChild(b);
+  };
+  mk("all", "全部", DATA.minerals.length);
+  for (const s of DATA.systems) {
+    const n = DATA.minerals.filter(m => m.system === s.id).length;
+    if (n) mk(s.id, s.zh, n);
+  }
+}
+
+function renderMinerals() {
+  const box = document.getElementById("minerals");
+  box.innerHTML = "";
+  const list = DATA.minerals.filter(m => state.system === "all" || m.system === state.system);
+  for (const m of list) {
+    const el = document.createElement("div");
+    el.className = "mitem" + (m.id === state.mineralId ? " on" : "");
+    el.innerHTML = `<div><div class="z">${m.zh}</div><div class="e">${m.en}</div></div><div class="fx">${m.formula}</div>`;
+    el.onclick = () => selectMineral(m.id);
+    box.appendChild(el);
+  }
+}
+
+function applyHabitView(h) {
+  state.quat = (h.view && h.view.yaw != null)
+    ? qNorm(qMul(Q_VIEW, qAxis(0, 0, 1, h.view.yaw * Math.PI / 180)))
+    : Q_VIEW.slice();
+  state.pan = [0, 0];
+}
+
+function selectMineral(id) {
+  state.mineralId = id;
+  const m = mineral();
+  state.habitId = m.habits[0].id;
+  state.mask = (1 << m.habits[0].forms.length) - 1;
+  applyHabitView(m.habits[0]);
+  state.uniform = m.colors && m.colors.length ? m.colors[0].hex : null;
+  state.zoom = 1; state.pan = [0, 0];
+  renderMinerals(); renderHabits(); rebuildGeometry(); draw(); syncPanels();
+}
+
+function renderHabits() {
+  const box = document.getElementById("habits");
+  box.innerHTML = "";
+  const m = mineral();
+  for (const h of m.habits) {
+    const b = document.createElement("button");
+    b.className = "hitem" + (h.id === state.habitId ? " on" : "");
+    b.innerHTML = `<span>${h.zh}<i> · ${h.en}</i></span><i>${h.counts.f} 面</i>`;
+    b.onclick = () => {
+      state.habitId = h.id;
+      state.mask = (1 << h.forms.length) - 1;
+      applyHabitView(h);
+      renderHabits(); rebuildGeometry(); draw(); syncPanels();
+    };
+    box.appendChild(b);
+  }
+}
+
+function renderForms() {
+  const box = document.getElementById("forms");
+  box.innerHTML = "";
+  const h = habit();
+  h.forms.forEach((f, i) => {
+    const on = (state.mask >> i) & 1;
+    const el = document.createElement("div");
+    el.className = "fitem" + (on ? " on" : " off");
+    el.innerHTML = `<span class="dot" style="background:${rgbStr(TINTS[i % TINTS.length])}"></span>
+      <span class="nm">${f.zh} <span style="color:#6b8099;font-size:10.5px">${f.en}</span></span>
+      <span class="fc">${f.faces} 面</span>`;
+    el.onclick = () => {
+      const next = state.mask ^ (1 << i);
+      if (next === 0) { toast("至少要保留一个单形"); return; }
+      state.mask = next;
+      renderForms(); rebuildGeometry(); draw(); syncPanels();
+    };
+    box.appendChild(el);
+  });
+  const v = variant();
+  document.getElementById("formHint").textContent = v && !v.closed
+    ? "开形：该组合本身不封闭，已用边界盒截断（灰面为截断面，非晶面）。"
+    : (h.forms.length > 1
+      ? "取消勾选 → 其余单形重新闭合为完整晶形（不是挖掉面）。"
+      : "该外形只有一种单形。");
+}
+
+function renderLusters() {
+  const box = document.getElementById("lusters");
+  if (!box) return;
+  const m = mineral();
+  const def = m.luster || DEFAULT_LUSTER;
+  const cur = state.luster || def;
+  box.innerHTML = "";
+  for (const [id, L] of Object.entries(LUSTERS)) {
+    const b = document.createElement("button");
+    b.className = "btn" + (cur === id ? " on" : "");
+    b.textContent = L.zh;
+    b.onclick = () => { state.luster = id; renderLusters(); draw(); };
+    box.appendChild(b);
+  }
+  document.getElementById("lusterHint").innerHTML =
+    `该矿物典型光泽：<b>${LUSTERS[def].zh}</b>。玻璃/金刚＝高光锐利、略有通透；金属＝带色高光；蜡状＝柔和高光。`;
+}
+
+function renderSwatches() {
+  const box = document.getElementById("swatches");
+  box.innerHTML = "";
+  const m = mineral();
+  const colors = m.colors || [];
+  for (const c of colors) {
+    const el = document.createElement("div");
+    el.className = "sw" + (state.colorMode === "mineral" && state.uniform === c.hex ? " on" : "");
+    el.style.background = c.hex;
+    el.title = `${c.zh} ${c.en}`;
+    el.onclick = () => {
+      state.colorMode = "mineral";
+      state.uniform = c.hex;
+      syncPanels(); draw();
+    };
+    box.appendChild(el);
+  }
+  document.getElementById("colorHint").textContent =
+    state.colorMode === "form"
+      ? "当前按单形配色；点色块＝整块晶体统一染该色（矿物常见色）。"
+      : `整晶体统一为「${(colors.find(c => c.hex === state.uniform) || {}).zh || "自定义"}」。`;
+}
+
+function syncPanels() {
+  const m = mineral(), h = habit();
+  document.getElementById("modeForm").classList.toggle("on", state.colorMode === "form");
+  document.getElementById("modeMineral").classList.toggle("on", state.colorMode === "mineral");
+  document.getElementById("modeMouse").classList.toggle("on", state.inputMode === "mouse");
+  document.getElementById("modeTouch").classList.toggle("on", state.inputMode === "touch");
+  document.getElementById("optAxes").checked = state.axes;
+  document.getElementById("optEdges").checked = state.edges;
+  document.getElementById("optStri").checked = state.striations;
+  document.getElementById("optSpin").checked = state.spin;
+  const twinRow = document.getElementById("twinRow");
+  if (twinRow) {
+    twinRow.style.display = habit().twin ? "" : "none";
+    document.getElementById("optTwin").checked = state.twinTint;
+  }
+  renderLusters();
+  renderSwatches();
+
+  const kv = document.getElementById("dataKV");
+  kv.innerHTML = `
+    <dt>晶系</dt><dd>${systemName(m.system)} ${m.system}</dd>
+    <dt>点群</dt><dd>${m.pointGroup}</dd>
+    <dt>晶胞</dt><dd>${m.cellText}</dd>
+    <dt>顶点/棱/面</dt><dd>${variant().counts.v} / ${variant().counts.e} / ${variant().counts.f}</dd>
+    <dt>特征面角</dt><dd>${(variant().angles || []).slice(0, 3).map(a => a.toFixed(2) + "°").join("，") || "—"}</dd>
+  `;
+
+  const hud = document.getElementById("hud");
+  hud.innerHTML = `
+    <div class="t1">${m.zh} · ${h.zh}<span>${m.en} / ${h.en}</span></div>
+    <div class="t2">${systemName(m.system)} · 点群 ${m.pointGroup} · ${h.forms.length} 种单形${h.twin ? ` · 双晶 ${h.twin.angle}` : ""}</div>
+    <div class="t3">${variant().counts.v} 顶点 · ${variant().counts.e} 棱 · ${variant().counts.f} 面</div>
+  `;
+
+  document.getElementById("hint").innerHTML = state.inputMode === "mouse"
+    ? `<kbd>左键拖拽</kbd> 旋转 · <kbd>滚轮</kbd> 缩放 · <kbd>右键/Shift 拖拽</kbd> 平移`
+    : `<kbd>单指</kbd> 旋转 · <kbd>双指</kbd> 缩放`;
+}
+
+function toast(msg) {
+  const el = document.getElementById("warn");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+/* 右侧按钮 */
+document.getElementById("modeForm").onclick = () => { state.colorMode = "form"; syncPanels(); draw(); };
+document.getElementById("modeMineral").onclick = () => {
+  state.colorMode = "mineral";
+  if (!state.uniform) state.uniform = (mineral().colors || [{ hex: "#cfe6ff" }])[0].hex;
+  syncPanels(); draw();
+};
+document.getElementById("modeMouse").onclick = () => { state.inputMode = "mouse"; syncPanels(); };
+document.getElementById("modeTouch").onclick = () => { state.inputMode = "touch"; syncPanels(); };
+document.getElementById("optAxes").onchange = (e) => { state.axes = e.target.checked; draw(); };
+document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.checked; draw(); };
+  document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
+document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
+document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
+document.getElementById("resetView").onclick = () => {
+  state.quat = Q_VIEW.slice(); state.zoom = 1; state.pan = [0, 0]; draw();
+};
+document.getElementById("resetAxes").onclick = () => {
+  state.quat = Q_AXES.slice(); state.zoom = 1; state.pan = [0, 0]; draw();
+  toast("已回到标准晶轴朝向：a₁ 向右、c 向上");
+};
+
+/* ============ 导出 ============ */
+const FIELDS = [
+  ["title", "矿物与外形的名称", true],
+  ["formula", "化学式", true],
+  ["system", "晶系与点群", true],
+  ["forms", "所含单形及面数", true],
+  ["cell", "晶胞参数", false],
+  ["angles", "特征面角", true],
+  ["intro", "矿物简介", true],
+  ["source", "数据来源与置信度", false],
+];
+
+function initExportFields() {
+  const box = document.getElementById("expFields");
+  box.innerHTML = "";
+  for (const [k, label, on] of FIELDS) {
+    state.exp.fields[k] = state.exp.fields[k] ?? on;
+    const l = document.createElement("label");
+    l.className = "ck";
+    l.innerHTML = `<input type="checkbox" ${state.exp.fields[k] ? "checked" : ""}> ${label}`;
+    l.querySelector("input").onchange = (e) => { state.exp.fields[k] = e.target.checked; refreshPreview(); };
+    box.appendChild(l);
+  }
+}
+
+function wrapText(g, text, maxW) {
+  const out = [];
+  let line = "";
+  for (const ch of text) {
+    if (ch === "\n") { out.push(line); line = ""; continue; }
+    const t = line + ch;
+    if (g.measureText(t).width > maxW && line) { out.push(line); line = ch; }
+    else line = t;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+function exportSize() {
+  const a = state.exp.aspect || "4:3";
+  if (a === "9:16") return [1080, 1920];
+  if (a === "16:9") return [1920, 1080];
+  return [1400, 1050];
+}
+
+function buildExportCanvas() {
+  const { bg, scale, fields } = state.exp;
+  const [w, h] = exportSize();
+  const landscape = (state.exp.aspect || "4:3") === "16:9";
+  const off = document.createElement("canvas");
+  off.width = w; off.height = h;
+  const g = off.getContext("2d");
+  const dark = bg !== "light";
+  const ink = bg === "none" ? "#12161c" : (dark ? "#eaf2fb" : "#10151c");
+  const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
+  const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
+
+  if (bg === "dark") {
+    const grd = g.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.38, w * 0.75);
+    grd.addColorStop(0, "#16283f"); grd.addColorStop(0.55, "#0c1522"); grd.addColorStop(1, "#070c14");
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+  } else if (bg === "light") {
+    const grd = g.createRadialGradient(w * 0.5, h * 0.36, 0, w * 0.5, h * 0.36, w * 0.7);
+    grd.addColorStop(0, "#fbf8f2"); grd.addColorStop(1, "#e9e3d7");
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+  }
+
+  // 晶体区域
+  const m = mineral(), hb = habit(), v = variant();
+  const textRows = [];
+  if (fields.title) textRows.push({ t: "title" });
+  if (fields.formula) textRows.push({ t: "formula" });
+  if (fields.system) textRows.push({ t: "system" });
+  if (fields.forms) textRows.push({ t: "forms" });
+  if (fields.cell) textRows.push({ t: "cell" });
+  if (fields.angles) textRows.push({ t: "angles" });
+  if (fields.intro) textRows.push({ t: "intro" });
+  if (fields.source) textRows.push({ t: "source" });
+
+  // 字号基准：竖版长画布按宽度、横版按高度取基准，避免文字块把画面撑爆
+  const uBase = landscape ? (h / 1000) : ((state.exp.aspect === "9:16") ? (w / 1000) * 0.86 : (Math.min(w, h) / 1000));
+  const u = uBase * scale;
+  const F = {
+    title: `600 ${Math.round(52 * u)}px "Noto Serif SC","Songti SC",serif`,
+    sub: `400 ${Math.round(22 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+    body: `400 ${Math.round(23 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+    small: `400 ${Math.round(19 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+  };
+  const padL = w * (landscape ? 0.045 : 0.075);
+  const textColX = landscape ? w * 0.50 : padL;
+  const maxTextW = landscape ? w * 0.46 : w - padL * 2;
+
+  // 先量出文字块高度
+  const blocks = [];
+  const push = (font, text, color, gapBefore) => {
+    g.font = font;
+    const lines = wrapText(g, text, maxTextW);
+    blocks.push({ font, lines, color, gapBefore });
+  };
+  const sysLabel = `${systemName(m.system)} · 点群 ${m.pointGroup}`;
+  const formsLabel = hb.forms.map(f => `${f.zh} ${f.en} ${f.faces}面`).join("　");
+  const angleLabel = (v.angles || []).slice(0, 3).map(a => a.toFixed(2) + "°").join(" / ");
+
+  if (fields.title) push(F.title, `${m.zh} · ${hb.zh}`, ink, 0);
+  if (fields.formula) push(F.sub, `${m.en} · ${hb.en}　${m.formula}`, ink2, 14 * u);
+  if (fields.system) push(F.body, sysLabel, ink, 18 * u);
+  if (fields.forms) push(F.small, `单形：${formsLabel}`, ink2, 8 * u);
+  if (fields.cell) push(F.small, `晶胞参数：${m.cellText}`, ink2, 8 * u);
+  if (fields.angles) push(F.small, `特征面角：${angleLabel}${hb.twin ? `　双晶角 ${hb.twin.angle}` : ""}`, ink2, 8 * u);
+  if (fields.intro) push(F.body, m.intro.zh, ink, 16 * u);
+  if (fields.source) push(F.small, `数据来源：${m.source}　置信度：${m.confidence}`, ink2, 12 * u);
+
+  const lh = (font, u2) => Math.round((font.includes("52") ? 66 : 32) * u2);
+  let textH = 0;
+  blocks.forEach((b, i) => {
+    const lineH = b.font === F.title ? 66 * u : (b.font === F.body ? 34 * u : 30 * u);
+    b.lineH = lineH;
+    textH += (i ? b.gapBefore : 0) + b.lines.length * lineH;
+  });
+
+  let crystCx, crystCy, crystScale, textTop;
+  let textX = textColX;
+  if (landscape) {
+    // 横版：晶体占左侧 46%，文字右侧纵列
+    crystCx = w * 0.25; crystCy = h * 0.5;
+    crystScale = Math.min(h / 1000, w / 1000) * 1.05;
+    textTop = h * 0.10;
+    paint(g, { cx: crystCx, cy: crystCy, scale: state.zoom * crystScale, vw: w, vh: h, pan: [0, 0] });
+    g.strokeStyle = line; g.lineWidth = 1.4 * u;
+    g.beginPath(); g.moveTo(textColX - w * 0.025, h * 0.10); g.lineTo(textColX - w * 0.025, h * 0.90); g.stroke();
+    let y = textTop;
+    blocks.forEach((b, i) => {
+      y += i ? b.gapBefore : 0;
+      g.font = b.font;
+      g.fillStyle = b.color;
+      g.textBaseline = "top";
+      g.textAlign = "left";
+      b.lines.forEach((ln) => { g.fillText(ln, textX, y); y += b.lineH; });
+    });
+    return off;
+  }
+
+  const crystTop = h * 0.055;
+  const crystH = Math.max(h * 0.30, h - textH - h * 0.16);   // 文字多时让出空间，避免压到底边
+  const scaleCrystal = Math.min(crystH / (h * 0.92), w / (h * 0.9)) * 0.92;
+  paint(g, { cx: w / 2, cy: crystTop + crystH / 2, scale: state.zoom * scaleCrystal * 1.06, vw: w, vh: h, pan: [0, 0] });
+
+  // 分隔线 + 文字：文字块整体不越底边（竖版长画布最容易被挤出界）
+  let y = Math.min(crystTop + crystH + 10 * u, h * 0.965 - textH - 30 * u);
+  y = Math.max(y, crystTop + h * 0.22);
+  g.strokeStyle = line; g.lineWidth = 1.4 * u;
+  g.beginPath(); g.moveTo(padL, y); g.lineTo(w - padL, y); g.stroke();
+  y += 30 * u;
+
+  blocks.forEach((b, i) => {
+    y += i ? b.gapBefore : 0;
+    g.font = b.font;
+    g.fillStyle = b.color;
+    g.textBaseline = "top";
+    g.textAlign = "left";
+    b.lines.forEach((ln) => {
+      g.fillText(ln, textX, y);
+      y += b.lineH;
+    });
+  });
+  return off;
+}
+
+function refreshPreview() {
+  const cvp = document.getElementById("expPrev");
+  if (!cvp) return;
+  let src;
+  try { src = buildExportCanvas(); } catch (err) { return; }
+  const k = Math.min(520 / src.width, 390 / src.height, 1);
+  cvp.width = Math.round(src.width * k);
+  cvp.height = Math.round(src.height * k);
+  document.getElementById("expPrevInfo").textContent = `${src.width} × ${src.height} px · 与保存结果同源`;
+  const g2 = cvp.getContext("2d");
+  if (!g2 || typeof g2.drawImage !== "function") return;
+  g2.clearRect(0, 0, cvp.width, cvp.height);
+  try { g2.drawImage(src, 0, 0, cvp.width, cvp.height); } catch (err) { /* 桩环境 */ }
+}
+
+function downloadCanvas(canvas, name) {
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }, "image/png");
+}
+
+document.getElementById("openExport").onclick = () => {
+  document.getElementById("modal").classList.add("show");
+  initExportFields();
+  refreshPreview();
+};
+document.getElementById("expClose").onclick = () => document.getElementById("modal").classList.remove("show");
+document.getElementById("modal").addEventListener("click", (e) => {
+  if (e.target.id === "modal") e.currentTarget.classList.remove("show");
+});
+
+  document.getElementById("expAspect").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-a]");
+    if (!b) return;
+    state.exp.aspect = b.dataset.a;
+    [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b));
+    drawExportPreview();
+  });
+for (const [boxId, key, attr] of [["expSize", "w", "w"], ["expBg", "bg", "bg"], ["expScale", "scale", "s"]]) {
+  document.getElementById(boxId).addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    [...e.currentTarget.children].forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    state.exp[key] = key === "scale" ? parseFloat(b.dataset[attr]) : (key === "w" ? parseInt(b.dataset[attr]) : b.dataset[attr]);
+    refreshPreview();
+  });
+}
+
+const fileName = (ext) => `${mineral().zh}_${habit().zh}_晶形.${ext}`;
+const flash = (msg) => {
+  const p = document.getElementById("expProgress");
+  p.textContent = msg;
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => (p.textContent = ""), 2600);
+};
+
+document.getElementById("expSave").onclick = () => {
+  downloadCanvas(buildExportCanvas(), fileName("png"));
+  flash("已保存 PNG");
+};
+document.getElementById("expCopy").onclick = async () => {
+  const cv2 = buildExportCanvas();
+  cv2.toBlob(async (blob) => {
+    try {
+      if (!navigator.clipboard || !window.ClipboardItem) throw new Error("no clipboard");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      flash("图像已复制到剪贴板");
+    } catch (err) {
+      flash("本浏览器未授予剪贴板写入，请用「保存 PNG」");
+    }
+  }, "image/png");
+};
+document.getElementById("expDataUrl").onclick = async () => {
+  const url = buildExportCanvas().toDataURL("image/png");
+  try { await navigator.clipboard.writeText(url); flash("PNG dataURL 已复制"); }
+  catch { flash("剪贴板不可用，已打开新标签页"); window.open(url, "_blank"); }
+};
+
+/* ============ 启动 ============ */
+renderSystems();
+selectMineral(state.mineralId);
+resize();
+window.addEventListener("resize", resize);
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") document.getElementById("modal").classList.remove("show");
+});
+</script>
+</body>
+</html>

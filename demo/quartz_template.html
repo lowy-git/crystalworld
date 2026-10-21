@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>石英 · 晶形试验台（M0 spike）</title>
+<style>
+  :root {
+    --bg: #0c1116;
+    --panel: rgba(18, 26, 34, 0.88);
+    --line: rgba(120, 160, 190, 0.22);
+    --text: #d6e2ec;
+    --dim: #7c8f9f;
+    --accent: #7fb4d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+  canvas.panning { cursor: move; }
+
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(8px); }
+  #info { left: 18px; top: 18px; width: 274px; }
+  #info h1 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+  #info .sub { color: var(--dim); font-size: 11px; margin-bottom: 10px; }
+  #info table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #info td { padding: 2px 0; vertical-align: top; }
+  #info td:first-child { color: var(--dim); width: 82px; }
+  #info .forms { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .form-row { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 3px 4px;
+    margin: 0 -4px; border-radius: 6px; cursor: pointer; user-select: none; }
+  .form-row:hover { background: rgba(127,180,216,.10); }
+  .form-row.off { opacity: .38; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+  .form-row .n { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+  .forms-hint { color: var(--dim); font-size: 11px; margin-top: 6px; }
+
+  #controls { right: 18px; top: 18px; width: 218px; }
+  #controls .group + .group { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 9px; }
+  #controls .label { color: var(--dim); font-size: 11px; margin-bottom: 6px; letter-spacing: .06em; }
+  button { appearance: none; border: 1px solid var(--line); background: rgba(255,255,255,.04);
+    color: var(--text); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12px;
+    cursor: pointer; width: 100%; text-align: left; margin-bottom: 6px; }
+  button:hover { background: rgba(127,180,216,.14); border-color: rgba(127,180,216,.45); }
+  button.on { background: rgba(127,180,216,.2); border-color: rgba(127,180,216,.7); }
+  button.primary { background: rgba(127,180,216,.28); border-color: rgba(127,180,216,.8); text-align: center; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { text-align: center; }
+  #hint { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    color: var(--dim); font-size: 11px; letter-spacing: .04em; }
+
+  #expOverlay { position: fixed; inset: 0; background: rgba(6, 10, 14, .84);
+    display: none; align-items: center; justify-content: center; padding: 24px; }
+  #expOverlay.open { display: flex; }
+  .modal { background: #121a22; border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; width: min(780px, 92vw); max-height: 92vh; overflow: auto; }
+  .modal-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .modal-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .modal-head .meta { color: var(--dim); font-size: 11px; }
+  .preview-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line);
+    background-color: #0a0e12;
+    background-image: linear-gradient(45deg, #131a21 25%, transparent 25%, transparent 75%, #131a21 75%),
+                      linear-gradient(45deg, #131a21 25%, transparent 25%, transparent 75%, #131a21 75%);
+    background-size: 18px 18px; background-position: 0 0, 9px 9px; }
+  #expPreview { display: block; width: 100%; height: auto; }
+  .modal-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .modal-row .lbl { color: var(--dim); font-size: 11px; letter-spacing: .06em; }
+  .modal-row button { width: auto; margin: 0; text-align: center; padding: 6px 12px; }
+  .modal-row .spacer { flex: 1; }
+  #toast { position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+    background: rgba(20, 32, 44, .95); border: 1px solid var(--line); color: var(--text);
+    padding: 7px 14px; border-radius: 20px; font-size: 12px; opacity: 0; pointer-events: none;
+    transition: opacity .18s ease; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div class="panel" id="info">
+  <h1>石英 Quartz</h1>
+  <div class="sub">SiO₂ · 三方晶系 · 点群 32（三方偏形）</div>
+  <table>
+    <tr><td>晶胞</td><td id="cell">—</td></tr>
+    <tr><td>形态</td><td id="habitName">—</td></tr>
+    <tr><td>面 / 棱 / 顶点</td><td id="counts">—</td></tr>
+    <tr><td>长宽比</td><td id="ratio">—</td></tr>
+  </table>
+  <div class="forms" id="forms"></div>
+  <div class="forms-hint">单击：显示 / 隐藏　·　双击：只看这一个</div>
+</div>
+
+<div class="panel" id="controls">
+  <div class="group">
+    <div class="label">晶形 HABIT</div>
+    <div id="variants"></div>
+  </div>
+  <div class="group">
+    <div class="label">操作方式 INPUT</div>
+    <div class="seg">
+      <button id="btnMouse" class="on">鼠标</button>
+      <button id="btnTouch">触屏</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="label">显示 DISPLAY</div>
+    <button id="btnTint" class="on">按单形着色</button>
+    <button id="btnWire" class="on">显示棱线</button>
+    <button id="btnAxes" class="on">显示坐标轴</button>
+    <button id="btnSpin">自动旋转</button>
+  </div>
+  <div class="group">
+    <div class="label">视角 / 输出</div>
+    <button id="btnReset">复位视角</button>
+    <button id="btnExport" class="primary">导出图片…</button>
+  </div>
+</div>
+
+<div id="hint">拖动旋转 · 滚轮缩放 · 双击复位</div>
+
+<div id="expOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>导出图片</h2>
+      <span class="meta" id="expMeta">—</span>
+    </div>
+    <div class="preview-wrap"><img id="expPreview" alt="晶形导出预览"></div>
+    <div class="modal-row">
+      <span class="lbl">分辨率</span>
+      <button data-scale="1">1×</button>
+      <button data-scale="2" class="on">2×</button>
+      <button data-scale="3">3×</button>
+      <span class="spacer"></span>
+      <span class="lbl">背景</span>
+      <button data-bg="gradient" class="on">深色渐变</button>
+      <button data-bg="none">透明</button>
+    </div>
+    <div class="modal-row">
+      <button id="expDownload" class="primary">保存 PNG</button>
+      <button id="expCopy">复制图像</button>
+      <button id="expCopyData">复制图像数据</button>
+      <button id="expNewTab">新页面打开</button>
+      <span class="spacer"></span>
+      <button id="expClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const DATA = /*__DATA__*/ null;
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+const COLORS = {
+  quartz: [[0.80, 0.87, 0.95], [0.96, 0.88, 0.92], [0.82, 0.94, 0.92]],
+  tint:   [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76]],
+};
+
+const state = {
+  variant: 0,
+  q: null,                 // 屏幕空间累积旋转（四元数）：永远可以继续转
+  dist: 4.6,
+  offset: [0, 0],
+  mode: 'mouse',
+  tinted: true,
+  edges: true,
+  axes: true,
+  spinning: false,
+  visible: [true, true, true],
+};
+
+// ---------- 四元数 ----------
+function qMul(a, b) {
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  return [
+    aw * bx + ax * bw + ay * bz - az * by,
+    aw * by - ax * bz + ay * bw + az * bx,
+    aw * bz + ax * by - ay * bx + az * bw,
+    aw * bw - ax * bx - ay * by - az * bz,
+  ];
+}
+function qAxis(axis, ang) {
+  const n = Math.hypot(axis[0], axis[1], axis[2]) || 1;
+  const s = Math.sin(ang / 2);
+  return [axis[0] / n * s, axis[1] / n * s, axis[2] / n * s, Math.cos(ang / 2)];
+}
+function qNorm(q) {
+  const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+  return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+}
+function qToMat(q) {
+  const x = q[0], y = q[1], z = q[2], w = q[3];
+  return [
+    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+  ];
+}
+function matMul(A, B) {
+  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    let s = 0;
+    for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j];
+    C[i][j] = s;
+  }
+  return C;
+}
+function mulV(M, v) {
+  return [
+    M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+    M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+    M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2],
+  ];
+}
+// 晶体 c 轴（+z）先摆到屏幕上方（+y）：Rx(-90°)
+const R_BASE = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
+function viewMatrix() {
+  return matMul(qToMat(state.q), R_BASE);
+}
+
+// ---------- 视图 ----------
+function resize() {
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function makeProjector(w, h) {
+  const scale = Math.min(w, h) * 0.56 * (4.6 / state.dist);
+  const f = 1.9;
+  const cx = w / 2 + state.offset[0] * (w / Math.max(W, 1));
+  const cy = h / 2 + state.offset[1] * (h / Math.max(H, 1));
+  return (p) => {
+    const zc = p[2] + state.dist;
+    const s = (f * scale) / zc;
+    return [cx + p[0] * s, cy - p[1] * s, zc];
+  };
+}
+
+const LIGHT = (() => {
+  const l = [-0.34, 0.56, -0.76];   // 指向光源：左上前方
+  const n = Math.hypot(l[0], l[1], l[2]);
+  return [l[0] / n, l[1] / n, l[2] / n];
+})();
+
+function shade(base, n) {
+  const lam = Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+  const k = 0.44 + 0.70 * lam + 0.10 * (1 - Math.abs(n[2]));
+  return [Math.min(1, base[0] * k), Math.min(1, base[1] * k), Math.min(1, base[2] * k)];
+}
+
+// ---------- 渲染 ----------
+function renderScene(g2d, w, h, opt) {
+  const g = DATA.variants[state.variant];
+  const V = g.verts, F = g.faces, formOf = g.formOfFace;
+  const R = viewMatrix();
+  const proj = makeProjector(w, h);
+
+  if (opt.background !== 'none') {
+    const bg = g2d.createRadialGradient(w * 0.5, h * 0.44, 0, w * 0.5, h * 0.44, Math.max(w, h) * 0.75);
+    bg.addColorStop(0, '#16202a');
+    bg.addColorStop(1, '#0a0e12');
+    g2d.fillStyle = bg;
+    g2d.fillRect(0, 0, w, h);
+  }
+
+  const P = V.map((v) => mulV(R, v));
+  // 有单形被隐藏时，晶体不再是闭合体：改用双面显示，这样"只看柱面"看到的是管子而不是空壳
+  const twoSided = state.visible.some((v) => !v);
+  const faces = [];
+  for (let i = 0; i < F.length; i++) {
+    const form = formOf[i];
+    if (!state.visible[form]) continue;
+    const loop = F[i];
+    const a = V[loop[0]], b = V[loop[1]], c = V[loop[2]];
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n = [
+      u[1] * v2[2] - u[2] * v2[1],
+      u[2] * v2[0] - u[0] * v2[2],
+      u[0] * v2[1] - u[1] * v2[0],
+    ];
+    const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+    n = [n[0] / nl, n[1] / nl, n[2] / nl];
+    const nr = mulV(R, n);
+    if (!twoSided && nr[2] > 0.02) continue;
+    faces.push({ pts: loop.map((idx) => proj(P[idx])), n: nr, form, back: nr[2] > 0 });
+  }
+  faces.sort((A, B) => B.pts[0][2] - A.pts[0][2]);
+  const lw = Math.max(1, Math.min(w, h) / 900);
+  for (const f of faces) {
+    const base = (state.tinted ? COLORS.tint : COLORS.quartz)[f.form];
+    const nn = f.back ? [-f.n[0], -f.n[1], -f.n[2]] : f.n;
+    const dim = f.back ? 0.5 : 1;
+    const col = shade(base, nn).map((x) => Math.round(Math.min(1, x * dim) * 255));
+    g2d.beginPath();
+    g2d.moveTo(f.pts[0][0], f.pts[0][1]);
+    for (let i = 1; i < f.pts.length; i++) g2d.lineTo(f.pts[i][0], f.pts[i][1]);
+    g2d.closePath();
+    g2d.fillStyle = 'rgb(' + col.join(',') + ')';
+    g2d.fill();
+    if (opt.edges) {
+      g2d.strokeStyle = 'rgba(8, 14, 20, 0.55)';
+      g2d.lineWidth = lw;
+      g2d.stroke();
+    }
+  }
+  if (opt.axes) drawAxes(g2d, w, h, R, proj, g);
+}
+
+// 六方晶轴：a1 与 a2 夹角 120°，a3 = −(a1+a2)，c 竖直
+// 画法：轴穿过晶体时用虚线（被晶体挡住的部分），外面用实线
+function solidInsideTest(g) {
+  const V = g.verts, F = g.faces;
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const planes = [];
+  for (const loop of F) {
+    const a = V[loop[0]], b = V[loop[1]], c = V[loop[2]];
+    let n = crs(sub(b, a), sub(c, a));
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    n = [n[0] / l, n[1] / l, n[2] / l];
+    const cen = [
+      (a[0] + b[0] + c[0]) / 3,
+      (a[1] + b[1] + c[1]) / 3,
+      (a[2] + b[2] + c[2]) / 3,
+    ];
+    if (dot(n, cen) < 0) n = [-n[0], -n[1], -n[2]];
+    planes.push({ n, d: dot(n, cen) });
+  }
+  return (p) => planes.every((pl) => dot(pl.n, p) <= pl.d + 1e-6);
+}
+
+function drawAxes(g2d, w, h, R, proj, g) {
+  const L = 1.18;
+  const axes = [
+    { v: [L, 0, 0], label: 'a₁', color: '#e8bd52' },
+    { v: [-L * 0.5, L * 0.866, 0], label: 'a₂', color: '#e8bd52' },
+    { v: [-L * 0.5, -L * 0.866, 0], label: 'a₃', color: '#a08a52' },
+    { v: [0, 0, L * 0.92], label: 'c', color: '#7fd8e8' },
+  ];
+  const inside = solidInsideTest(g);
+  const unit = Math.min(w, h);
+  const lw = Math.max(1.4, unit / 620);
+  const ah = Math.max(9, unit / 72);
+  g2d.save();
+  g2d.lineWidth = lw;
+  g2d.font = Math.round(Math.max(11, unit / 46)) + 'px "Segoe UI", system-ui, sans-serif';
+  g2d.textBaseline = 'middle';
+  for (const ax of axes) {
+    const SEG = 44;
+    for (let i = 0; i < SEG; i++) {
+      const t0 = i / SEG, t1 = (i + 1) / SEG;
+      const v0 = [ax.v[0] * t0, ax.v[1] * t0, ax.v[2] * t0];
+      const v1 = [ax.v[0] * t1, ax.v[1] * t1, ax.v[2] * t1];
+      const mid = [ax.v[0] * (t0 + t1) / 2, ax.v[1] * (t0 + t1) / 2, ax.v[2] * (t0 + t1) / 2];
+      const hid = inside(mid);
+      const p0 = proj(mulV(R, v0));
+      const p1 = proj(mulV(R, v1));
+      g2d.setLineDash(hid ? [4, 5] : []);
+      g2d.globalAlpha = hid ? 0.38 : 0.92;
+      g2d.strokeStyle = ax.color;
+      g2d.beginPath();
+      g2d.moveTo(p0[0], p0[1]);
+      g2d.lineTo(p1[0], p1[1]);
+      g2d.stroke();
+    }
+    g2d.setLineDash([]);
+    const p = proj(mulV(R, ax.v));
+    const o = proj(mulV(R, [0, 0, 0]));
+    const dx = p[0] - o[0], dy = p[1] - o[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    g2d.globalAlpha = 1;
+    g2d.fillStyle = ax.color;
+    g2d.beginPath();
+    g2d.moveTo(p[0], p[1]);
+    g2d.lineTo(p[0] - ux * ah - uy * ah * 0.38, p[1] - uy * ah + ux * ah * 0.38);
+    g2d.lineTo(p[0] - ux * ah + uy * ah * 0.38, p[1] - uy * ah - ux * ah * 0.38);
+    g2d.closePath();
+    g2d.fill();
+    g2d.fillText(ax.label, p[0] + ux * 9 + 4, p[1] + uy * 9);
+  }
+  g2d.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  renderScene(ctx, W, H, { background: 'gradient', edges: state.edges, axes: state.axes });
+  updateInfo();
+}
+
+// ---------- 面板 ----------
+function updateInfo() {
+  const g = DATA.variants[state.variant];
+  document.getElementById('cell').textContent = g.cell;
+  document.getElementById('habitName').textContent = g.habit;
+  document.getElementById('counts').textContent = g.counts.f + ' / ' + g.counts.e + ' / ' + g.counts.v;
+  document.getElementById('ratio').textContent = g.ratio;
+  const box = document.getElementById('forms');
+  box.innerHTML = '';
+  g.forms.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'form-row' + (state.visible[i] ? '' : ' off');
+    const sw = document.createElement('span');
+    sw.className = 'swatch';
+    const c = (state.tinted ? COLORS.tint : COLORS.quartz)[i].map((x) => Math.round(x * 255));
+    sw.style.background = 'rgb(' + c.join(',') + ')';
+    const label = document.createElement('span');
+    label.textContent = f;
+    const num = document.createElement('span');
+    num.className = 'n';
+    num.textContent = g.formCounts[i] + ' 面';
+    row.append(sw, label, num);
+    row.addEventListener('click', () => {
+      state.visible[i] = !state.visible[i];
+      updateInfo(); draw();
+    });
+    row.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      const solo = state.visible.filter(Boolean).length === 1 && state.visible[i];
+      state.visible = state.visible.map((_, k) => (solo ? true : k === i));
+      updateInfo(); draw();
+    });
+    box.append(row);
+  });
+}
+
+function buildVariants() {
+  const box = document.getElementById('variants');
+  box.innerHTML = '';
+  DATA.variants.forEach((g, i) => {
+    const b = document.createElement('button');
+    b.textContent = g.habit;
+    b.className = i === state.variant ? 'on' : '';
+    b.onclick = () => { state.variant = i; buildVariants(); draw(); };
+    box.append(b);
+  });
+}
+
+// ---------- 交互 ----------
+const pointers = new Map();
+let lastPinch = 0;
+
+function setMode(mode) {
+  state.mode = mode;
+  document.getElementById('btnMouse').classList.toggle('on', mode === 'mouse');
+  document.getElementById('btnTouch').classList.toggle('on', mode === 'touch');
+  document.getElementById('hint').textContent = mode === 'mouse'
+    ? '鼠标：左键拖动旋转 · 滚轮缩放 · 右键拖动平移 · 双击复位'
+    : '触屏：单指拖动旋转 · 双指捏合缩放 / 平移 · 双击复位';
+}
+
+function rotateBy(dx, dy) {
+  const k = 0.0075;
+  const qx = qAxis([1, 0, 0], dy * k);
+  const qy = qAxis([0, 1, 0], dx * k);
+  state.q = qNorm(qMul(qx, qMul(qy, state.q)));
+}
+
+cv.addEventListener('pointerdown', (e) => {
+  const wantPan = e.button === 2 || (state.mode === 'mouse' && e.button === 1);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pan: wantPan });
+  cv.classList.add(wantPan ? 'panning' : 'dragging');
+  cv.setPointerCapture(e.pointerId);
+  lastPinch = 0;
+});
+
+cv.addEventListener('pointermove', (e) => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  const dx = e.clientX - prev.x;
+  const dy = e.clientY - prev.y;
+
+  if (state.mode === 'touch' && pointers.size >= 2) {
+    const others = [...pointers.entries()].filter(([id]) => id !== e.pointerId);
+    if (others.length) {
+      const p1 = others[0][1];
+      const d = Math.hypot(e.clientX - p1.x, e.clientY - p1.y);
+      if (lastPinch > 0 && d > 0) {
+        state.dist = Math.max(2.6, Math.min(9, state.dist * (lastPinch / d)));
+      }
+      lastPinch = d;
+      state.offset[0] += dx * 0.5;
+      state.offset[1] += dy * 0.5;
+      draw();
+    }
+  } else if (prev.pan) {
+    state.offset[0] += dx;
+    state.offset[1] += dy;
+    draw();
+  } else {
+    rotateBy(dx, dy);
+    draw();
+  }
+  prev.x = e.clientX; prev.y = e.clientY;
+});
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  lastPinch = 0;
+  if (pointers.size === 0) cv.classList.remove('dragging', 'panning');
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+
+cv.addEventListener('wheel', (e) => {
+  if (state.mode !== 'mouse') return;
+  e.preventDefault();
+  state.dist = Math.max(2.6, Math.min(9, state.dist * Math.exp(e.deltaY * 0.0012)));
+  draw();
+}, { passive: false });
+
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+cv.addEventListener('dblclick', () => resetView());
+
+function resetView() {
+  state.q = qNorm(qMul(qAxis([0, 1, 0], -0.55), qAxis([1, 0, 0], 0.16)));
+  state.dist = 4.6;
+  state.offset = [0, 0];
+  draw();
+}
+
+// ---------- 按钮 ----------
+document.getElementById('btnMouse').onclick = () => setMode('mouse');
+document.getElementById('btnTouch').onclick = () => setMode('touch');
+document.getElementById('btnTint').onclick = (e) => {
+  state.tinted = !state.tinted;
+  e.currentTarget.classList.toggle('on', state.tinted);
+  updateInfo(); draw();
+};
+document.getElementById('btnWire').onclick = (e) => {
+  state.edges = !state.edges;
+  e.currentTarget.classList.toggle('on', state.edges);
+  draw();
+};
+document.getElementById('btnAxes').onclick = (e) => {
+  state.axes = !state.axes;
+  e.currentTarget.classList.toggle('on', state.axes);
+  draw();
+};
+document.getElementById('btnSpin').onclick = (e) => {
+  state.spinning = !state.spinning;
+  e.currentTarget.classList.toggle('on', state.spinning);
+  if (state.spinning) { lastT = 0; requestAnimationFrame(tick); }
+};
+document.getElementById('btnReset').onclick = () => resetView();
+
+let lastT = 0;
+function tick(t) {
+  if (!state.spinning) return;
+  const now = t || 0;
+  const dt = lastT ? Math.min(64, now - lastT) : 16;
+  lastT = now;
+  state.q = qNorm(qMul(qAxis([0, 1, 0], dt * 0.00035), state.q));
+  draw();
+  requestAnimationFrame(tick);
+}
+
+// ---------- 导出 ----------
+const exp = { scale: 2, bg: 'gradient', dataURL: '', blob: null };
+
+function renderExport() {
+  const g = DATA.variants[state.variant];
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * exp.scale);
+  c.height = Math.round(H * exp.scale);
+  const c2 = c.getContext('2d');
+  renderScene(c2, c.width, c.height, {
+    background: exp.bg,
+    edges: state.edges,
+    axes: state.axes,
+  });
+  exp.dataURL = c.toDataURL('image/png');
+  document.getElementById('expPreview').src = exp.dataURL;
+  document.getElementById('expMeta').textContent = g.habit + ' · ' + c.width + ' × ' + c.height + ' px';
+  c.toBlob((b) => { exp.blob = b; }, 'image/png');
+}
+
+function openExport() {
+  document.getElementById('expOverlay').classList.add('open');
+  document.querySelectorAll('[data-scale]').forEach((b) => {
+    b.classList.toggle('on', Number(b.dataset.scale) === exp.scale);
+  });
+  document.querySelectorAll('[data-bg]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.bg === exp.bg);
+  });
+  renderExport();
+}
+
+document.getElementById('btnExport').onclick = openExport;
+document.getElementById('expClose').onclick = () => document.getElementById('expOverlay').classList.remove('open');
+document.getElementById('expOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'expOverlay') e.currentTarget.classList.remove('open');
+});
+document.querySelectorAll('[data-scale]').forEach((b) => {
+  b.onclick = () => { exp.scale = Number(b.dataset.scale); openExport(); };
+});
+document.querySelectorAll('[data-bg]').forEach((b) => {
+  b.onclick = () => { exp.bg = b.dataset.bg; openExport(); };
+});
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+document.getElementById('expDownload').onclick = () => {
+  const a = document.createElement('a');
+  a.href = exp.dataURL;
+  a.download = 'quartz-' + (state.variant + 1) + '-' + exp.scale + 'x.png';
+  a.click();
+  toast('已保存 PNG');
+};
+
+function blobFromDataURL(cb) {
+  if (exp.blob) { cb(exp.blob); return; }
+  const c = document.createElement('canvas');
+  const img = new Image();
+  img.onload = () => {
+    c.width = img.width; c.height = img.height;
+    c.getContext('2d').drawImage(img, 0, 0);
+    c.toBlob(cb, 'image/png');
+  };
+  img.src = exp.dataURL;
+}
+
+document.getElementById('expCopy').onclick = () => {
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    toast('此浏览器不支持写图像剪贴板，请用「保存 PNG」');
+    return;
+  }
+  blobFromDataURL((blob) => {
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      .then(() => toast('图片已复制到剪贴板'))
+      .catch(() => {
+        navigator.clipboard.writeText(exp.dataURL)
+          .then(() => toast('浏览器不允许写图像剪贴板，已复制 DataURL'))
+          .catch(() => toast('复制失败：请用「保存 PNG」'));
+      });
+  });
+};
+
+document.getElementById('expCopyData').onclick = () => {
+  navigator.clipboard.writeText(exp.dataURL)
+    .then(() => toast('图像数据（DataURL）已复制'))
+    .catch(() => toast('复制失败，请改用保存 PNG'));
+};
+
+document.getElementById('expNewTab').onclick = () => {
+  const g = DATA.variants[state.variant];
+  const w = window.open('', '_blank');
+  if (!w) { toast('被浏览器拦截，请允许弹出窗口'); return; }
+  w.document.write(
+    '<!doctype html><meta charset="utf-8"><title>石英 · ' + g.habit + '</title>' +
+    '<body style="margin:0;background:#0a0e12;display:flex;align-items:center;justify-content:center;height:100vh">' +
+    '<img src="' + exp.dataURL + '" style="max-width:100%;max-height:100%">'
+  );
+  w.document.close();
+};
+
+// ---------- 启动 ----------
+window.addEventListener('resize', () => { resize(); draw(); });
+resize();
+buildVariants();
+setMode('mouse');
+resetView();
+</script>
+</body>
+</html>
