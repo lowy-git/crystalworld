@@ -69,7 +69,9 @@ BACKGROUNDS = {
 
 
 def draw_bg(kind, W, H):
-    """程序化背景（复刻 demo/crystal_template.html 的 BACKGROUNDS[kind].draw）"""
+    """程序化背景（复刻 demo/crystal_template.html 的 BACKGROUNDS[kind].draw）
+       含背景内容物（标尺/试管/标签/草丛/石子/木块）——透过去才看得见，
+       这是"透明感"的必要条件：背后一片纯色时再透明也只是一块变色玻璃。"""
     im = Image.new("RGB", (W, H))
     dr = ImageDraw.Draw(im, "RGBA")
     if kind == "dark":
@@ -154,6 +156,100 @@ def draw_bg(kind, W, H):
             a = int(140 * (rr - r0) / max(1, r1 - r0))
             dv.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=(0, 0, 0, min(140, a)), width=9)
         im = Image.alpha_composite(im.convert("RGBA"), vg).convert("RGB")
+    # ---- 背景内容物（透过去才看得见；后面一片纯色时再透明也只是一块变色玻璃）----
+    im = _backdrop_props(im, kind, W, H)
+    return im
+
+
+def _rnd(seed):
+    """确定性伪随机（复刻 demo 的 backdropRnd）"""
+    h = 2166136261
+    for ch in seed:
+        h ^= ord(ch)
+        h = (h * 16777619) & 0xFFFFFFFF
+    def f():
+        nonlocal h
+        h ^= h << 13; h &= 0xFFFFFFFF
+        h ^= h >> 17
+        h ^= h << 5; h &= 0xFFFFFFFF
+        return h / 4294967296.0
+    return f
+
+
+def _backdrop_props(im, kind, W, H):
+    dr = ImageDraw.Draw(im, "RGBA")
+    R = _rnd("prop-" + kind)
+    ty = int(H * 0.74) if kind == "lab" else (int(H * 0.66) if kind == "nature"
+          else (int(H * 0.80) if kind == "cabinet" else None))
+    if kind == "lab":
+        # 直立标尺（左侧）+ 刻度
+        x = int(W * 0.10); rw = max(14, W * 0.018)
+        dr.rectangle([x, int(H * 0.16), x + rw, int(H * 0.60)], fill=(242, 238, 226), outline=(120, 126, 132))
+        for i in range(1, 7):
+            y = int(H * 0.16) + (H * 0.44) * i / 7
+            dr.line([x, y, x + rw * (0.55 if i % 2 else 1.0), y], fill=(70, 76, 84), width=1)
+        # 试管（斜靠右侧）
+        tx, tw = int(W * 0.845), int(W * 0.055)
+        dr.polygon([(tx, int(H * 0.34)), (tx + tw, int(H * 0.34)),
+                    (tx + tw * 0.55, ty), (tx + tw * 0.45, ty)],
+                   fill=(228, 240, 244, 210), outline=(150, 168, 176))
+        dr.rectangle([tx + tw * 0.45, ty, tx + tw * 0.55, ty + int(H * 0.035)],
+                     fill=(200, 214, 222))
+        # 液体（下半截，浮在液面以上）
+        dr.polygon([(tx + tw * 0.16, int(H * 0.50)), (tx + tw * 0.84, int(H * 0.50)),
+                    (tx + tw * 0.55, ty), (tx + tw * 0.45, ty)], fill=(150, 198, 206, 190))
+        # 手写标签（白底 + 灰线）
+        lx, ly = int(W * 0.755), int(H * 0.27)
+        dr.rectangle([lx, ly, lx + int(W * 0.15), ly + int(H * 0.10)],
+                     fill=(250, 248, 240), outline=(120, 126, 132))
+        for i in range(4):
+            dr.line([lx + 8, ly + 12 + i * 9, lx + int(W * 0.15) * (0.55 + 0.12 * R()), ly + 12 + i * 9],
+                    fill=(120, 128, 138), width=2)
+    elif kind == "nature":
+        gy = int(H * 0.66)
+        # 草丛（底部、晶体两侧）
+        for gx, gh, n in ((int(W * 0.13), int(H * 0.16), 7), (int(W * 0.87), int(H * 0.12), 6)):
+            for i in range(n):
+                a = -1 + i * 2.0 / (n - 1)
+                dr.line([gx, gy + int(H * 0.02), gx + int(a * gh * 0.5), gy + int(H * 0.02) - gh * (0.55 + 0.45 * (1 - abs(a)))],
+                        fill=(78, 108, 56, 205), width=max(2, W // 320))
+        # 石子（右下）
+        for i in range(3):
+            px = int(W * (0.66 + 0.10 * i)); py = int(H * (0.86 + 0.02 * (i % 2)))
+            rr = int(W * (0.014 + 0.010 * R()))
+            dr.ellipse([px - rr, py - rr * 0.72, px + rr, py + rr * 0.72], fill=(118, 114, 106), outline=(92, 88, 82))
+        # 碎草点
+        for i in range(14):
+            px = int(W * R()); py = gy + int((H - gy) * (0.35 + 0.6 * R()))
+            dr.line([px, py, px + int(W * 0.006), py - int(H * 0.01)], fill=(150, 170, 110, 150), width=1)
+    elif kind == "cabinet":
+        sy = int(H * 0.80)
+        # 小木块 + 手写标签（展台左右两侧）
+        for i, (fx, fw) in enumerate(((int(W * 0.16), int(W * 0.10)), (int(W * 0.72), int(W * 0.13)))):
+            dr.rectangle([fx, sy - int(H * 0.075), fx + fw, sy],
+                         fill=(96 + int(24 * R()), 68 + int(20 * R()), 44), outline=(58, 40, 26))
+            dr.line([fx, sy - int(H * 0.075), fx + fw, sy - int(H * 0.075)], fill=(140, 110, 76), width=1)
+            lx, ly = fx + fw - int(W * 0.01), sy - int(H * 0.30)
+            dr.rectangle([lx, ly, lx + int(W * 0.10), ly + int(H * 0.055)],
+                         fill=(238, 230, 210, 235), outline=(150, 132, 104))
+            for j in range(3):
+                dr.line([lx + 7, ly + 11 + j * 8, lx + int(W * 0.10) * (0.5 + 0.15 * R()), ly + 11 + j * 8],
+                        fill=(120, 100, 70), width=2)
+    elif kind == "paper":
+        # 印刷字行 + 参考圆（左上）+ 比例尺（右下）
+        for i in range(4):
+            y = int(H * 0.14) + i * int(H * 0.055)
+            dr.line([int(W * 0.08), y, int(W * 0.38), y], fill=(150, 145, 132), width=max(2, H // 240))
+        dr.ellipse([int(W * 0.66), int(H * 0.14), int(W * 0.66) + int(H * 0.20), int(H * 0.14) + int(H * 0.20)],
+                   outline=(150, 145, 132), width=2)
+        dr.line([int(W * 0.66) + int(H * 0.10), int(H * 0.14),
+                 int(W * 0.66) + int(H * 0.10), int(H * 0.14) + int(H * 0.20)], fill=(150, 145, 132), width=1)
+        rx, ry, rl = int(W * 0.70), int(H * 0.88), int(W * 0.20)
+        for i in range(11):
+            x = rx + rl * i / 10
+            dr.line([x, ry, x, ry - int(H * (0.022 if i % 5 == 0 else 0.011))],
+                    fill=(120, 115, 104), width=max(1, W // 700))
+        dr.line([rx, ry, rx + rl, ry], fill=(120, 115, 104), width=1)
     return im
 
 
@@ -396,17 +492,28 @@ STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0)}
 
 def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striations=True,
            alpha=None, inclusion=None, dens=0.6, light=(-25, 38), yaw=0.0, pitch=0.0,
-           indiv=None, on_table=False):
+           indiv=None, on_table=False, split=0.0, split_dir=None, tint=True):
     D = load()
     m = next(x for x in D["minerals"] if x["id"] == mineral_id)
     hab = next(x for x in m["habits"] if x["id"] == habit_id)
     v = hab["variants"][mask_key] if mask_key in hab["variants"] else hab["variants"][sorted(hab["variants"])[-1]]
     P = np.array(v["v"], dtype=float).reshape(-1, 3)
+    # 拆解：个体 B 沿 splitDir 平移（复刻 demo 的 twinSplit；接触型双晶两边等长）
+    # 必须按「面」平移：双晶（尤其穿插型）的顶点会被两个个体共用，改顶点会把个体 A
+    # 的同一个角也拽走，接缝立刻被撕成碎片（试过：萤石尖晶石律拉出满天细刺）。
+    if split > 0.001 and split_dir is not None:
+        sd = np.array(split_dir, dtype=float)
+        sd = sd / (np.linalg.norm(sd) + 1e-12)
+        off = sd * split * 1.5
+    else:
+        off = None
     faces = []
     for fi, loop in enumerate(v["f"]):
         if indiv is not None and v["indiv"][fi] != indiv:
             continue
         pts = P[loop]
+        if off is not None and v["indiv"][fi] == 1:
+            pts = pts + off
         n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
         n = n / (np.linalg.norm(n) + 1e-12)
         faces.append(dict(pts=pts, n=n, c=pts.mean(0), form=v["form"][fi],
@@ -490,6 +597,31 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
             wp = R @ p
             k = FOC / max(DIST - wp[2], 0.4) * _sc
             return (cx + wp[0] * k, cy - wp[1] * k)
+
+    # ── 本体染色层：屏幕轮廓填一层本体色，alpha 固定 0.40、不随通透度淡掉 ──
+    # （少了这层，"透明度拉高"就只剩背景色，晶体直接掉色——用户反馈"颜色消失了"）
+    body_hex = None
+    for c in m.get("colors", []):
+        if c.get("zh") != "无色":
+            body_hex = c.get("hex")
+            break
+    if body_hex is None:
+        bc = (0.55, 0.68, 0.82)
+    else:
+        hx = body_hex.lstrip("#")
+        bc = (int(hx[0:2], 16) / 255.0, int(hx[2:4], 16) / 255.0, int(hx[4:6], 16) / 255.0)
+    if tint and mat["alpha"] < 0.995 and faces:
+        # 先画 L 掩膜（并集轮廓），再把颜色一次性按掩膜盖上——
+        # 逐面直接填 alpha 会在重叠处叠加深色，与 JS 的 fill("nonzero") 不等价
+        mask = Image.new("L", (W, H), 0)
+        dm = ImageDraw.Draw(mask)
+        for f in faces:
+            if indiv is not None and f["indiv"] != indiv:
+                continue
+            pts = [proj(p) for p in f["pts"]]
+            dm.polygon(pts, fill=255)
+        lay = Image.new("RGBA", (W, H), tuple(int(c * 255) for c in bc) + (102,))
+        bgim.paste(lay, (0, 0), mask)
 
     items = []
     two_sided = any(f["clip"] for f in faces) or not v["closed"]
@@ -735,6 +867,43 @@ if __name__ == "__main__":
             dr.text(((i % 2) * T + 12, (i // 2) * T + 8), lab, fill=(205, 214, 228), font=fnt)
         out.save("render/qa-table.png")
         print("saved render/qa-table.png")
+    elif mode == "sweep":
+        # 细粒度旋转扫描：日本律双晶 12 个方位角 + 3 个俯仰角，找"旋转出错"的角度
+        T = 300
+        yaws = [i * 30 for i in range(12)]
+        pits = [0, 25, -25]
+        rows = [("quartz", "japan-twin", "1111", None, "日本律双晶"),
+                ("fluorite", "spinel-twin", "1", None, "萤石尖晶石律")]
+        out = Image.new("RGB", (len(yaws) * T, len(rows) * len(pits) * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(16)
+        for ri, (mi, hi, mk, iv, lab) in enumerate(rows):
+            for pi, pt in enumerate(pits):
+                for ci, yw in enumerate(yaws):
+                    im = render(mi, hi, mk, T, T, luster="glass", yaw=yw, pitch=pt, indiv=iv)
+                    out.paste(im, (ci * T, (ri * len(pits) + pi) * T))
+                    dr.text((ci * T + 10, (ri * len(pits) + pi) * T + 8),
+                            f"{lab} yaw={yw} pitch={pt}", fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-sweep.png")
+        print("saved render/qa-sweep.png")
+    elif mode == "twins":
+        # 四种双晶并排：萤石尖晶石律 / 石英日本律 / 石英道芬律 / 石英巴西律
+        tiles = [
+            ("fluorite", "spinel-twin", "1", "萤石 · 尖晶石律（贯穿 [111]）"),
+            ("quartz", "japan-twin", "1111", "石英 · 日本律（{11-22} 接触）"),
+            ("quartz", "dauphine-twin", "111", "石英 · 道芬律（绕 c 180°）"),
+            ("quartz", "brazil-twin", "111", "石英 · 巴西律（{11-20} 镜面）"),
+        ]
+        T = 460
+        out = Image.new("RGB", (2 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(18)
+        for i, (mi, hi, mk, label) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster="glass")
+            out.paste(im, ((i % 2) * T, (i // 2) * T))
+            dr.text(((i % 2) * T + 14, (i // 2) * T + 10), label, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-twins.png")
+        print("saved render/qa-twins.png")
     elif mode == "sheet":
         tiles = [
             ("fluorite", "spinel-twin", "1", "glass"),
@@ -750,6 +919,47 @@ if __name__ == "__main__":
             out.paste(im, ((i % 3) * 420, (i // 3) * 420))
         out.save("render/qa-sheet.png")
         print("saved render/qa-sheet.png")
+    elif mode == "split":
+        # 双晶拆解：滑杆 0 / 0.5 / 1.0 + 只看 A / 只看 B
+        T = 400
+        rows = [
+            [("石英日本律 · 合在一起", dict(split=0.0)),
+             ("石英日本律 · 拆开一半", dict(split=0.5)),
+             ("石英日本律 · 完全拆开", dict(split=1.0))],
+            [("只看个体 A", dict(indiv=0)),
+             ("只看个体 B", dict(indiv=1)),
+             ("萤石尖晶石律 · 拆开", dict(mi="fluorite", hi="spinel-twin", mk="1", split=1.0,
+                                       split_dir=[1, 1, 1]))],
+        ]
+        out = Image.new("RGB", (3 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(18)
+        for r, row in enumerate(rows):
+            for c, (label, kw) in enumerate(row):
+                mi = kw.pop("mi", "quartz"); hi = kw.pop("hi", "japan-twin")
+                mk = kw.pop("mk", "1111")
+                kw.setdefault("split_dir", [0.5, 0.866, 0.0])
+                im = render(mi, hi, mk, T, T, luster="glass", **kw)
+                out.paste(im, (c * T, r * T))
+                dr.text((c * T + 14, r * T + 10), label, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-split.png")
+        print("saved render/qa-split.png")
+    elif mode == "transp2":
+        # 通透度 vs 本体色层：上排带 tint（颜色不淡掉），下排不带 tint（对照）
+        T = 400
+        alphas = [0.26, 0.45, 0.70]
+        out = Image.new("RGB", (len(alphas) * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(18)
+        for i, a in enumerate(alphas):
+            for r, tn in enumerate((True, False)):
+                im = render("quartz", "prismatic", "111", T, T, luster="glass",
+                            bg="lab", on_table=True, alpha=a, tint=tn)
+                out.paste(im, (i * T, r * T))
+                lab = ("带本体色层" if tn else "无本体色层（旧行为）") + f" alpha={a:.2f}"
+                dr.text((i * T + 14, r * T + 10), lab, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-transp2.png")
+        print("saved render/qa-transp2.png")
     else:
         im = render("quartz", "japan-twin", "111", 760, 760, luster="glass")
         im.save("render/qa-twin.png")

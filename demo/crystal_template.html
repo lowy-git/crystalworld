@@ -33,11 +33,19 @@
   .brand b{font:600 17px/1 "Noto Serif SC","Songti SC",serif;letter-spacing:.06em}
   .brand span{font-size:11px;color:var(--ink3);letter-spacing:.14em;text-transform:uppercase}
 
-  .sec{margin:0 0 16px}
-  .sec > h3{
+  .sec{margin:0 0 10px;border:1px solid var(--line);border-radius:10px;background:#0d1929}
+  .sec > h3{margin:0}
+  .sec > h3 .fold{
+    all:unset;display:flex;justify-content:space-between;align-items:center;gap:8px;
+    width:100%;box-sizing:border-box;padding:9px 11px;cursor:pointer;
     font-size:11px;font-weight:600;letter-spacing:.16em;color:var(--ink3);
-    text-transform:uppercase;margin:0 0 8px;display:flex;justify-content:space-between;
+    text-transform:uppercase;
   }
+  .sec > h3 .fold::after{content:"▾";font-size:10px;color:var(--ink3);transition:.16s}
+  .sec.closed > h3 .fold::after{transform:rotate(-90deg)}
+  .sec > h3 .fold:hover{color:var(--ink)}
+  .sec > .secbody{padding:0 11px 11px}
+  .sec.closed > .secbody{display:none}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
   .chip{
     border:1px solid var(--line);background:#12213a;color:var(--ink2);
@@ -198,25 +206,27 @@
   <aside class="panel left">
     <div class="brand"><b>晶形工坊</b><span>Crystal Forms</span></div>
 
-    <div class="sec">
-      <h3>晶系 <span style="text-transform:none;letter-spacing:0">Crystal system</span></h3>
-      <div class="chips" id="systems"></div>
+    <div class="sec" data-sec="sys">
+      <h3><button class="fold" type="button" aria-expanded="true">晶系 <span style="text-transform:none;letter-spacing:0">Crystal system</span></button></h3>
+      <div class="secbody"><div class="chips" id="systems"></div></div>
     </div>
 
-    <div class="sec">
-      <h3>矿物 <span style="text-transform:none;letter-spacing:0">Mineral</span></h3>
-      <div class="mlist" id="minerals"></div>
+    <div class="sec" data-sec="min">
+      <h3><button class="fold" type="button" aria-expanded="true">矿物 <span style="text-transform:none;letter-spacing:0">Mineral</span></button></h3>
+      <div class="secbody"><div class="mlist" id="minerals"></div></div>
     </div>
 
-    <div class="sec">
-      <h3>外形 <span style="text-transform:none;letter-spacing:0">Habit</span></h3>
-      <div class="hlist" id="habits"></div>
+    <div class="sec" data-sec="hab">
+      <h3><button class="fold" type="button" aria-expanded="true">外形 <span style="text-transform:none;letter-spacing:0">Habit</span></button></h3>
+      <div class="secbody"><div class="hlist" id="habits"></div></div>
     </div>
 
-    <div class="sec">
-      <h3>单形 <span style="text-transform:none;letter-spacing:0">Forms</span></h3>
-      <div class="flist" id="forms"></div>
-      <div class="swarning" id="formHint">取消勾选后，其余单形会重新闭合为完整晶形（不是简单挖掉面）。</div>
+    <div class="sec" data-sec="frm">
+      <h3><button class="fold" type="button" aria-expanded="true">单形 <span style="text-transform:none;letter-spacing:0">Forms</span></button></h3>
+      <div class="secbody">
+        <div class="flist" id="forms"></div>
+        <div class="swarning" id="formHint">取消勾选后，其余单形会重新闭合为完整晶形（不是简单挖掉面）。</div>
+      </div>
     </div>
   </aside>
 
@@ -228,50 +238,61 @@
   </main>
 
   <aside class="panel right">
-    <div class="sec">
-      <h3>染色 <span style="text-transform:none;letter-spacing:0">Colour</span></h3>
-      <div class="row">
-        <button class="btn on" id="modeForm">单形配色</button>
-        <button class="btn" id="modeMineral">矿物单色</button>
+    <div class="sec" data-sec="color">
+      <h3><button class="fold" type="button" aria-expanded="true">染色 <span style="text-transform:none;letter-spacing:0">Colour</span></button></h3>
+      <div class="secbody">
+        <div class="row">
+          <button class="btn on" id="modeForm">单形配色</button>
+          <button class="btn" id="modeMineral">矿物单色</button>
+        </div>
+        <div class="swatches" id="swatches"></div>
+        <div class="swarning" id="colorHint"></div>
       </div>
-      <div class="swatches" id="swatches"></div>
-      <div class="swarning" id="colorHint"></div>
     </div>
 
-    <div class="sec">
-      <h3>场景 <span style="text-transform:none;letter-spacing:0">Scene</span></h3>
-      <div class="row wrap" id="bgs"></div>
-      <div class="row" style="margin-top:6px">
-        <label style="flex:1"><input type="checkbox" id="onTable"> 放在桌面上（贴合 + 接触阴影）</label>
+    <div class="sec" data-sec="scene">
+      <h3><button class="fold" type="button" aria-expanded="true">场景 <span style="text-transform:none;letter-spacing:0">Scene</span></button></h3>
+      <div class="secbody">
+        <div class="row wrap" id="bgs"></div>
+        <div class="row" style="margin-top:6px">
+          <label style="flex:1"><input type="checkbox" id="onTable"> 放在桌面上（贴合 + 接触阴影）</label>
+        </div>
+        <div class="swarning" id="bgHint"></div>
       </div>
-      <div class="swarning" id="bgHint"></div>
     </div>
 
-    <div class="sec">
-      <h3>质感 <span style="text-transform:none;letter-spacing:0">Lustre</span></h3>
-      <div class="row wrap" id="lusters"></div>
-      <div class="swarning" id="lusterHint"></div>
-      <div class="srow"><span>通透度</span><select id="transp"></select></div>
-      <div class="srow"><span>透明度 <b id="alphaVal" class="val"></b></span><input type="range" id="alphaR" min="12" max="100" step="1"></div>
-      <div class="swarning" id="transpHint"></div>
+    <div class="sec" data-sec="luster">
+      <h3><button class="fold" type="button" aria-expanded="true">质感 <span style="text-transform:none;letter-spacing:0">Lustre</span></button></h3>
+      <div class="secbody">
+        <div class="row wrap" id="lusters"></div>
+        <div class="swarning" id="lusterHint"></div>
+        <div class="srow"><span>通透度</span><select id="transp"></select></div>
+        <div class="srow"><span>透明度 <b id="alphaVal" class="val"></b></span><input type="range" id="alphaR" min="12" max="100" step="1"></div>
+        <div class="swarning" id="transpHint"></div>
+      </div>
     </div>
 
-    <div class="sec">
-      <h3>内含物 <span style="text-transform:none;letter-spacing:0">Inclusion</span></h3>
-      <div class="srow"><span>类型</span><select id="incSel"></select></div>
-      <div class="srow"><span>密度 <b id="incDensVal" class="val"></b></span><input type="range" id="incDens" min="0" max="100" step="5"></div>
-      <div class="swarning" id="incHint"></div>
+    <div class="sec" data-sec="incl">
+      <h3><button class="fold" type="button" aria-expanded="true">内含物 <span style="text-transform:none;letter-spacing:0">Inclusion</span></button></h3>
+      <div class="secbody">
+        <div class="srow"><span>类型</span><select id="incSel"></select></div>
+        <div class="srow"><span>密度 <b id="incDensVal" class="val"></b></span><input type="range" id="incDens" min="0" max="100" step="5"></div>
+        <div class="swarning" id="incHint"></div>
+      </div>
     </div>
 
-    <div class="sec">
-      <h3>光照 <span style="text-transform:none;letter-spacing:0">Light</span></h3>
-      <div class="srow"><span>方位角 <b id="lightAzVal" class="val"></b></span><input type="range" id="lightAz" min="-180" max="180" step="1"></div>
-      <div class="srow"><span>高度角 <b id="lightElVal" class="val"></b></span><input type="range" id="lightEl" min="-30" max="88" step="1"></div>
-      <div class="swarning">光源固定在世界坐标：转动晶体时，反射内容会随之扫过各晶面。真实阴影、环境贴图反射要等 WebGL。</div>
+    <div class="sec" data-sec="light">
+      <h3><button class="fold" type="button" aria-expanded="true">光照 <span style="text-transform:none;letter-spacing:0">Light</span></button></h3>
+      <div class="secbody">
+        <div class="srow"><span>方位角 <b id="lightAzVal" class="val"></b></span><input type="range" id="lightAz" min="-180" max="180" step="1"></div>
+        <div class="srow"><span>高度角 <b id="lightElVal" class="val"></b></span><input type="range" id="lightEl" min="-30" max="88" step="1"></div>
+        <div class="swarning">光源固定在世界坐标：转动晶体时，反射内容会随之扫过各晶面。真实阴影、环境贴图反射要等 WebGL。</div>
+      </div>
     </div>
 
-    <div class="sec">
-      <h3>显示 <span style="text-transform:none;letter-spacing:0">Display</span></h3>
+    <div class="sec" data-sec="display">
+      <h3><button class="fold" type="button" aria-expanded="true">显示 <span style="text-transform:none;letter-spacing:0">Display</span></button></h3>
+      <div class="secbody">
       <div class="opt">
         <label class="ck"><input type="checkbox" id="optEdges" checked> 棱线 Arrises</label>
           <label class="ck"><input type="checkbox" id="optStri" checked> 晶纹 Striations</label>
@@ -279,31 +300,60 @@
         <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
         <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
       </div>
-    </div>
-
-    <div class="sec">
-      <h3>操作 <span style="text-transform:none;letter-spacing:0">Input</span></h3>
-      <div class="row">
-        <button class="btn on" id="modeMouse">鼠标</button>
-        <button class="btn" id="modeTouch">触屏</button>
+    <div class="sec" data-sec="display">
+      <h3><button class="fold" type="button" aria-expanded="true">显示 <span style="text-transform:none;letter-spacing:0">Display</span></button></h3>
+      <div class="secbody">
+        <div class="opt">
+          <label class="ck"><input type="checkbox" id="optEdges" checked> 棱线 Arrises</label>
+          <label class="ck"><input type="checkbox" id="optStri" checked> 晶纹 Striations</label>
+          <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
+          <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
+          <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
+        </div>
+        <!-- 双晶拆解：只在双晶习惯出现。0＝合在一起；>0＝个体 B 沿拆解方向平移 -->
+        <div id="splitBox" style="display:none">
+          <div class="srow"><span>拆解 <b id="splitVal" class="val">0%</b></span><input type="range" id="splitR" min="0" max="100" step="1"></div>
+          <div class="row">
+            <button class="btn on" id="spBoth">两个体</button>
+            <button class="btn" id="spA">只看 A</button>
+            <button class="btn" id="spB">只看 B</button>
+          </div>
+          <div class="swarning">接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开（萤石 [111]）。</div>
+        </div>
       </div>
     </div>
 
-    <div class="sec">
-      <h3>视角 <span style="text-transform:none;letter-spacing:0">View</span></h3>
-      <div class="row"><button class="btn" id="resetView">复位视角</button></div>
-      <div class="row"><button class="btn" id="resetAxes">重置晶轴</button></div>
-      <div class="swarning">复位视角＝习惯的斜视；重置晶轴＝回到 a₁ 向右、c 向上的标准晶轴朝向。</div>
+    <div class="sec" data-sec="input">
+      <h3><button class="fold" type="button" aria-expanded="true">操作 <span style="text-transform:none;letter-spacing:0">Input</span></button></h3>
+      <div class="secbody">
+        <div class="row">
+          <button class="btn on" id="modeMouse">鼠标</button>
+          <button class="btn" id="modeTouch">触屏</button>
+        </div>
+      </div>
     </div>
 
-    <div class="sec">
-      <h3>导出 <span style="text-transform:none;letter-spacing:0">Export</span></h3>
-      <div class="row"><button class="btn primary" id="openExport">导出图片…</button></div>
+    <div class="sec" data-sec="view">
+      <h3><button class="fold" type="button" aria-expanded="true">视角 <span style="text-transform:none;letter-spacing:0">View</span></button></h3>
+      <div class="secbody">
+        <div class="row"><button class="btn" id="resetView">复位视角</button></div>
+        <div class="row"><button class="btn" id="resetAxes">重置晶轴</button></div>
+        <div class="swarning">复位视角＝习惯的斜视；重置晶轴＝回到 a₁ 向右、c 向上的标准晶轴朝向。</div>
+      </div>
     </div>
 
-    <div class="sec">
-      <h3>数据 <span style="text-transform:none;letter-spacing:0">Data</span></h3>
-      <dl class="kv" id="dataKV"></dl>
+    <div class="sec" data-sec="export">
+      <h3><button class="fold" type="button" aria-expanded="true">导出 <span style="text-transform:none;letter-spacing:0">Export</span></button></h3>
+      <div class="secbody">
+        <div class="row"><button class="btn primary" id="openExport">导出图片…</button></div>
+      </div>
+    </div>
+
+    <div class="sec" data-sec="data">
+      <h3><button class="fold" type="button" aria-expanded="true">数据 <span style="text-transform:none;letter-spacing:0">Data</span></button></h3>
+      <div class="secbody">
+        <dl class="kv" id="dataKV"></dl>
+      </div>
     </div>
   </aside>
 </div>
@@ -394,6 +444,8 @@ const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
 const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
 const unit = (a) => { const l = Math.hypot(...a) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const norm3 = unit;   // 别名：拆解方向等场景用，语义更清楚
+const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /* ============ 状态 ============ */
@@ -434,6 +486,80 @@ const defaultAlpha = (m) => (transpById(defaultTransp(m)) || { alpha: 1 }).alpha
    同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似。
    table.y ＝ 桌面/地面在画面高度上的位置（0–1）。带 table 的背景会把晶体放上去，
    并按接触阴影画一团软阴影；不需要物理、不需要 WebGL（见 README「放在桌上」一节）。 */
+/* 本体色（body colour）：通透度越低，晶体越靠这层"染色"而不是晶面的明暗来说颜色。
+   取矿物第一个颜色（无色则取第二个），矿物单色模式下取用户选的颜色 */
+function bodyColor() {
+  if (state.colorMode === "mineral" && state.uniform) return hexToRgb(state.uniform);
+  const cs = mineral().colors || [];
+  const pick = cs.find(c => c.zh !== "无色") || cs[0];
+  return pick ? hexToRgb(pick.hex) : [0.55, 0.68, 0.82];
+}
+
+/* 本体染色层：把晶体的屏幕轮廓填一层本体色，alpha 固定、不随通透度淡掉。
+   少了这一层，"透明度拉高"就只剩背景色，晶体直接掉色（用户反馈：颜色消失了）。 */
+function paintTint(g, project, M) {
+  if (!GEO || M.alpha > 0.995) return;
+  const k = 0.40;
+  if (k <= 0.02) return;
+  g.save();
+  g.beginPath();
+  for (const f of GEO.faces) {
+    if (state.twinShow !== "both" && f.indiv !== (state.twinShow === "A" ? 0 : 1)) continue;
+    const p0 = project(f.pts[0]);
+    g.moveTo(p0[0], p0[1]);
+    for (let i = 1; i < f.pts.length; i++) { const p = project(f.pts[i]); g.lineTo(p[0], p[1]); }
+    g.closePath();
+  }
+  g.fillStyle = rgbStr(bodyColor(), k);
+  g.fill("nonzero");           // 闭合体所有面绕序一致，nonzero 即得并集轮廓
+  g.restore();
+}
+
+/* 背景内容物：放在晶体身后（桌面线上下），透过去才看得见——
+   这是"透明感"的必要条件：背后一片纯色时，再透明也只是一块变色玻璃。
+   rnd 是确定性伪随机，同一场景每次渲染位置一致。 */
+function backdropRnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+function drawPropRuler(g, x, y, w) {
+  g.fillStyle = "rgba(226,214,186,.92)"; g.fillRect(x, y, w, w * 0.13);
+  g.strokeStyle = "rgba(60,50,35,.55)"; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w, w * 0.13);
+  const n = 10;
+  for (let i = 0; i <= n; i++) {
+    const tx = x + w * i / n;
+    g.beginPath(); g.moveTo(tx, y); g.lineTo(tx, y + w * 0.13 * (i % 5 === 0 ? 1 : 0.55)); g.stroke();
+  }
+}
+function drawPropTube(g, x, y, h, col) {
+  const w = h * 0.22;
+  g.fillStyle = col; g.fillRect(x, y, w, h);
+  g.fillStyle = "rgba(255,255,255,.35)"; g.fillRect(x, y, w * 0.28, h);
+  g.fillStyle = "rgba(20,30,45,.18)"; g.fillRect(x + w - w * 0.18, y, w * 0.18, h);
+}
+function drawPropPebble(g, x, y, r, col) {
+  g.fillStyle = col;
+  g.beginPath(); g.ellipse(x, y, r, r * 0.72, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "rgba(255,255,255,.18)";
+  g.beginPath(); g.ellipse(x - r * 0.25, y - r * 0.2, r * 0.35, r * 0.2, -0.5, 0, Math.PI * 2); g.fill();
+}
+function drawPropLabel(g, x, y, w, h, tone) {
+  g.fillStyle = tone; g.fillRect(x, y, w, h);
+  g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w, h);
+  g.strokeStyle = "rgba(70,60,45,.45)"; g.lineWidth = 1;
+  for (let i = 1; i <= 3; i++) {
+    const ly = y + h * i / 4;
+    g.beginPath(); g.moveTo(x + w * 0.12, ly); g.lineTo(x + w * (0.85 - 0.12 * (i % 2)), ly); g.stroke();
+  }
+}
+function drawPropGrass(g, x, y, n, col) {
+  g.strokeStyle = col; g.lineWidth = 2; g.lineCap = "round";
+  for (let i = 0; i < n; i++) {
+    const bx = x + (i - n / 2) * 9, hgt = 12 + (i % 3) * 7;
+    g.beginPath(); g.moveTo(bx, y);
+    g.quadraticCurveTo(bx + (i % 2 ? 5 : -5), y - hgt * 0.6, bx + (i % 2 ? 11 : -11), y - hgt);
+    g.stroke();
+  }
+}
+
 const BACKGROUNDS = {
   dark: {
     zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
@@ -463,6 +589,17 @@ const BACKGROUNDS = {
       const sh = g.createLinearGradient(0, h * 0.9, 0, h);       // 桌腿方向的压暗
       sh.addColorStop(0, "rgba(20,30,45,0)"); sh.addColorStop(1, "rgba(20,30,45,.22)");
       g.fillStyle = sh; g.fillRect(0, h * 0.9, w, h * 0.1);
+      // 背景内容物：标尺 + 试管 + 标签，都在台面上、晶体身后
+      const r = backdropRnd(20240517);
+      const u = Math.min(w, h);
+      drawPropRuler(g, w * 0.5 + u * 0.16, ty - u * 0.035, u * 0.34);
+      drawPropTube(g, w * 0.5 - u * 0.30, ty - u * 0.17, u * 0.17, "rgba(150,205,190,.75)");
+      drawPropLabel(g, w * 0.5 - u * 0.40, ty - u * 0.10, u * 0.09, u * 0.07, "rgba(238,232,214,.9)");
+      for (let i = 0; i < 3; i++) {
+        g.fillStyle = "rgba(90,120,150,.13)";
+        const cx = w * (0.16 + 0.24 * i), cy = ty + (h - ty) * (0.3 + 0.2 * r());
+        g.beginPath(); g.ellipse(cx, cy, u * 0.012, u * 0.006, 0, 0, Math.PI * 2); g.fill();
+      }
     },
   },
   nature: {
@@ -485,6 +622,18 @@ const BACKGROUNDS = {
       for (let i = 0; i < 7; i++) {
         const y = gy + (h - gy) * (0.12 + 0.13 * i) + (i % 2 ? 6 : -6);
         g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+      }
+      // 背景内容物：草丛 + 石子，长在晶体身后
+      const r = backdropRnd(77031);
+      const u = Math.min(w, h);
+      drawPropGrass(g, w * 0.5 + u * 0.20, gy + 2, 7, "rgba(96,124,64,.75)");
+      drawPropGrass(g, w * 0.5 - u * 0.26, gy + 3, 5, "rgba(84,110,56,.7)");
+      drawPropPebble(g, w * 0.5 + u * 0.32, gy + (h - gy) * 0.10, u * 0.022, "#8d8b80");
+      drawPropPebble(g, w * 0.5 - u * 0.34, gy + (h - gy) * 0.22, u * 0.015, "#77736a");
+      for (let i = 0; i < 8; i++) {                                // 地面碎草点
+        g.fillStyle = `rgba(${120 + r() * 40 | 0},${140 + r() * 30 | 0},${80 + r() * 20 | 0},.5)`;
+        const px = w * (0.1 + 0.8 * r()), py = gy + (h - gy) * (0.05 + 0.3 * r());
+        g.fillRect(px, py, 3, 1.5);
       }
     },
   },
@@ -511,6 +660,13 @@ const BACKGROUNDS = {
       const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.25, w * 0.5, h * 0.46, Math.max(w, h) * 0.78);
       vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.55)");
       g.fillStyle = vg; g.fillRect(0, 0, w, h);
+      // 背景内容物：小木块承托 + 手写标签（都在展台上、晶体身后）
+      const u = Math.min(w, h);
+      g.fillStyle = "#4a3826";
+      g.fillRect(w * 0.5 + u * 0.22, sy - u * 0.055, u * 0.10, u * 0.055);
+      g.fillStyle = "rgba(255,220,170,.10)";
+      g.fillRect(w * 0.5 + u * 0.22, sy - u * 0.055, u * 0.10, u * 0.008);
+      drawPropLabel(g, w * 0.5 - u * 0.38, sy - u * 0.075, u * 0.13, u * 0.075, "rgba(214,198,168,.92)");
     },
   },
   paper: {
@@ -522,6 +678,24 @@ const BACKGROUNDS = {
       const sh = g.createLinearGradient(0, h * 0.8, 0, h);      // 纸面自身的柔和压暗
       sh.addColorStop(0, "rgba(120,105,80,0)"); sh.addColorStop(1, "rgba(120,105,80,.14)");
       g.fillStyle = sh; g.fillRect(0, h * 0.8, w, h * 0.2);
+      // 背景内容物：印刷字行 + 比例尺 + 参考圆
+      const u = Math.min(w, h);
+      g.fillStyle = "rgba(96,86,70,.30)";
+      for (let i = 0; i < 5; i++) {
+        const ly = h * 0.10 + i * u * 0.045;
+        g.fillRect(w * 0.5 + u * 0.06, ly, u * (0.30 - 0.05 * (i % 3)), u * 0.010);
+        g.fillRect(w * 0.5 - u * 0.42, ly, u * (0.22 - 0.04 * (i % 2)), u * 0.010);
+      }
+      g.strokeStyle = "rgba(96,86,70,.35)"; g.lineWidth = 1;
+      g.beginPath(); g.arc(w * 0.5 + u * 0.26, h * 0.60, u * 0.075, 0, Math.PI * 2); g.stroke();
+      drawPropRuler(g, w * 0.5 - u * 0.42, h * 0.70, u * 0.30);
+      g.strokeStyle = "rgba(96,86,70,.45)"; g.lineWidth = 1.4;
+      const sy2 = h * 0.78;
+      g.beginPath(); g.moveTo(w * 0.5 - u * 0.15, sy2); g.lineTo(w * 0.5 + u * 0.15, sy2); g.stroke();
+      for (let i = 0; i <= 6; i++) {
+        const tx = w * 0.5 - u * 0.15 + u * 0.30 * i / 6;
+        g.beginPath(); g.moveTo(tx, sy2); g.lineTo(tx, sy2 + (i % 2 ? 5 : 9)); g.stroke();
+      }
     },
   },
 };
@@ -546,6 +720,8 @@ const state = {
   incDensity: 0.6,
   lightAz: -25, lightEl: 38,
   twinTint: false,
+  twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
+  twinShow: "both",    // both / A / B：只显示其中一个个体
   uniform: null,       // {hex}
   exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
   striations: true,
@@ -582,12 +758,29 @@ function rebuildGeometry() {
   if (!v) { GEO = null; return; }
   const P = [];
   for (let i = 0; i < v.v.length; i += 3) P.push([v.v[i], v.v[i + 1], v.v[i + 2]]);
+  // ── 双晶拆解：个体 B 沿拆解方向平移，两个体各自仍是完整闭合体 ──
+  // 注意：必须按「面」平移，不能按「顶点」平移——双晶（尤其穿插型）的顶点会被两个
+  // 个体共用，改顶点会把个体 A 的同一个角也拽走，接缝立刻被撕成碎片。
+  const tw = habit().twin;
+  const sd = (tw && tw.splitDir) ? tw.splitDir : null;
+  const sp = state.twinSplit || 0;
+  const off = (sd && sp > 0.001) ? norm3(sd).map(x => x * sp * 1.5) : null;
+  const keepIndiv = state.twinShow === "both" ? null : (state.twinShow === "A" ? 0 : 1);
   const faces = v.f.map((loop, fi) => {
-    const pts = loop.map(i => P[i]);
+    const shift = (off && v.indiv[fi] === 1) ? off : null;
+    const pts = loop.map(i => {
+      const p = P[i];
+      return shift ? [p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]] : p;
+    });
     const n = unit(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
     const c = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length, a[2] + p[2] / pts.length], [0, 0, 0]);
     return { pts, n, c, loop, form: v.form[fi], indiv: v.indiv[fi], clip: v.clip[fi] };
   });
+  // 只看 A / 只看 B：从几何层就滤掉另一个体，闭合性/欧拉数等检查才不会混入两块
+  if (keepIndiv !== null) {
+    const keep = new Set(faces.map((f, i) => f.indiv === keepIndiv ? i : -1).filter(i => i >= 0));
+    faces.splice(0, faces.length, ...faces.filter((_, i) => keep.has(i)));
+  }
   // 每个个体的平面（用于轴向遮挡判断）
   const planesByIndiv = {};
   for (const f of faces) {
@@ -994,15 +1187,28 @@ function paintFaces(g, opts, project, M) {
   const eye = [0, 0, DIST];
   const cx = opts.cx, cy = opts.cy;
   const twoSided = GEO.faces.some(f => f.clip === 1) || !variant().closed;
+  // 拆解后是两个互不穿插的独立凸体：画家算法必须先按个体（远→近）再按面，
+  // 否则一个个体的远侧面会画到另一个个体的近侧面之上，接缝处打出空洞。
+  const splitOn = (state.twinSplit || 0) > 0.001;
+  let indOrder = null;
+  if (splitOn) {
+    const cz = {};
+    for (const f of GEO.faces) {
+      const cw = mv(R, f.c);
+      (cz[f.indiv] ||= []).push(cw[2]);
+    }
+    indOrder = Object.keys(cz).sort((a, b) => avg(cz[a]) - avg(cz[b])).map(Number); // 远→近
+  }
   const list = [];
   for (const f of GEO.faces) {
+    if (state.twinShow !== "both" && f.indiv !== (state.twinShow === "A" ? 0 : 1)) continue;
     const wn = mv(R, f.n);
     const cw = mv(R, f.c);
     const front = dot(wn, sub(eye, cw)) > 0;
     if (!front && !twoSided) continue;
-    list.push({ f, wn, cw, depth: DIST - cw[2], front });
+    list.push({ f, wn, cw, depth: DIST - cw[2], front, rank: splitOn ? indOrder.indexOf(f.indiv) : 0 });
   }
-  list.sort((a, b) => b.depth - a.depth);
+  list.sort((a, b) => (b.rank - a.rank) || (b.depth - a.depth));
 
   for (const it of list) {
     const pts = it.f.pts.map(project);
@@ -1097,6 +1303,7 @@ function paint(g, opts) {
     project = makeProject(opts);
   }
   if (M.alpha < 0.995) {
+    paintTint(g, project, M);                    // 先罩一层本体色，颜色不随 alpha 淡掉
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.round(opts.vw * dpr));
     off.height = Math.max(1, Math.round(opts.vh * dpr));
@@ -1503,6 +1710,17 @@ function syncPanels() {
     twinRow.style.display = habit().twin ? "" : "none";
     document.getElementById("optTwin").checked = state.twinTint;
   }
+  // 双晶拆解控件只在双晶习惯出现；切到非双晶时复位，免得下次打开残留拆解状态
+  const splitBox = document.getElementById("splitBox");
+  if (splitBox) splitBox.style.display = habit().twin ? "" : "none";
+  if (!habit().twin && (state.twinSplit || state.twinShow !== "both")) {
+    state.twinSplit = 0; state.twinShow = "both";
+  }
+  document.getElementById("splitVal").textContent = Math.round((state.twinSplit || 0) * 100) + "%";
+  document.getElementById("splitR").value = Math.round((state.twinSplit || 0) * 100);
+  document.getElementById("spBoth").classList.toggle("on", state.twinShow === "both");
+  document.getElementById("spA").classList.toggle("on", state.twinShow === "A");
+  document.getElementById("spB").classList.toggle("on", state.twinShow === "B");
   renderLusters();
   renderBackgrounds();
   renderTransp();
@@ -1553,6 +1771,47 @@ document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.c
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
+
+/* ── 面板折叠：点标题栏收起/展开，记忆在 localStorage ── */
+const FOLD_KEY = "crystalworld.folds";
+const foldState = (() => {
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; } catch (e) { return {}; }
+})();
+function applyFolds() {
+  document.querySelectorAll(".sec[data-sec]").forEach(sec => {
+    const key = sec.dataset.sec;
+    const want = foldState[key] === undefined ? true : foldState[key];
+    sec.classList.toggle("closed", !want);
+    const b = sec.querySelector(".fold");
+    if (b) b.setAttribute("aria-expanded", String(want));
+  });
+}
+document.querySelectorAll(".sec[data-sec] > h3 .fold").forEach(btn => {
+  btn.onclick = () => {
+    const sec = btn.closest(".sec");
+    const key = sec.dataset.sec;
+    const open = !sec.classList.contains("closed");
+    sec.classList.toggle("closed", open);
+    foldState[key] = !open;
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(foldState)); } catch (e) { /* 隐私模式 */ }
+  };
+});
+applyFolds();
+
+/* ── 双晶拆解 ── */
+document.getElementById("splitR").oninput = (e) => {
+  state.twinSplit = +e.target.value / 100;
+  document.getElementById("splitVal").textContent = e.target.value + "%";
+  rebuildGeometry(); draw();
+};
+const spBtn = (id, val) => { document.getElementById(id).onclick = () => {
+  state.twinShow = val;
+  document.getElementById("spBoth").classList.toggle("on", val === "both");
+  document.getElementById("spA").classList.toggle("on", val === "A");
+  document.getElementById("spB").classList.toggle("on", val === "B");
+  rebuildGeometry(); draw();
+}; };
+spBtn("spBoth", "both"); spBtn("spA", "A"); spBtn("spB", "B");
 document.getElementById("resetView").onclick = () => {
   state.quat = Q_VIEW.slice(); state.zoom = 1; state.pan = [0, 0]; draw();
 };

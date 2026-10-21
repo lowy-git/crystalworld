@@ -184,6 +184,26 @@ export const MINERALS = [
           { hkl: [1, 1, 2], k: 1.5, idx: "{11-22}", zh: "s 面（双晶面）", en: "s face (composition plane)" },
         ],
       },
+      {
+        id: "dauphine-twin", zh: "道芬律双晶", en: "Dauphiné twin",
+        note: "双晶操作：绕 c 轴 <0001> 转 180°。32 点群里没有平行 c 的二次轴，所以这是双晶而非对称操作。六方柱被 180° 映回自身，菱面体 r 与 z 互换 → 柱体仍是完整六棱柱，但上下两端的 r/z 尖角互相咬合、出现凹角。真实道芬律多为不规则连生，外形常不明显，此处取理想同心对称形",
+        twin: { mode: "axis", axis: [0, 0, 1], angle: 180 },
+        forms: [
+          { hkl: [1, 0, 0], k: 0.95, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [1, 0, 1], k: 0.95, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
+          { hkl: [0, 1, 1], k: 0.95, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
+        ],
+      },
+      {
+        id: "brazil-twin", zh: "巴西律双晶", en: "Brazil twin",
+        note: "双晶面 {11-20}（含 c 轴的棱柱面）。32 点群没有镜面，故镜面操作产生双晶：c 轴互相平行，两个体旋光方向相反（一左一右）。电学和压电效应相互抵消，所以巴西双晶石英不能做压电元件。r/z 面镜像后错开咬合，柱面仍为六方形",
+        twin: { mode: "mirror", plane: [1, 1, -2, 0], angle: 0 },
+        forms: [
+          { hkl: [1, 0, 0], k: 0.95, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [1, 0, 1], k: 0.95, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
+          { hkl: [0, 1, 1], k: 0.95, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
+        ],
+      },
     ],
   },
   {

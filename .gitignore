@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 
+# 临时调试产物（约定：_ 开头的一律不进仓库）
+spike/_*
+render/_*
+
 # Node
 node_modules/
 

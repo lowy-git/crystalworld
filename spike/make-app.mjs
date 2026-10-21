@@ -126,7 +126,10 @@ function buildGeometry(mineral, habit, mask) {
     };
     const nR = (v) => { const s2 = 2 * dot(n, v); return [v[0] - n[0] * s2, v[1] - n[1] * s2, v[2] - n[2] * s2]; };
     const sideB0 = polys.map(f => ({
-      pts: f.pts.map(T),
+      // 反射是反向变换：点的绕序会跟着反，必须用 orient 纠正，否则渲染端按绕序算法向，
+      // 个体 B 的每个面法向都朝内 → 背面剔除把 B 的正面全砍掉，只剩发暗的"远侧面"，
+      // 看起来就是两个体互相穿插/分离，且随旋转剧烈变化。
+      pts: orient(f.pts.map(T), nR(f.n)),
       n: nR(f.n), form: f.form, indiv: 1, clip: f.clip,
     }));
     const tol = 1e-6;
@@ -289,6 +292,7 @@ for (const m of MINERALS) {
 
     // 双晶默认视角：让第二个个体的 c 轴落在屏幕横向，否则容易正好指向镜头
     let view = null;
+    let splitDir = null;
     if (h.twin) {
       const L0 = lattice(m.cell);
       const pl = h.twin.plane;
@@ -298,6 +302,10 @@ for (const m of MINERALS) {
         : twinAxisMatrix(h.twin.axis, L0);
       const cB0 = applyM(T0, [0, 0, 1]);
       view = { yaw: +(Math.atan2(cB0[1], cB0[0]) * 180 / Math.PI).toFixed(2) };
+      // 拆解方向（晶体坐标）：接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开
+      splitDir = h.twin.mode === "axis"
+        ? h.twin.axis.slice()
+        : (h3 ? faceNormal(h3, L0).n : [0, 0, 1]);
     }
     mg.habits.push({
       id: h.id, zh: h.zh, en: h.en,
@@ -307,6 +315,7 @@ for (const m of MINERALS) {
         axis: h.twin.axis ?? null,     // 贯穿双晶：二次轴方向（萤石尖晶石律 [111]）
         plane: h.twin.plane ?? null,   // 接触双晶：结合面（石英日本律 {11-22}）
         delta: h.twin.delta ?? null,
+        splitDir,   // 拆解方向（晶体坐标）：接触型沿结合面法向，贯穿型沿双晶轴
       } : null,
       forms: h.forms.map((f, i) => ({
         idx: f.idx, zh: f.zh, en: f.en,
