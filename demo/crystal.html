@@ -346,14 +346,16 @@ const Q_VIEW = qNorm(qMul(qAxis(0, 1, 0, 0.52), qAxis(1, 0, 0, -Math.PI / 2 + 0.
 const Q_AXES = qNorm(qAxis(1, 0, 0, -Math.PI / 2));
 const TINTS = [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76], [0.97, 0.84, 0.55]];
 const LIGHT_V = unit([-0.34, 0.62, 0.72]);
-/* 光泽模型：amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、alpha 通透度、back 背面透出度 */
+/* 光泽模型：amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、alpha 通透度、back 背面透出度、
+   fres 掠射角提亮、ior 折射率（决定 R0=((n-1)/(n+1))^2 镜面反射率）、envI 环境反射强度、
+   metal 金属（R0=1 且反射带本体色，无漫反射） */
 const LUSTERS = {
-  opaque:      { zh: "不透明", amb: .54, diff: .62, spec: .05, shin: 8,   alpha: 1,    back: 1,   fres: .06 },
-  glass:       { zh: "玻璃",   amb: .44, diff: .56, spec: .60, shin: 80,  alpha: .88,  back: .55, fres: .40 },
-  adamantine:  { zh: "金刚",   amb: .30, diff: .50, spec: .98, shin: 150, alpha: .95,  back: .62, fres: .58 },
-  metallic:    { zh: "金属",   amb: .28, diff: .54, spec: .85, shin: 42,  alpha: 1,    back: 1,   fres: .50, tintSpec: true },
-  waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .18, shin: 14,  alpha: .96,  back: .72, fres: .14 },
-  transparent: { zh: "透明",   amb: .40, diff: .44, spec: .40, shin: 70,  alpha: .50,  back: .30, fres: .62 },
+  opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,   alpha: 1,    back: 1,   fres: .06, ior: 1.60, envI: .10 },
+  glass:       { zh: "玻璃",   amb: .40, diff: .55, spec: .75, shin: 14,  alpha: .78,  back: .55, fres: .34, ior: 1.54, envI: .52 },
+  adamantine:  { zh: "金刚",   amb: .22, diff: .38, spec: 1.0, shin: 22,  alpha: .95,  back: .62, fres: .48, ior: 2.42, envI: 1.00 },
+  metallic:    { zh: "金属",   amb: .04, diff: .07, spec: .85, shin: 10,  alpha: 1,    back: 1,   fres: .34, ior: 1.00, envI: .95, metal: 1 },
+  waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .22, shin: 6,   alpha: .96,  back: .72, fres: .14, ior: 1.50, envI: .22 },
+  transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16,  alpha: .45,  back: .30, fres: .52, ior: 1.54, envI: .45 },
 };
 const DEFAULT_LUSTER = "glass";
 
@@ -477,16 +479,48 @@ const inside = (p) => {
 
 const mat = () => LUSTERS[state.luster || mineral().luster || DEFAULT_LUSTER] || LUSTERS.glass;
 
+/* 程序化"影棚环境"：方向固定在世界/观察空间，晶体转动时反射内容随之扫过各个晶面——
+   这正是真实晶体在固定光源下的观感。不是贴图，是几个方向光斑加天地渐变。
+   第一个与 LIGHT_V 同向，保证高光和环境反射对得上（不会出现"高光在左、亮斑在右"的撕裂） */
+const ENV_LIGHTS = [
+  { dir: unit([-0.34, 0.62, 0.72]), col: [1.00, 0.98, 0.93], sharp: 3.5, inten: 0.75 },  // 主柔光箱：大面积柔光，提供整体的"上左下亮"反射梯度
+  { dir: unit([0.72, 0.28, 0.62]),  col: [0.60, 0.72, 1.00], sharp: 26, inten: 0.50 },  // 高位冷侧亮块：较窄，制造锐利的亮斑
+  { dir: unit([0.10, -0.85, 0.50]), col: [0.95, 0.78, 0.58], sharp: 2,  inten: 0.26 },  // 下方暖反光板
+];
+function envSample(r) {
+  const out = [0, 0, 0];
+  for (const L of ENV_LIGHTS) {
+    const k = Math.pow(Math.max(0, dot(r, L.dir)), L.sharp) * L.inten;
+    out[0] += k * L.col[0]; out[1] += k * L.col[1]; out[2] += k * L.col[2];
+  }
+  // 天顶亮、地平中、地面暗的基础渐变：没有它，反射非光源方向是死黑，金属会"缺块"
+  const t = Math.max(-1, Math.min(1, r[1]));
+  const g = 0.16 * Math.pow(Math.max(0, t), 0.65) + 0.05 * Math.pow(Math.max(0, -t), 0.5);
+  out[0] += g * 0.72; out[1] += g * 0.80; out[2] += g * 0.95;
+  return out;
+}
+
 function shadeFace(base, n, cw, eye, M) {
   const lam = Math.max(0, dot(n, LIGHT_V));
   const v = unit(sub(eye, cw));
   const hv = unit([LIGHT_V[0] + v[0], LIGHT_V[1] + v[1], LIGHT_V[2] + v[2]]);
   const sp = Math.pow(Math.max(0, dot(n, hv)), M.shin) * M.spec;
   const tint = M.tintSpec ? [0.35 + 0.65 * base[0], 0.35 + 0.65 * base[1], 0.35 + 0.65 * base[2]] : null;
-  // 掠射角提亮（Fresnel）：玻璃/金刚石在斜看时边缘发亮，这一项最能拉开"塑料感"与"晶体感"
-  const fres = Math.pow(1 - Math.abs(dot(n, v)), 3) * (M.fres || 0);
+  // 反射向量：视线被这个面弹向哪里，就取环境那个方向的颜色
+  const d = dot(n, v);
+  const env = envSample([2 * d * n[0] - v[0], 2 * d * n[1] - v[1], 2 * d * n[2] - v[2]]);
+  // Schlick 菲涅耳：R0=((n-1)/(n+1))^2。石英≈4%、金刚石≈17%、金属=1。
+  // 同一种"亮边"，过去只能靠 fres 假造，现在有了物理依据
+  const R0 = M.metal ? 1 : Math.pow((M.ior - 1) / (M.ior + 1), 2);
+  const F = R0 + (1 - R0) * Math.pow(1 - Math.abs(d), 5);
+  const refl = F * M.envI;
+  // 掠射角提亮：保留的"晶体感"项，量已调小，避免与 Schlick 双重计分
+  const fres = Math.pow(1 - Math.abs(d), 3) * (M.fres || 0) * 0.45;
   return [0, 1, 2].map(i =>
-    clamp(base[i] * (M.amb + M.diff * lam) + (tint ? tint[i] : 1) * sp + fres * (0.55 + 0.45 * base[i]), 0, 1));
+    clamp(base[i] * (M.amb + M.diff * lam)                       // 漫反射 + 环境光
+      + (tint ? tint[i] : 1) * sp                                 // 锐利高光
+      + (M.metal ? base[i] : 1) * refl * env[i]                   // 环境反射（金属带本体色）
+      + fres * (0.55 + 0.45 * base[i]), 0, 1));
 }
 const rgbStr = (c, a = 1) => `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${a})`;
 const hexToRgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];

@@ -1,6 +1,7 @@
 """QA 渲染器：按 demo 的相机/四元数/光泽模型复刻一帧，用来肉眼核对几何与材质。"""
 import json
 import math
+import os
 import re
 import sys
 
@@ -12,13 +13,26 @@ DIST = 7.0
 LIGHT = np.array([-0.34, 0.62, 0.72])
 LIGHT = LIGHT / np.linalg.norm(LIGHT)
 
+
+def _font(size=16):
+    """QA 图要写中文标签，PIL 默认字体不含 CJK，优先挂系统微软雅黑。"""
+    from PIL import ImageFont
+    for p in (r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\simhei.ttf",
+              r"C:\Windows\Fonts\msyhn.ttc"):
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
 LUSTERS = {
-    "opaque":     dict(amb=0.52, diff=0.62, spec=0.06, shin=8,   alpha=1.00, back=1.00),
-    "glass":      dict(amb=0.46, diff=0.58, spec=0.55, shin=70,  alpha=0.86, back=0.50),
-    "adamantine": dict(amb=0.34, diff=0.52, spec=0.90, shin=110, alpha=0.92, back=0.60),
-    "metallic":   dict(amb=0.30, diff=0.55, spec=0.75, shin=36,  alpha=1.00, back=1.00),
-    "waxy":       dict(amb=0.58, diff=0.52, spec=0.18, shin=14,  alpha=0.95, back=0.70),
-    "transparent": dict(amb=0.42, diff=0.45, spec=0.35, shin=60, alpha=0.48, back=0.28),
+    "opaque":     dict(amb=0.50, diff=0.60, spec=0.05, shin=4,   alpha=1.00, back=1.00, fres=0.06, ior=1.60, envI=0.10),
+    "glass":      dict(amb=0.40, diff=0.55, spec=0.75, shin=14,  alpha=0.78, back=0.55, fres=0.34, ior=1.54, envI=0.52),
+    "adamantine": dict(amb=0.22, diff=0.38, spec=1.00, shin=22,  alpha=0.95, back=0.62, fres=0.48, ior=2.42, envI=1.00),
+    "metallic":   dict(amb=0.04, diff=0.07, spec=0.85, shin=10,  alpha=1.00, back=1.00, fres=0.34, ior=1.00, envI=0.95, metal=1),
+    "waxy":       dict(amb=0.58, diff=0.50, spec=0.22, shin=6,   alpha=0.96, back=0.72, fres=0.14, ior=1.50, envI=0.22),
+    "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, alpha=0.45, back=0.30, fres=0.52, ior=1.54, envI=0.45),
 }
 TINTS = [(0.55, 0.74, 0.97), (0.97, 0.62, 0.82), (0.55, 0.92, 0.76), (0.97, 0.84, 0.55)]
 CLIP_TINT = (0.58, 0.62, 0.68)
@@ -58,6 +72,29 @@ Q_VIEW = q_mul(q_axis(0, 1, 0, 0.52), q_axis(1, 0, 0, -math.pi / 2 + 0.16))
 Q_VIEW = Q_VIEW / np.linalg.norm(Q_VIEW)
 
 
+def _u(v):
+    v = np.array(v, dtype=float)
+    return v / np.linalg.norm(v)
+
+
+# 与 demo/crystal_template.html 的 ENV_LIGHTS 保持一致
+ENV_LIGHTS = [
+    dict(dir=_u([-0.34, 0.62, 0.72]), col=np.array([1.00, 0.98, 0.93]), sharp=3.5, inten=0.75),
+    dict(dir=_u([0.72, 0.28, 0.62]),  col=np.array([0.60, 0.72, 1.00]), sharp=26, inten=0.50),
+    dict(dir=_u([0.10, -0.85, 0.50]), col=np.array([0.95, 0.78, 0.58]), sharp=2,  inten=0.26),
+]
+
+
+def env_sample(r):
+    out = np.zeros(3)
+    for L in ENV_LIGHTS:
+        k = (max(0.0, float(np.dot(r, L["dir"]))) ** L["sharp"]) * L["inten"]
+        out = out + k * L["col"]
+    t = max(-1.0, min(1.0, float(r[1])))
+    g = 0.16 * max(0.0, t) ** 0.65 + 0.05 * max(0.0, -t) ** 0.5
+    return out + g * np.array([0.72, 0.80, 0.95])
+
+
 def shade(base, n, c, eye, mat, tint_spec=False):
     lam = max(0.0, float(np.dot(n, LIGHT)))
     v = eye - c
@@ -65,9 +102,19 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     h = LIGHT + v
     h = h / (np.linalg.norm(h) + 1e-9)
     sp = (max(0.0, float(np.dot(n, h))) ** mat["shin"]) * mat["spec"]
-    col = np.array(base) * (mat["amb"] + mat["diff"] * lam)
-    spec_col = np.array(base) * 0.9 + 0.1 if tint_spec else np.array([1.0, 1.0, 1.0])
+    b = np.array(base, dtype=float)
+    col = b * (mat["amb"] + mat["diff"] * lam)
+    spec_col = b * 0.65 + 0.35 if tint_spec else np.array([1.0, 1.0, 1.0])
     col = col + spec_col * sp
+    d = float(np.dot(n, v))
+    env = env_sample(2 * d * n - v)
+    R0 = 1.0 if mat.get("metal") else ((mat["ior"] - 1) / (mat["ior"] + 1)) ** 2
+    F = R0 + (1 - R0) * (1 - abs(d)) ** 5
+    refl = F * mat["envI"]
+    tint_ref = b if mat.get("metal") else np.ones(3)
+    col = col + tint_ref * refl * env
+    fres = (1 - abs(d)) ** 3 * mat.get("fres", 0) * 0.45
+    col = col + fres * (0.55 + 0.45 * b)
     return np.clip(col, 0, 1)
 
 
@@ -200,12 +247,23 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg=(0.07, 0.085, 0
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "lustre":
-        names = [("opaque", "不透明"), ("glass", "玻璃"), ("adamantine", "金刚"),
-                 ("metallic", "金属"), ("waxy", "蜡状"), ("transparent", "透明")]
-        out = Image.new("RGB", (3 * 400, 2 * 400), (7, 9, 13))
-        for i, (lu, zh) in enumerate(names):
-            im = render("quartz", "prismatic", "111", 400, 400, luster=lu)
-            out.paste(im, ((i % 3) * 400, (i // 3) * 400))
+        # 用多面习惯（36 面聚形 / 24 面双晶）才看得出光泽差异——面太少时高光只落在一两个面上
+        tiles = [
+            ("garnet", "combined", "111", "glass",       "石榴石聚形 · 玻璃光泽"),
+            ("garnet", "combined", "111", "adamantine",  "石榴石聚形 · 金刚光泽"),
+            ("garnet", "combined", "111", "metallic",    "石榴石聚形 · 金属光泽"),
+            ("quartz", "japan-twin", "111", "glass",     "石英日本律 · 玻璃光泽"),
+            ("quartz", "japan-twin", "111", "transparent", "石英日本律 · 透明"),
+            ("fluorite", "cube", "1", "opaque",          "萤石立方体 · 不透明"),
+        ]
+        T = 400
+        out = Image.new("RGB", (3 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (mi, hi, mk, lu, label) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster=lu)
+            out.paste(im, ((i % 3) * T, (i // 3) * T))
+            dr.text(((i % 3) * T + 12, (i // 3) * T + 8), label, fill=(205, 214, 228), font=fnt)
         out.save("render/qa-lustre.png")
         print("saved render/qa-lustre.png")
 if __name__ == "__main__":
