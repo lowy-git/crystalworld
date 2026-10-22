@@ -707,8 +707,21 @@ const glLastOptsOk = (glw, vw, vh) => {
 
   // 3) 缓冲顶点数 = Σ每面(pts-2)*3 —— 扇形三角化，少一个面就少一批顶点
   const want = run(`GEO.faces.reduce((a,f)=>a+(f.pts.length-2)*3,0)`);
-  const buf = run(`(() => { const b = __glLastBuf; return b && b.data ? b.data.length/9 : -1; })()`);
+  const buf = run(`(() => { const b = __glLastBuf; return b && b.data ? b.data.length/GL_STRIDE : -1; })()`);
   check("GL 顶点数 = 扇形三角化的 Σ(n−2)·3", buf === want, `buf=${buf} want=${want}`);
+
+  // 3b) 防裂缝改成顶点着色器外扩：必须有面心属性 + 外扩算式 + 每顶点 12 个 float。
+  // 关掉棱线时晶体不能自己长出一圈假轮廓——那是旧的 2D 补缝描边造成的，
+  // 它按"棱中点一次着色"取色，而 GL 是逐像素着色，掠射处菲涅耳差得远。
+  check("顶点着色器带面心属性与 0.8px 外扩（用于消掉抗锯齿裂缝）", (() => {
+    const vs = run(`GL_VS`);
+    return /layout\(location=3\)\s+in\s+vec3\s+aCen/.test(vs) && /sp\s*\+=\s*d\s*\/\s*dl/.test(vs) && run(`GL_STRIDE`) === 12;
+  })());
+  check("paintOverlay 不再补缝描边（否则关掉棱线也会有一圈假棱）", (() => {
+    const a = html.indexOf("function paintOverlay(");
+    const src = html.slice(a, html.indexOf("function paintFaces2D(", a));
+    return a > 0 && src.length > 0 && !/shadeFace\s*\(/.test(src);
+  })());
 
   // 4) drawArrays 真的被调用了，且顶点数与缓冲一致（否则画面是空的）
   check("drawArrays 被调用", glStat.draws > 0, `calls=${glStat.draws}`);
@@ -833,12 +846,12 @@ const glLastOptsOk = (glw, vw, vh) => {
     // 截断面（form<0）走 CLIP_TINT，是刻意的"断面"标记色，不算单色失效
     const isClip = (i) => Math.abs(d[i] - 0.58) <= 1e-6 && Math.abs(d[i + 1] - 0.62) <= 1e-6 && Math.abs(d[i + 2] - 0.68) <= 1e-6;
     let uni = 0, clip = 0;
-    for (let i = 6; i + 2 < d.length; i += 9) {
+    for (let i = 6; i + 2 < d.length; i += run(`GL_STRIDE`)) {
       if (isUniform(i)) uni++;
       else if (isClip(i)) clip++;
       else return false;
     }
-    return d.length >= 9 && uni > 0;
+    return d.length >= run(`GL_STRIDE`) && uni > 0;
   })(), "");
   run(`state.colorMode = "mineral"; state.uniform = null; draw();`);
 }

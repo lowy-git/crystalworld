@@ -1360,7 +1360,7 @@ let glVBO = null, glUni = {}, glAttr = {};
 let glN = 0;                                     // 上次上传的顶点数
 let glLastOpts = null;                           // 最近一次 glRender 的视口参数（测试比对用）
 let glStamp = -1, glColStamp = -1, glSize = "";  // 缓存失效戳
-const GL_STRIDE = 9;                             // pos3 + nrm3 + col3
+const GL_STRIDE = 12;                            // pos3 + nrm3 + col3 + cen3
 const GL_DIST = 7.0;                             // 与 makeProject 的 DIST 一致
 
 /* 顶点着色器：与 makeProject() 逐字对应（同一个 FOC / 同一个 max(z,0.4)），
@@ -1371,11 +1371,17 @@ const GL_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
+layout(location=3) in vec3 aCen;      // 该面的面心（世界系），只用来做"防裂缝外扩"
 uniform mat3 uRot;
 uniform float uDist, uFoc, uCx, uCy, uVw, uVh, uZn, uZf;
 flat out vec3 vCol;
 flat out float vFront;
 out vec3 vPos; out vec3 vNrm;
+vec2 screen(vec3 w) {
+  float z = max(uDist - w.z, 0.4);
+  return vec2(((uCx + w.x * uFoc / z) / uVw) * 2.0 - 1.0,
+              1.0 - ((uCy - w.y * uFoc / z) / uVh) * 2.0);
+}
 void main() {
   vec3 w = uRot * aPos;
   vPos = w; vNrm = uRot * aNrm; vCol = aCol;
@@ -1385,9 +1391,19 @@ void main() {
   // 写成 z 是致命 bug：GPU 会把 xy 再除以 z（≈6–8），晶体整体缩成 1/7 并往中心吸，
   // 而 2D 棱线用的是同一套投影却不除——于是「棱线整片飘在晶体外面」，
   // 且随旋转呼吸（每个顶点的 z 都在变）。深度另用 z_ndc 走深度缓冲，与 w 无关。
+  vec2 sp = screen(w);
+  // 抗锯齿会在相邻面之间留下亚像素裂缝，透出背景就是一圈黑线。
+  // 过去的做法是在 2D 层沿每条棱补一次同色描边——但那道描边用的是"棱中点"的着色，
+  // 而 GL 是逐像素着色：掠射处菲涅耳变化极快，描边颜色和旁边填充对不上，
+  // 于是「关掉棱线也看得见一圈醒目的轮廓」。现在改成在顶点着色器里把每个面的
+  // 多边形沿"面心 → 顶点"方向外扩约 1 px，让相邻面互相压住，从源头消掉裂缝。
+  vec2 sc = screen(uRot * aCen);
+  vec2 d = sp - sc;
+  float dl = length(d);
+  if (dl > 1e-5) sp += d / dl * vec2(2.0 / uVw, 2.0 / uVh) * 1.0;
   gl_Position = vec4(
-    ((uCx + w.x * uFoc / z) / uVw) * 2.0 - 1.0,
-    1.0 - ((uCy - w.y * uFoc / z) / uVh) * 2.0,
+    sp.x,
+    sp.y,
     (2.0 * (z - uZn) / max(uZf - uZn, 1e-4)) - 1.0,
     1.0);
 }`;
@@ -1542,7 +1558,7 @@ function glInit() {
                    "uLigDir", "uLigCol", "uLigInt", "uEnvDir", "uEnvCol", "uEnvPar",
                    "uAmb", "uDiff", "uSpec", "uShin", "uFres", "uIor", "uEnvI",
                    "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided", "uAlpha", "uDisp", "uExpo"]) glUni[n] = gl.getUniformLocation(glProg, n);
-  for (const n of ["aPos", "aNrm", "aCol"]) glAttr[n] = gl.getAttribLocation(glProg, n);
+  for (const n of ["aPos", "aNrm", "aCol", "aCen"]) glAttr[n] = gl.getAttribLocation(glProg, n);
   glVBO = gl.createBuffer();
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
@@ -1562,10 +1578,11 @@ function glBuild() {
     if (show >= 0 && f.indiv !== show) continue;
     const col = faceColor(f);
     const L = f.pts;
+    const c = f.c;                                           // 面心：VS 里做防裂缝外扩要用
     for (let i = 1; i + 1 < L.length; i++) {                 // 扇形三角化（面都是凸的）
       for (const j of [0, i, i + 1]) {
         const p = L[j];
-        a.push(p[0], p[1], p[2], f.n[0], f.n[1], f.n[2], col[0], col[1], col[2]);
+        a.push(p[0], p[1], p[2], f.n[0], f.n[1], f.n[2], col[0], col[1], col[2], c[0], c[1], c[2]);
       }
     }
   }
@@ -1653,6 +1670,7 @@ function glRender(project, M, opts) {
   gl.enableVertexAttribArray(glAttr.aPos); gl.vertexAttribPointer(glAttr.aPos, 3, gl.FLOAT, false, S, 0);
   gl.enableVertexAttribArray(glAttr.aNrm); gl.vertexAttribPointer(glAttr.aNrm, 3, gl.FLOAT, false, S, 12);
   gl.enableVertexAttribArray(glAttr.aCol); gl.vertexAttribPointer(glAttr.aCol, 3, gl.FLOAT, false, S, 24);
+  gl.enableVertexAttribArray(glAttr.aCen); gl.vertexAttribPointer(glAttr.aCen, 3, gl.FLOAT, false, S, 36);
   gl.drawArrays(gl.TRIANGLES, 0, glN);
   return true;
 }
@@ -1756,18 +1774,10 @@ function paintOverlay(g, opts, project, M) {
     if (dot(wn, sub(eye, cw)) <= 0) continue;      // 只描正面（2D 版同样只描正面）
     const pts = f.pts.map(project);
     const L = f.loop;
-    // 逐棱补缝：颜色取该棱中点处的视线，与 GL 在该像素上的着色一致
-    g.lineWidth = 1;
-    for (let i = 0; i < L.length; i++) {
-      const j = (i + 1) % L.length;
-      const q0 = f.pts[i], q1 = f.pts[j];
-      const mid = [(q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2, (q0[2] + q1[2]) / 2];
-      g.strokeStyle = rgbStr(shadeFace(faceColor(f), wn, mv(R, mid), eye, M));
-      g.beginPath();
-      g.moveTo(pts[i][0], pts[i][1]);
-      g.lineTo(pts[j][0], pts[j][1]);
-      g.stroke();
-    }
+    // 这里过去有一条"逐棱补缝"的同色描边，用来盖住相邻面之间透出背景的亚像素裂缝。
+    // 但它把"关掉棱线也看得见一圈醒目轮廓"这毛病带进来了（见 GL_VS 的外扩注释）：
+    // 描边颜色取的是棱中点的一次着色，而 GL 是逐像素着色，掠射处菲涅耳变化极快，
+    // 两者对不上，于是每条棱都成了一道假线。裂缝现在由顶点着色器外扩约 1px 消掉。
     if (state.striations) drawStriations(g, { f, wn, cw }, pts, R, project);
     if (!state.edges) continue;
     g.beginPath();
