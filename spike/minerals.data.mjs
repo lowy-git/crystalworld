@@ -109,7 +109,7 @@ export const MINERALS = [
   },
   {
     id: "diamond",
-  luster: "adamantine", transp: "clear", inclusion: "none",
+  luster: "adamantine", transp: "transl", inclusion: "none",
     zh: "钻石（金刚石）", en: "Diamond", formula: "C",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 3.5670 Å（Dana）",

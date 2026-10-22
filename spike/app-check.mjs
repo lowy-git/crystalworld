@@ -606,8 +606,8 @@ check("半透明时画本体色层，不透明时跳过", tClear.box > 0 && tTra
 check("本体色层中心比边缘薄（玻璃的芯看得穿、边吃色深）",
   tClear.stops.length === 3 && alphaOf(tClear.stops[0][1]) < alphaOf(tClear.stops[2][1]),
   tClear.stops.map(s => s[0] + ":" + alphaOf(s[1])).join(" "));
-check("透明度越高本体色越靠这层撑住（但中心 alpha < 0.20，不挡住背后的东西）",
-  aClearCenter > aTranslCenter && aClearCenter > 0 && aClearCenter < 0.20,
+check("本体色层中间最厚、两头最薄（不透明靠晶面、全透明靠有色透射，都不需要平涂）",
+  aTranslCenter > aClearCenter && aClearCenter >= 0 && aTranslCenter > 0.05 && aTranslCenter < 0.30,
   `90%透明芯=${aClearCenter} 45%透明芯=${aTranslCenter}`);
 check("本体色跟随矿物（石英取有色项）", (() => {
   const c = run(`JSON.stringify(bodyColor())`);
@@ -904,19 +904,34 @@ const glLastOptsOk = (glw, vw, vh) => {
   }
 
   // 5) GL 逐像素透明度：alpha 由 uAlpha 与高光共同决定（高光不随透射淡掉）
-  check("GL 片元着色器有 uAlpha 且按高光抬升像素 alpha", (() => {
+  check("GL 片元着色器有 uAlpha，且像素 alpha = max(uAlpha, 面底线) 再按高光抬升", (() => {
     const src = run(`GL_FS`);
-    return /uniform\s+float\s+[^;]*uAlpha/.test(src) && /pa\s*=\s*clamp\(uAlpha\s*\+/.test(src);
+    return /uniform\s+float\s+[^;]*uAlpha/.test(src)
+      && /pa\s*=\s*clamp\(max\(uAlpha,\s*floorA\)/.test(src)
+      && /floorA\s*=\s*[\d.]+\s*\+\s*[\d.]+\s*\*/.test(src);
   })());
   const uniA = glStat.uni.filter(u => u[0] === "uAlpha");
   check("uAlpha 每次绘制都上传", uniA.length > 0, `n=${uniA.length}`);
-  check("全透明时 uAlpha ≈ 0.26（clear 档），不是 0", (() => {
+  check("全透明时 uAlpha = 0（clear 档就是 100% 透明），半透明 0.62，不透明 1", (() => {
+    // 旧版 clear 是 0.26，滑杆只显示到 74%——用户问"全透明为什么不是 100%"。
+    // 现在全透明真的是 0：晶面只剩表面反射，颜色交给「有色透射」的 multiply 层。
     run(`state.luster = "glass"; state.transp = "clear"; state.alpha = (transpById("clear") || {}).alpha; renderTransp(); draw();`);
-    const last = glStat.uni.filter(u => u[0] === "uAlpha").pop();
-    const v = last ? last[1] : -1;
+    const vc = (glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1];
+    run(`state.transp = "transl"; state.alpha = (transpById("transl") || {}).alpha; renderTransp(); draw();`);
+    const vt = (glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1];
+    run(`state.transp = "opaque"; state.alpha = (transpById("opaque") || {}).alpha; renderTransp(); draw();`);
+    const vo = (glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1];
     run(`state.luster = null; state.transp = null; state.alpha = null; renderTransp(); draw();`);
-    return v > 0.15 && v < 0.40;
-  })(), `v=${(glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1]}`);
+    return Math.abs(vc - 0) < 1e-9 && Math.abs(vt - 0.62) < 1e-9 && Math.abs(vo - 1) < 1e-9;
+  })(), (() => {
+    const f = (id) => {
+      run(`state.luster = "glass"; state.transp = "${id}"; state.alpha = (transpById("${id}") || {}).alpha; renderTransp(); draw();`);
+      return (glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1];
+    };
+    const r = ["clear", "transl", "opaque"].map(f).join("/");
+    run(`state.luster = null; state.transp = null; state.alpha = null; renderTransp(); draw();`);
+    return r;
+  })());
 }
 
 /* ── 第十轮：标题栏 + 主题三态 + 左右分栏（UI 重构）────────────────── */
@@ -1042,6 +1057,51 @@ check("光泽只留四种（蜡状/玻璃/金刚/金属），不透明与透明�
   const vis = run(`Object.entries(LUSTERS).filter(([k, v]) => !v.hidden).map(([k]) => k)`);
   return vis.length === 4 && vis.includes("waxy") && vis.includes("glass") && vis.includes("adamantine") && vis.includes("metallic");
 })(), `可见=${run(`Object.entries(LUSTERS).filter(([k,v])=>!v.hidden).map(([k])=>k).join(",")`)}`);
+
+/* ── 第十三轮：光泽按反射率排序 / 换光泽立刻联动通透度 / 金刚色散 / 有色透射 ── */
+const pfsrc = html.slice(html.indexOf("function paintFaces("), html.indexOf("function paintOverlay("));
+check("光泽按钮按反射率从低到高排：蜡状 < 玻璃 < 金刚 < 金属", (() => {
+  const o = run(`LUSTER_ORDER.join(",")`);
+  return o === "waxy,glass,adamantine,metallic";
+})(), `顺序=${run(`LUSTER_ORDER.join(" < ")`)}`);
+check("反射率参数确实单调递增（spec 与 ior 都抬），金属 R0=1", (() => {
+  const g = (k, f) => run(`LUSTERS["${k}"].${f}`);
+  return g("waxy", "spec") < g("glass", "spec") && g("glass", "spec") < g("adamantine", "spec")
+    && g("waxy", "ior") < g("glass", "ior") && g("glass", "ior") < g("adamantine", "ior")
+    && run(`LUSTERS.metallic.metal`) === 1;
+})(), `spec=${run(`LUSTER_ORDER.map(k=>LUSTERS[k].spec).join("/")`)}`);
+check("换光泽会立刻刷新通透度（金属立刻禁用滑杆，切回玻璃立刻放开）", (() => {
+  // 旧 bug：光泽按钮只调 draw()，disabled 要等下一次 syncPanels，用户看到的是"点了金属没反应"
+  const btnClick = (id) => run(`(() => {
+    state.luster = "${id}"; renderLusters(); renderTransp();
+    return document.getElementById("alphaR").disabled;
+  })()`);
+  const metalOff = btnClick("metallic");
+  const glassOff = btnClick("glass");
+  run(`state.luster = null; renderLusters(); renderTransp();`);
+  return metalOff === true && glassOff === false;
+})(), `金属=${run(`(()=>{state.luster="metallic";renderLusters();renderTransp();const d=document.getElementById("alphaR").disabled;state.luster=null;renderLusters();renderTransp();return d})()`)} 玻璃=${run(`(()=>{state.luster="glass";renderLusters();renderTransp();const d=document.getElementById("alphaR").disabled;state.luster=null;renderLusters();renderTransp();return d})()`)}`);
+check("金刚光泽带色散（GL_FS 有 uDisp，且金刚 > 玻璃 > 蜡状=0）", (() => {
+  const src = run(`GL_FS`);
+  const has = /uniform\s+float\s+[^;]*uDisp/.test(src) && /mix\s*\(\s*vec3\(1\.0\)\s*,\s*fire/.test(src);
+  const d = (k) => run(`LUSTERS["${k}"].disp`);
+  return has && d("adamantine") > d("glass") && d("glass") > d("waxy");
+})(), `disp=${run(`LUSTER_ORDER.map(k=>k+"="+LUSTERS[k].disp).join(",")`)}`);
+check("统一曝光补偿 uExpo = EXPO（GL 与 2D 同值）", (() => {
+  const src = run(`GL_FS`);
+  return /uniform\s+float\s+[^;]*uExpo/.test(src) && /c\s*\*=\s*uExpo/.test(src) && Math.abs(run(`EXPO`) - 1.10) < 1e-9;
+})(), `EXPO=${run(`EXPO`)}`);
+check("有色透射：透明度 > 0 时在轮廓内做 multiply 混本体色（不是把颜色整体淡掉）", (() => {
+  const s = String(pfsrc);
+  return /globalCompositeOperation\s*=\s*"multiply"/.test(s)
+    && /const\s+tr\s*=\s*1\s*-\s*\(M\.alpha/.test(s)
+    && /crystalPath\s*\(\s*g\s*,\s*project\s*\)/.test(s);
+})(), "paintFaces 含 multiply 分支=" + /multiply/.test(String(pfsrc)));
+check("全透明档就是 100% 透明（alpha=0），滑杆读数与档位一致", (() => {
+  const a = run(`transpById("clear").alpha`);
+  const r = run(`(() => { state.transp = "clear"; state.alpha = transpById("clear").alpha; renderTransp(); const v = document.getElementById("alphaVal").textContent; state.transp = null; state.alpha = null; renderTransp(); return v; })()`);
+  return Math.abs(a) < 1e-9 && r === "100%";
+})(), `alpha=${run(`transpById("clear").alpha`)} 读数=${run(`(() => { state.transp = "clear"; state.alpha = transpById("clear").alpha; renderTransp(); const v = document.getElementById("alphaVal").textContent; state.transp = null; state.alpha = null; renderTransp(); return v; })()`)}`);
 check("三光源：主光 + 轮廓光 + 补光，且按强度归一化（单灯 lam=1 时曝光不变）", (() => {
   const n = run(`LIGHTS.length`);
   const s = run(`LIGHT_SUM`);

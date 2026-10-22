@@ -6,7 +6,7 @@ import re
 import sys
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
 
 SS = 2
 DIST = 7.0
@@ -27,16 +27,19 @@ def _font(size=16):
     return ImageFont.load_default()
 
 LUSTERS = {
-    "opaque":      dict(amb=0.50, diff=0.60, spec=0.05, shin=4,  fres=0.06, ior=1.60, envI=0.10),
-    "glass":       dict(amb=0.40, diff=0.55, spec=0.75, shin=14, fres=0.34, ior=1.54, envI=0.52),
-    "adamantine":  dict(amb=0.09, diff=0.18, spec=1.00, shin=40, fres=0.48, ior=2.42, envI=1.00),
-    "metallic":    dict(amb=0.06, diff=0.12, spec=0.85, shin=10, fres=0.34, ior=1.00, envI=0.95, metal=1, opaqueOnly=1),
-    "waxy":        dict(amb=0.58, diff=0.50, spec=0.22, shin=6,  fres=0.14, ior=1.50, envI=0.22),
-    "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, fres=0.52, ior=1.54, envI=0.45),
+    "opaque":      dict(amb=0.50, diff=0.60, spec=0.05, shin=4,  fres=0.06, ior=1.60, envI=0.10, disp=0.0),
+    "glass":       dict(amb=0.40, diff=0.55, spec=0.75, shin=14, fres=0.34, ior=1.54, envI=0.52, disp=0.07),
+    "adamantine":  dict(amb=0.13, diff=0.22, spec=1.25, shin=30, fres=0.52, ior=2.42, envI=1.15, disp=0.55),
+    "metallic":    dict(amb=0.06, diff=0.12, spec=0.85, shin=10, fres=0.34, ior=1.00, envI=0.95, disp=0.10, metal=1, opaqueOnly=1),
+    "waxy":        dict(amb=0.58, diff=0.50, spec=0.22, shin=6,  fres=0.14, ior=1.50, envI=0.22, disp=0.0),
+    "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, fres=0.52, ior=1.54, envI=0.45, disp=0.07),
 }
 
-# 通透度：与光泽完全独立（金属光泽天然不透明）
-TRANSP = {"opaque": 1.00, "transl": 0.55, "clear": 0.26}
+# 统一曝光补偿（与 demo/crystal_template.html 的 EXPO、GL_FS 的 uExpo 三处一致）
+EXPO = 1.10
+
+# 通透度：与光泽完全独立（金属光泽天然不透明）；0.0 = 100% 透明
+TRANSP = {"opaque": 1.00, "transl": 0.62, "clear": 0.00}
 
 
 def default_transp(m):
@@ -44,7 +47,7 @@ def default_transp(m):
     if lu in ("metallic", "opaque"):
         return "opaque"
     if lu in ("adamantine", "transparent"):
-        return "clear"
+        return "transl"
     return "transl"
 
 
@@ -490,17 +493,23 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     # 与 JS shadeFace 逐字一致：环境光乘 ambT，漫反射不乘（amb_t 只调制环境光）
     col = b * (amb * amb_t + mat["diff"] * lam)
     spec_col = b * 0.65 + 0.35 if tint_spec else np.array([1.0, 1.0, 1.0])
-    col = col + spec_col * sp
     d = float(np.dot(n, v))
-    env = env_sample(2 * d * n - v)
+    rd = 2 * d * n - v
+    env = env_sample(rd)
+    # 色散（火彩）：与 GL_FS / shadeFace 同一个式子
+    disp = mat.get("disp", 0.0)
+    phase = float(np.dot(rd, [0.5773, 0.5773, 0.5773])) * 1.7 + d * 0.6
+    fire = 0.5 + 0.5 * np.cos(6.28318 * (np.array([0.0, 0.33, 0.67]) + phase))
+    fire_col = 1.0 + (fire - 1.0) * disp
+    col = col + spec_col * sp * fire_col
     R0 = 1.0 if mat.get("metal") else ((mat["ior"] - 1) / (mat["ior"] + 1)) ** 2
     F = R0 + (1 - R0) * (1 - abs(d)) ** 5
     refl = F * mat["envI"]
     tint_ref = b if mat.get("metal") else np.ones(3)
-    col = col + tint_ref * refl * env
+    col = col + tint_ref * refl * env * fire_col
     fres = (1 - abs(d)) ** 3 * mat.get("fres", 0) * 0.45
     col = col + fres * (0.55 + 0.45 * b)
-    return np.clip(col, 0, 1)
+    return np.clip(col * EXPO, 0, 1)
 
 
 STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0), "pyrite": ("edge", 3.2)}
@@ -628,8 +637,7 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
     else:
         hx = body_hex.lstrip("#")
         bc = (int(hx[0:2], 16) / 255.0, int(hx[2:4], 16) / 255.0, int(hx[4:6], 16) / 255.0)
-    if tint and mat["alpha"] < 0.995 and faces:
-        # 先画 L 掩膜（并集轮廓），再把颜色一次性按掩膜盖上——
+    if tint and mat["alpha"] < 0.995 and faces:        # 先画 L 掩膜（并集轮廓），再把颜色一次性按掩膜盖上——
         # 逐面直接填 alpha 会在重叠处叠加深色，与 JS 的 fill("nonzero") 不等价
         mask = Image.new("L", (W, H), 0)
         dm = ImageDraw.Draw(mask)
@@ -638,8 +646,13 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
                 continue
             pts = [proj(p) for p in f["pts"]]
             dm.polygon(pts, fill=255)
-        lay = Image.new("RGBA", (W, H), tuple(int(c * 255) for c in bc) + (102,))
-        bgim.paste(lay, (0, 0), mask)
+        # ⚠ PIL 的 paste(im, box, mask) 只用 mask 当 alpha，**会忽略 im 自己的 alpha 通道**。
+        # 之前写成 lay=(色,102) + paste(..., mask) → 本体色被按 255 全不透明糊上去，
+        # 半透明晶体的晶面被整块盖住（QA 图里钻石变成一块死黄）。必须把两个 alpha 相乘。
+        kt = 0.30 * (1 - abs(2 * mat["alpha"] - 1))
+        lay = Image.new("RGB", (W, H), tuple(int(c * 255) for c in bc))
+        amask = Image.new("L", (W, H), int(kt * 255))
+        bgim.paste(lay, (0, 0), ImageChops.multiply(mask, amask))
 
     items = []
     two_sided = any(f["clip"] for f in faces) or not v["closed"]
@@ -665,7 +678,13 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         if not front:
             col = col * 0.5
         pts = [proj(p) for p in f["pts"]]
-        fill = tuple(int(c * 255) for c in col) + (int(alpha * 255),)
+        # 逐面不透明度：与 GL 的 pa 同义——身体随 alpha 透，但每个面永远留一点底
+        # （全透明时不至于只剩一圈棱线）。用面亮度近似 surf。
+        ua = mat["alpha"]
+        lum = float(np.mean(col))
+        floor_a = 0.20 + 0.26 * min(1.0, lum)
+        pa_f = max(ua, floor_a)
+        fill = tuple(int(c * 255) for c in col) + (int(alpha * pa_f * 255),)
         dr.polygon(pts, fill=fill, outline=fill, width=SS)
         if striations and front and f["form"] == 0 and mineral_id in STRIPE:
             axv, step = STRIPE[mineral_id]
@@ -723,12 +742,28 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
                     continue
                 dr.line([pts[i], pts[(i + 1) % len(f["loop"])]],
                         fill=(12, 22, 34, 150 if front else 55), width=SS)
-    # 晶面画在透明层上，再按 mat.alpha 整体盖到「背景+阴影」之上
-    # （JS 里是逐面 globalAlpha，等效于整块半透明）
-    if mat["alpha"] < 0.995:
-        a = img.split()[3].point(lambda v: int(v * mat["alpha"]))
-        img.putalpha(a)
+    # 晶面画在透明层上，再盖到「背景+阴影」之上。
+    # 注意：**不能再整层乘 mat.alpha**——逐面 alpha 已经含了通透度（见上面的 pa_f），
+    # 再乘一次会把全透明的晶体变成彻底看不见。
     bgim.paste(img, (0, 0), img)
+    # 有色透射（与 demo 的 paintFaces 末尾同义）：轮廓内朝本体色做 multiply，
+    # 强度随透明度上升——不透明时不起作用，全透明时相当于一块彩色滤色片。
+    tr = 1.0 - mat["alpha"]
+    if tr > 0.01 and faces:
+        mask = Image.new("L", (W, H), 0)
+        dmk = ImageDraw.Draw(mask)
+        for f in faces:
+            if indiv is not None and f["indiv"] != indiv:
+                continue
+            dmk.polygon([proj(p) for p in f["pts"]], fill=255)
+        arr = np.asarray(bgim.convert("RGB"), dtype=np.float32)
+        # 越透明越接近无色（与 demo 的 paintFaces 同义）
+        w0 = 0.55 * tr
+        bc_t = np.array([c + (1.0 - c) * w0 for c in bc], dtype=np.float32)
+        tintcol = bc_t * 255.0
+        mm = min(1.0, tr * 0.90)
+        mul = arr * (1.0 - mm) + (arr * tintcol / 255.0) * mm
+        bgim.paste(Image.fromarray(np.clip(mul, 0, 255).astype(np.uint8)), (0, 0), mask)
     # 内含物最后画：在晶体之上，可见度系数 k = 0.30 + 0.70*(1 - alpha)
     # （旧版把包体画在背景层，会被半透明晶体整体吃掉 45%，这就是"内含物看不见"的根因）
     if inc and mat["alpha"] < 0.995:
@@ -884,16 +919,22 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
         refl = (F * mat["envI"])[..., None]
         tint = (0.35 + 0.65 * b) if tint_spec else np.ones(3)
         fres = ((1 - np.abs(d)) ** 3 * mat.get("fres", 0) * 0.45)[..., None]
+        # 色散（火彩）：与 GL_FS 逐字对应
+        disp = mat.get("disp", 0.0)
+        phase = np.sum(r * np.array([0.5773, 0.5773, 0.5773]), axis=-1) * 1.7 + d * 0.6
+        fire = 0.5 + 0.5 * np.cos(6.28318 * (np.array([0.0, 0.33, 0.67])[None, None, :] + phase[..., None]))
+        fire_col = 1.0 + (fire - 1.0) * disp
         c = (b[None, None, :] * (mat["amb"] * mat.get("ambK", 1.0) * amb_t[None, None, :]
                                  + (mat["diff"] * lam_p)[..., None])
-             + tint[None, None, :] * sp[..., None]
-             + (b if mat.get("metal") else np.ones(3))[None, None, :] * refl * env
+             + tint[None, None, :] * sp[..., None] * fire_col
+             + (b if mat.get("metal") else np.ones(3))[None, None, :] * refl * env * fire_col
              + fres * (0.55 + 0.45 * b[None, None, :]))
-        c = np.clip(c, 0.0, 1.0)
+        c = np.clip(c * EXPO, 0.0, 1.0)
         # 逐像素 alpha：高光/掠射反射是表面反射，不随透射淡掉（与 GL_FS 的 pa 同式）
         ua = mat.get("alpha", 1.0)
         surf = np.clip(sp + refl[..., 0] * 0.90 + fres[..., 0] * 1.6, 0.0, 1.0)
-        pa = np.clip(ua + (1.0 - ua) * surf, 0.0, 1.0) * alpha
+        floor_a = 0.20 + 0.26 * np.clip(mat["diff"] * lam_p + sp, 0.0, 1.0)
+        pa = np.clip(np.maximum(ua, floor_a) + (1.0 - ua) * surf, 0.0, 1.0) * alpha
         o = out[ymin:ymax + 1, xmin:xmax + 1]
         o[win] = np.concatenate([c[win], pa[win][..., None]], axis=1)
     cov = float((out[..., 3] > 0).mean())
