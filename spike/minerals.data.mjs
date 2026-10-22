@@ -19,7 +19,7 @@ export const SYSTEMS = [
 export const MINERALS = [
   {
     id: "fluorite",
-  luster: "glass", inclusion: "pyrite",
+  luster: "glass", transp: "transl", inclusion: "pyrite",
     zh: "萤石", en: "Fluorite", formula: "CaF₂",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 5.4626 Å（Webmineral / Dana）",
@@ -34,6 +34,12 @@ export const MINERALS = [
     intro: {
       zh: "等轴晶系最典型的矿物，立方体、八面体与两者的聚形都常见；尖晶石律是两个立方体沿 [111] 互相穿插，是「贯穿双晶」的标准案例。",
       en: "The textbook cubic mineral: cube, octahedron and their combination all occur; the spinel law is two cubes interpenetrating along [111], the type example of a penetration twin.",
+    },
+    about: {
+      zh: "自然界颜色最杂的矿物之一，紫、绿、蓝、黄都能长，而且常常一块晶体上带好几种色带。加热到一定温度会发出荧光——荧光灯名字的由来就是它。质软、性脆，是最适合当「结晶学教材」的矿物。",
+      where: "英国 Cumberland（老牌紫萤石）、中国湖南桃林与内蒙古；墨西哥、美国伊利诺伊都有名坑。",
+      hard: "4（小刀一划就白，软到不能做首饰）",
+      spot: "立方体 + 八面体 + 四组完全解理；紫绿相间的色带最招人喜欢。",
     },
     habits: [
       { id: "cube", zh: "立方体", en: "Cube", forms: [{ hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" }] },
@@ -56,8 +62,95 @@ export const MINERALS = [
     ],
   },
   {
+    id: "pyrite",
+  luster: "metallic", transp: "opaque", inclusion: "none",
+    zh: "黄铁矿", en: "Pyrite", formula: "FeS₂",
+    system: "cubic", pointGroup: "m-3",
+    confidence: "high", source: "a = 5.417 Å（Dana）",
+    cell: { a: 5.417, b: 5.417, c: 5.417, alpha: 90, beta: 90, gamma: 90 },
+    cellText: "a = b = c = 5.417 Å，α = β = γ = 90°",
+    colors: [
+      { zh: "亮铜黄", en: "Brass yellow", hex: "#c9a227" },
+      { zh: "虹彩", en: "Iridescent", hex: "#8e9aa8" },
+    ],
+    about: {
+      zh: "「愚人金」的正主就是它——比黄金更亮、更黄，但硬且脆，小刀一划就碎，比重也没金子大。最常见的面貌是带条纹的立方体，或者立方体被五角十二面体的面切掉棱之后形成的「立方体+五角十二面体」聚形。",
+      where: "西班牙 Navajún（完美立方体）、秘鲁 Huanzala；国内广西、湖南也有。热液矿床和煤层里最常见。",
+      hard: "6–6.5（比小刀硬，比石英软）",
+      spot: "颜色铜黄到亮白、表面常有平行条纹、条痕是绿黑色——划一下瓷板看条痕，一眼分开真假。",
+    },
+    intro: {
+      zh: "等轴晶系里最典型的金属光泽矿物：{210} 五角十二面体是它的招牌单形，立方体面上常见的平行条纹是双晶或生长台阶留下的。",
+      en: "The classic metallic-looking cubic mineral: {210} pyritohedron is its signature form, and the parallel striations on cube faces are twinning or growth steps.",
+    },
+    habits: [
+      { id: "cube", zh: "带条纹的立方体", en: "Striated cube", forms: [{ hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" }] },
+      {
+        id: "pyritohedron", zh: "五角十二面体", en: "Pyritohedron",
+        forms: [{ hkl: [2, 1, 0], k: 1, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" }],
+      },
+      {
+        id: "combo", zh: "立方体 + 五角十二面体", en: "Cube + pyritohedron",
+        note: "真实黄铁矿最常见的面貌：立方体的 12 条棱被 {210} 五角十二面体的面一道道切掉。注意 k 要大于 2——{210} 的唐奈-哈克距离只有 {100} 的 1/√5，k=1 时五角十二面体整个缩在立方体里面，一个面都看不见。",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" },
+          { hkl: [2, 1, 0], k: 2.4, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" },
+        ],
+      },
+      {
+        id: "iron-cross", zh: "铁十字双晶", en: "Iron-cross twin",
+        note: "两个五角十二面体以 {110} 为双晶面互相穿插，从某个方向看正好是个十字——德国 Harz 山脉的老矿工把它当护身符。",
+        twin: { mode: "axis", axis: [1, 1, 0], angle: 180 },
+        forms: [
+          { hkl: [2, 1, 0], k: 1, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "diamond",
+  luster: "adamantine", transp: "clear", inclusion: "none",
+    zh: "钻石（金刚石）", en: "Diamond", formula: "C",
+    system: "cubic", pointGroup: "m-3m",
+    confidence: "high", source: "a = 3.5670 Å（Dana）",
+    cell: { a: 3.5670, b: 3.5670, c: 3.5670, alpha: 90, beta: 90, gamma: 90 },
+    cellText: "a = b = c = 3.5670 Å，α = β = γ = 90°",
+    colors: [
+      { zh: "无色", en: "Colorless", hex: "#eef4f8" },
+      { zh: "淡黄", en: "Pale yellow", hex: "#e6d9a8" },
+      { zh: "蓝", en: "Blue", hex: "#9fc0d8" },
+    ],
+    about: {
+      zh: "地球上最硬的天然矿物。它硬到只能被自己划伤，所以琢磨全靠钻石粉。天然钻石大多数长得并不「规则」——八面体最常见，但往往曲面化、圆嘟嘟的。",
+      where: "南非金伯利（金伯利岩筒）、俄罗斯雅库特、澳大利亚阿盖尔（粉钻）；现在市面上一大半是人工合成的。",
+      hard: "10（莫氏硬度老大，定义它就是 10）",
+      spot: "金刚光泽——一种「亮到像自己发光」的光；硬度 10 + 划得动刚玉（红蓝宝）就能定。",
+    },
+    intro: {
+      zh: "等轴晶系里折射率最高的矿物（n = 2.42），金刚光泽的名字就是从它来的。{111} 八面体是最常见的天然晶形，{110} 菱形十二面体与曲面八面体也常见。",
+      en: "The cubic mineral with the highest refractive index (n = 2.42) — the very mineral \"adamantine lustre\" is named after. {111} octahedra dominate; {110} dodecahedra and curved octahedra also occur.",
+    },
+    habits: [
+      {
+        id: "octahedron", zh: "八面体", en: "Octahedron",
+        forms: [{ hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" }],
+      },
+      {
+        id: "dodecahedron", zh: "菱形十二面体", en: "Rhombic dodecahedron",
+        forms: [{ hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Rhombic dodecahedron" }],
+      },
+      {
+        id: "combo", zh: "八面体 + 菱形十二面体", en: "Octahedron + dodecahedron",
+        forms: [
+          { hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" },
+          { hkl: [1, 1, 0], k: 1.35, idx: "{110}", zh: "菱形十二面体", en: "Rhombic dodecahedron" },
+        ],
+      },
+    ],
+  },
+  {
     id: "garnet",
-  luster: "adamantine", inclusion: "rutile",
+  luster: "adamantine", transp: "clear", inclusion: "rutile",
     zh: "石榴石", en: "Garnet", formula: "Fe₃Al₂(SiO₄)₃",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "铁铝榴石 a = 11.526 Å（Dana）",
@@ -67,6 +160,12 @@ export const MINERALS = [
       { zh: "深红", en: "Deep red", hex: "#8e2b33" },
       { zh: "橙红", en: "Orange",  hex: "#b5651d" },
     ],
+    about: {
+      zh: "一个大家族的统称（铁铝榴石、镁铝榴石、钙铝榴石……），化学式像，晶系却几乎都落在等轴。颗粒小的时候像一捧红砂，大的能长成拳头大的菱形十二面体。",
+      where: "巴西、印度、斯里兰卡（冲积砂矿）；国内河北、内蒙也有。",
+      hard: "6.5–7.5（比小刀硬，做磨料用）",
+      spot: "等轴晶系 + 菱形十二面体/四角三八面体，颜色红到绿到黑都有，玻璃到金刚光泽。",
+    },
     intro: {
       zh: "与萤石同晶系、不同单形：菱形十二面体 {110} 与四角三八面体 {211} 是它的招牌，二者常组成聚形。",
       en: "Same system as fluorite, different forms: the dodecahedron {110} and the trapezohedron {211} are its signatures, often combined.",
@@ -85,7 +184,7 @@ export const MINERALS = [
   },
   {
     id: "scheelite",
-  luster: "adamantine", inclusion: "fracture",
+  luster: "adamantine", transp: "transl", inclusion: "fracture",
     zh: "白钨矿", en: "Scheelite", formula: "CaWO₄",
     system: "tetragonal", pointGroup: "4/m",
     confidence: "high", source: "a = 5.2429、c = 11.3736 Å（Dana）",
@@ -95,6 +194,12 @@ export const MINERALS = [
       { zh: "白", en: "White", hex: "#ece7da" },
       { zh: "橙黄", en: "Orange", hex: "#e0a23c" },
     ],
+    about: {
+      zh: "紫外灯下一片明亮的蓝白色荧光——这是它在野外最好用的身份证。本身是重要的钨矿石，一块带完整四方双锥的标本比矿石值钱得多。",
+      where: "中国江西（南岭一带，世界级钨矿区）、四川；国外奥地利、美国加州。",
+      hard: "4.5–5（小刀能划动，但晶体往往一按就裂）",
+      spot: "四方双锥、金刚光泽、荧光；掂着有点沉（含钨）。",
+    },
     intro: {
       zh: "四方双锥 {101} 一个单形就自成闭合晶形——反例教学：单形不必是开形。",
       en: "The tetragonal bipyramid {101} closes on its own: proof that a single form need not be open.",
@@ -105,7 +210,7 @@ export const MINERALS = [
   },
   {
     id: "beryl",
-  luster: "glass", inclusion: "fluid",
+  luster: "glass", transp: "transl", inclusion: "fluid",
     zh: "绿柱石", en: "Beryl", formula: "Be₃Al₂Si₆O₁₈",
     system: "hexagonal", pointGroup: "6/mmm",
     confidence: "high", source: "a = 9.215、c = 9.192 Å（Dana）",
@@ -120,6 +225,12 @@ export const MINERALS = [
       zh: "六方柱 {10-10} 加底面 {0001}：柱是开形，必须靠底面才闭合成晶体——「开形必须组合」的活教材。",
       en: "Hexagonal prism {10-10} plus basal pinacoid {0001}: the prism is open and only closes with the pinacoid — the classic lesson that open forms must be combined.",
     },
+    about: {
+      zh: "绿柱石这一大家族的名字来自颜色：海蓝宝是它，祖母绿也是它。六方柱长得又长又直，端头一个平底——这就是「开形必须靠别的面来合」的最好例子。",
+      where: "哥伦比亚 Muzo（祖母绿）、巴西、巴基斯坦；国内新疆阿勒泰出过很大的海蓝宝。",
+      hard: "7.5–8（比石英硬一点，但性脆，别磕）",
+      spot: "六方柱 + 玻璃光泽 + 断口上的树脂感；祖母绿的绿是认不出来的那种绿。",
+    },
     habits: [
       {
         id: "prismatic", zh: "柱状", en: "Prismatic",
@@ -132,7 +243,7 @@ export const MINERALS = [
   },
   {
     id: "quartz",
-  luster: "glass", inclusion: "rutile",
+  luster: "glass", transp: "transl", inclusion: "rutile",
     zh: "石英", en: "Quartz", formula: "SiO₂",
     system: "trigonal", pointGroup: "32",
     confidence: "high", source: "a = 4.9134、c = 5.4052 Å（Dana）",
@@ -147,6 +258,12 @@ export const MINERALS = [
     intro: {
       zh: "点群 32 没有对称中心也没有镜面，所以 r {10-11} 与 z {01-11} 是两个不同单形，在晶体上下交替出现。日本律双晶的两个 c 轴夹角 84°33′。",
       en: "Point group 32 has neither a centre nor a mirror plane, so r {10-11} and z {01-11} are two distinct forms alternating along c. Japan-law twins meet at 84°33′ between the c axes.",
+    },
+    about: {
+      zh: "地壳里第二多的矿物，长成一根六方柱、两头收尖——也就是「水晶」这个名字的来源。紫水晶的紫色是铁杂质加天然辐照做出来的，加热到两三百度就褪色成黄水晶。",
+      where: "巴西米纳斯吉拉斯（紫水晶大晶体）、马达加斯加；国内江苏东海、云南、新疆都有水晶矿。",
+      hard: "7（莫氏硬度的标尺就是它，小刀划不动）",
+      spot: "六方柱 + 玻璃光泽 + 贝壳状断口；紫水晶颜色不均匀，常见深浅相间的色带。",
     },
     habits: [
       {
@@ -208,7 +325,7 @@ export const MINERALS = [
   },
   {
     id: "calcite",
-  luster: "adamantine", inclusion: "fluid",
+  luster: "adamantine", transp: "clear", inclusion: "fluid",
     zh: "方解石", en: "Calcite", formula: "CaCO₃",
     system: "trigonal", pointGroup: "-3m",
     confidence: "high", source: "a = 4.990、c = 17.061 Å（Dana）；{10-14} 面角 74°55′",
@@ -222,6 +339,12 @@ export const MINERALS = [
     intro: {
       zh: "菱面体 {10-14} 的三组解理面互成 74°55′，是整个结晶学最常用的面角锚点；偏三角面体 {21-31} 就是「犬牙石」。",
       en: "The rhombohedron {10-14} cleaves at 74°55′ — the most-quoted interfacial angle in crystallography; the scalenohedron {21-31} is the \"dog-tooth spar\".",
+    },
+    about: {
+      zh: "石灰岩和大理石的主角，也是「冰洲石」的学名——那种能把字切成两个影的透明晶体就是它。三组解理拼成标准菱面体，一敲就顺着解理碎成小块。",
+      where: "冰岛 Helgustadir（冰洲石老产地）；国内贵州、广西、湖南的溶洞和石灰岩里遍地都是。",
+      hard: "3（小刀一划一个白痕，是最软的常见矿物之一）",
+      spot: "菱面体 + 三组解理 + 双折射（透过它看字有重影）；遇盐酸冒泡。",
     },
     habits: [
       {
@@ -239,8 +362,43 @@ export const MINERALS = [
     ],
   },
   {
+    id: "topaz",
+  luster: "glass", transp: "clear", inclusion: "fluid",
+    zh: "黄玉（托帕石）", en: "Topaz", formula: "Al₂SiO₄(F,OH)₂",
+    system: "orthorhombic", pointGroup: "mmm",
+    confidence: "high", source: "a = 4.6495、b = 8.7968、c = 8.3925 Å（Dana）",
+    cell: { a: 4.6495, b: 8.7968, c: 8.3925, alpha: 90, beta: 90, gamma: 90 },
+    cellText: "a = 4.6495 Å，b = 8.7968 Å，c = 8.3925 Å，α = β = γ = 90°",
+    colors: [
+      { zh: "无色", en: "Colorless", hex: "#e9f0f3" },
+      { zh: "蜜黄", en: "Imperial", hex: "#e0b169" },
+      { zh: "蓝", en: "Swiss blue", hex: "#7fb6d8" },
+    ],
+    about: {
+      zh: "斜方晶系最有名的代表：三根轴互相垂直但都不等长，所以晶体总是「瘦高条」而不是立方体。天然黄玉常常巨大——一块拳头大的完整晶体并不稀奇。市面上的蓝色托帕石几乎都是辐照改色过的。",
+      where: "巴西 Minas Gerais（帝国托帕石的故乡）、巴基斯坦、俄罗斯乌拉尔、日本（三瓶山越後黃玉）。",
+      hard: "8（能划伤石英，但怕磕碰——有一组完全解理，一摔就顺理解开）",
+      spot: "玻璃光泽 + 柱状 + 一端常带斜面；蓝色太鲜艳反而要当心是处理过的。",
+    },
+    intro: {
+      zh: "斜方晶系的招牌矿物：{110} 斜方柱配上 {101}、{011} 两组截切面，是标准的高温热液巨晶。注意它和「玉」没有半点关系。",
+      en: "The flagship orthorhombic mineral: {110} prism with {101} and {011} truncations, a standard pegmatite giant. Nothing to do with jade.",
+    },
+    habits: [
+      {
+        id: "prismatic", zh: "柱状", en: "Prismatic",
+        forms: [
+          { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "斜方柱", en: "Prism" },
+          { hkl: [1, 0, 1], k: 1.3, idx: "{101}", zh: "斜方柱", en: "Dome" },
+          { hkl: [0, 1, 1], k: 1.3, idx: "{011}", zh: "斜方柱", en: "Dome" },
+          { hkl: [0, 0, 1], k: 1.9, idx: "{001}", zh: "底面", en: "Pinacoid c" },
+        ],
+      },
+    ],
+  },
+  {
     id: "aragonite",
-  luster: "glass", inclusion: "fluid",
+  luster: "glass", transp: "transl", inclusion: "fluid",
     zh: "文石", en: "Aragonite", formula: "CaCO₃",
     system: "orthorhombic", pointGroup: "mmm",
     confidence: "high", source: "a = 4.9614、b = 7.9671、c = 5.7404 Å（Dana）",
@@ -254,20 +412,28 @@ export const MINERALS = [
       zh: "与方解石同成分、不同晶系（斜方 vs 三方）——「同质多象」的标准例子，常成假六方三连晶。",
       en: "Same chemistry as calcite but orthorhombic rather than trigonal — the classic polymorph pair, often forming pseudo-hexagonal trillings.",
     },
+    about: {
+      zh: "方解石的「孪生兄弟」：化学成分一模一样，但原子排成了斜方晶系，于是长成针状、柱状的晶体，而且更喜欢成群扎堆、扭成假六方。热水泉口边那层白白的「钙华」多半是它。",
+      where: "西班牙、意大利西西里（经典产地）；国内云南、西藏的温泉边和溶洞里常见。",
+      hard: "3.5–4（比方解石略硬，一样怕酸）",
+      spot: "针状/柱状集合体、常带蓝白色荧光；加热会变成方解石粉末。",
+    },
     habits: [
       {
         id: "prismatic", zh: "柱状", en: "Prismatic",
+        note: "真实文石是沿 c 延长的斜方柱：{110} 四条棱柱面占满，{010} 与 {011} 只做窄窄的截切，{001} 把两端收住。旧版把 {010}/{001} 的 k 收到 0.65/0.8，等于让两个板面狠狠切进来，结果压成一块板——那不是文石。",
         forms: [
           { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [0, 1, 0], k: 0.65, idx: "{010}", zh: "板面", en: "Pinacoid b" },
-          { hkl: [0, 0, 1], k: 0.8, idx: "{001}", zh: "底面", en: "Pinacoid c" },
+          { hkl: [0, 1, 0], k: 1.5, idx: "{010}", zh: "板面", en: "Pinacoid b" },
+          { hkl: [0, 1, 1], k: 1.3, idx: "{011}", zh: "斜方柱", en: "Dome" },
+          { hkl: [0, 0, 1], k: 2.0, idx: "{001}", zh: "底面", en: "Pinacoid c" },
         ],
       },
     ],
   },
   {
     id: "gypsum",
-  luster: "waxy",
+  luster: "waxy", transp: "transl", inclusion: "none",
     zh: "石膏", en: "Gypsum", formula: "CaSO₄·2H₂O",
     system: "monoclinic", pointGroup: "2/m",
     confidence: "medium", source: "a = 5.6794、b = 15.1774、c = 6.2867 Å，β = 118.43°（待复核）",
@@ -280,6 +446,12 @@ export const MINERALS = [
     intro: {
       zh: "板状晶体以 {010} 为最大面；单斜晶系的 b 轴是唯一轴，c 轴斜插——这正是「单斜」三个字的来历。",
       en: "Tabular plates dominated by {010}; the unique b axis plus the inclined c is exactly what \"monoclinic\" means.",
+    },
+    about: {
+      zh: "透明的那种叫「透石膏」，能剥成薄片写字。沙漠里长的「沙漠玫瑰」是它——一群板状晶体围着一粒沙子抱成花的样子。单斜晶系的代表矿物。",
+      where: "墨西哥 Naica（水晶洞里的巨晶）、美国新墨西哥（沙漠玫瑰）；国内湖北、山西的石膏矿。",
+      hard: "2（指甲就能划动）",
+      spot: "一组极完全解理（能撕成薄片）、蜡状光泽、软到没朋友。",
     },
     habits: [
       {
@@ -294,7 +466,7 @@ export const MINERALS = [
   },
   {
     id: "albite",
-  luster: "glass", inclusion: "tourm",
+  luster: "glass", transp: "transl", inclusion: "tourm",
     zh: "斜长石（钠长石）", en: "Albite", formula: "NaAlSi₃O₈",
     system: "triclinic", pointGroup: "-1",
     confidence: "medium", source: "a = 8.137、b = 12.785、c = 7.174 Å，α = 94.26°、β = 116.60°、γ = 87.67°（待复核）",
@@ -307,6 +479,12 @@ export const MINERALS = [
     intro: {
       zh: "三斜晶系：三个轴都不垂直、三个角都不等，只有对称中心。板状外形配钠长石律聚片双晶最有名。",
       en: "Triclinic: no two axes perpendicular, no two angles equal, only a centre of symmetry. Tabular crystals plus albite-law polysynthetic twinning.",
+    },
+    about: {
+      zh: "长石家族里最常见的一员，也是三斜晶系的代表：三个夹角全都不是 90°，所以晶体长得「歪」。月光石那种柔和的蓝光就来自长石内部的细微片状结构。",
+      where: "加拿大 Mont Saint-Hilaire（精品）、巴基斯坦；国内花岗岩里遍地都是。",
+      hard: "6–6.5（小刀划不动，但明显软于石英）",
+      spot: "板状 + 一组解理 + 玻璃光泽；把晶体泡在水里看反光，聚片双晶会显出平行的细纹。",
     },
     habits: [
       {

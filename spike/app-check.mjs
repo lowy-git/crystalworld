@@ -89,12 +89,21 @@ function glslUndeclared(src) {
     .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ")
     .replace(/(?<![A-Za-z_0-9.])(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g, "0");
   const declared = new Set();
-  // 声明符列表：先切掉初始化式（第一个 = 之后），再按逗号拆，各取开头标识符。
-  // 不能直接按逗号拆整句——`float sp = pow(max(0,d), s)` 里的逗号在初始化式里。
+  // 声明符列表：`float lam = 0.0, sp = 0.0, lamSum = 0.0;` 有多个声明符，
+  // 必须按**顶层**逗号拆（初始化式里也有逗号，如 pow(max(0.0, d), 2.0)），
+  // 每个声明符取 `=` 前面的标识符。
   const declarators = (txt) => {
-    const head = txt.split("=")[0];
-    for (const part of head.split(",")) {
-      const id = part.trim().match(/^([A-Za-z_]\w*)/);
+    let depth = 0, start = 0;
+    const parts = [];
+    for (let i = 0; i < txt.length; i++) {
+      const c = txt[i];
+      if (c === "(" || c === "[") depth++;
+      else if (c === ")" || c === "]") depth--;
+      else if (c === "," && depth === 0) { parts.push(txt.slice(start, i)); start = i + 1; }
+    }
+    parts.push(txt.slice(start));
+    for (const part of parts) {
+      const id = part.trim().split("=")[0].trim().match(/^([A-Za-z_]\w*)/);
       if (id) declared.add(id[1]);
     }
   };
@@ -864,24 +873,34 @@ const glLastOptsOk = (glw, vw, vh) => {
   check("把透明度拉到 0% → 不透明度 1（完全不透明）", run(`state.alpha`) === 1, `alpha=${run(`state.alpha`)}`);
   run(`state.alpha = null; state.transp = null; state.luster = null; renderTransp(); draw();`);
 
-  // 4) 透射参考物：晶体后方必须有高对比的东西，否则透明度不可见
+  // 4) 场景内容物：每个场景都要在晶体正后方放**属于自己的**东西（透过去才看得见）
   {
     const calls = [];
+    const grad = { addColorStop() {} };
     const cg = new Proxy({}, {
-      get: (t, k) => (k === "fillRect" ? (x, y, w, h) => calls.push([x, y, w, h]) : () => {}),
+      get: (t, k) => {
+        if (k === "fillRect" || k === "strokeRect") return (x, y, w, h) => calls.push([x, y, w, h]);
+        if (k === "arc" || k === "ellipse") return (x, y, r) => calls.push([x - r, y - r, r * 2, r * 2]);
+        if (k === "createLinearGradient" || k === "createRadialGradient" || k === "createConicGradient") return () => grad;
+        return () => {};
+      },
       set: () => true,
     });
     sandbox.__cg = cg;
-    run(`drawSceneProps(__cg, "lab", 800, 600);`);
-    // 晶体在画面中心（800×600 → cx=400），标尺必须横穿 x=400 且落在 y≈240 附近
-    const crosses = calls.some(c => c[0] < 400 && c[0] + c[2] > 400);
-    check("透射参考物横穿晶体正后方（不是摆在旁边）", crosses && calls.length > 10,
-      `rects=${calls.length}`);
-    check("五个场景都有透射参考物", ["dark", "lab", "nature", "cabinet", "paper"].every(id => {
+    // 晶体大致占 cx=400、cy=240、R≈204 这一块；内容物必须有东西压在这块里面
+    const behind = (id) => {
       calls.length = 0;
       run(`drawSceneProps(__cg, "${id}", 800, 600);`);
-      return calls.length > 10;
-    }));
+      return calls.filter(([x, y, w, h]) => x < 400 && x + w > 400 && y < 240 && y + h > 240).length;
+    };
+    for (const id of ["dark", "lab", "nature", "cabinet", "paper"]) {
+      check(`场景「${id}」在晶体正后方有内容物`, behind(id) > 0 && calls.length > 4, `rects=${calls.length}`);
+    }
+    check("五个场景的内容物互不相同（不是同一套图案）", (() => {
+      const sig = (id) => { calls.length = 0; run(`drawSceneProps(__cg, "${id}", 800, 600);`); return calls.map(c => c.map(v => v.toFixed(2)).join(",")).join("|"); };
+      const s = ["dark", "lab", "nature", "cabinet", "paper"].map(sig);
+      return new Set(s).size === 5;
+    })());
   }
 
   // 5) GL 逐像素透明度：alpha 由 uAlpha 与高光共同决定（高光不随透射淡掉）
@@ -938,11 +957,11 @@ const secsIn = (panel) => {
 };
 const popFors = [...html.matchAll(/<div class="pop" data-for="([a-z]+)"/g)].map(x => x[1]);
 check("顶部图标按钮共 4 个：视角 / 操作 / 导出 / 数据", popFors.length === 4 && ["view", "input", "export", "data"].every(k => popFors.includes(k)), `pops=${popFors.join(",")}`);
-check("左侧是「选择」（晶系/矿物/外形/单形/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
+check("左侧是「选择」（晶系/矿物/认识它/外形/单形/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
   const left = secsIn("left"), right = secsIn("right");
-  const wantL = ["sys", "min", "hab", "frm", "scene"];
+  const wantL = ["sys", "min", "about", "hab", "frm", "scene"];
   const wantR = ["color", "luster", "incl", "light", "display"];
-  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 5 && right.length === 5;
+  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 6 && right.length === 5;
 })(), `L=${secsIn("left").join(",")} R=${secsIn("right").join(",")}`);
 check("视角/操作/导出/数据已从两侧面板搬到顶部浮出（不重复）", (() => {
   const inPanels = [...secsIn("left"), ...secsIn("right")];
@@ -994,7 +1013,69 @@ check("JS 里 getElementById 的每个 id 在 HTML 里都真实存在（防搬�
   return missing.length === 0;
 })(), `缺=${(() => { const want = new Set(); for (const m of html.matchAll(/getElementById\("([^"]+)"\)/g)) want.add(m[1]); const have = new Set([...html.matchAll(/id="([^"]+)"/g)].map(x => x[1])); return [...want].filter(k => !have.has(k)).join(",") || "无"; })()}`);
 
+// ── 第十一轮：矿物科普（认识它） + 新矿物/新光源 ──
+const pInfo = () => { const s = run(`selectMineral("pyrite"); syncPanels(); const t = mineral().pointGroup + " " + mineral().luster + " " + habit().forms.map(f=>f.faces).join("/"); selectMineral("fluorite"); syncPanels(); t`); return s; };
+check("「认识它」面板存在且放在矿物旁（左栏，与「数据」分开）", (() => {
+  const secs = [...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]);
+  return secs.includes("about") && secs.indexOf("about") === secs.indexOf("min") + 1;
+})(), `左栏顺序=${[...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]).slice(0, 7).join(",")}`);
+check("12 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
+  const bad = run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id)`);
+  return bad.length === 0 && run(`DATA.minerals.length`) === 12;
+})(), `缺=${run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id).join(",")`)}`);
+check("renderAbout() 被 syncPanels() 调用（换矿物时刷新）", /renderAbout\(\);\s*\/\/[^\n]*认识它/.test(html) && /function renderAbout\(\)/.test(html));
+check("导出默认带「认识它」，且换矿物后内容跟着变", (() => {
+  const a = run(`selectMineral("diamond"); syncPanels(); document.getElementById("aboutZh").textContent`);
+  const b = run(`selectMineral("gypsum"); syncPanels(); document.getElementById("aboutZh").textContent`);
+  return !!a && !!b && a !== b && run(`state.exp.fields.about`) !== undefined;
+})());
+check("新矿物：黄铁矿 m-3（偏形，五角十二面体 12 面）/ 钻石 adamantine / 黄玉 斜方", (() => {
+  const p = run(`selectMineral("pyrite"); syncPanels(); [mineral().pointGroup, mineral().luster, mineral().habits.map(h=>h.forms.map(f=>f.faces).join("/")).join(",")]`);
+  const d = run(`selectMineral("diamond"); syncPanels(); [mineral().luster, mineral().habits.map(h=>h.forms.map(f=>f.faces).join("/")).join(",")]`);
+  const t = run(`selectMineral("topaz"); syncPanels(); [mineral().system, mineral().habits.map(h=>h.forms.map(f=>f.faces).join("/")).join(",")]`);
+  run(`selectMineral("fluorite"); syncPanels();`);
+  return p[0] === "m-3" && p[1] === "metallic" && p[2].split(/[,\/]/).includes("12")
+    && d[0] === "adamantine" && d[1].split(/[,\/]/).includes("8")
+    && t[0] === "orthorhombic" && t[1].split(/[,\/]/).includes("4");
+})(), "pyrite=" + pInfo());
+check("光泽只留四种（蜡状/玻璃/金刚/金属），不透明与透明已从 UI 拿掉", (() => {
+  const vis = run(`Object.entries(LUSTERS).filter(([k, v]) => !v.hidden).map(([k]) => k)`);
+  return vis.length === 4 && vis.includes("waxy") && vis.includes("glass") && vis.includes("adamantine") && vis.includes("metallic");
+})(), `可见=${run(`Object.entries(LUSTERS).filter(([k,v])=>!v.hidden).map(([k])=>k).join(",")`)}`);
+check("三光源：主光 + 轮廓光 + 补光，且按强度归一化（单灯 lam=1 时曝光不变）", (() => {
+  const n = run(`LIGHTS.length`);
+  const s = run(`LIGHT_SUM`);
+  const spec = run(`LIGHT_SPEC_SUM`);
+  const raw = run(`LIGHTS.reduce((a,L)=>a+L.inten,0)`);
+  const rawSpec = run(`LIGHTS.reduce((a,L)=>a+L.inten*L.spec,0)`);
+  return n === 3 && Math.abs(s - raw) < 1e-9 && Math.abs(spec - rawSpec) < 1e-9 && raw > 1;
+})(), "n=" + run(`LIGHTS.length`) + " sum=" + run(`LIGHT_SUM`));
+check("GL_FS 里 uniform 是三灯数组 uLigDir/uLigCol/uLigInt（与 shadeFace 同源）", /uniform\s+vec3\s+uLigDir\[3\]/.test(html) && /uniform\s+vec3\s+uLigCol\[3\]/.test(html) && /uniform\s+vec3\s+uLigInt\[3\]/.test(html) && /float\s+inten\s*=\s*uLigInt\[i\]\.x/.test(html));
+check("环境采样有地平线亮带（影棚围灯在晶体边缘的亮环）", /band\s*=\s*0\.17\s*\*\s*exp\(/.test(html) && /exp\(-abs\(t\)\s*\*\s*5\.0\)/.test(html));
+check("五个场景的背景内容物互不相同（不再共用坐标系+白圈+横线）", (() => {
+  const sig = run(`(() => {
+    const out = [];
+    const REC = ["fillRect","strokeRect","arc","ellipse","moveTo","lineTo","quadraticCurveTo","bezierCurveTo","rect","roundRect","arcTo"];
+    for (const id of Object.keys(BACKGROUNDS)) {
+      const seen = [];
+      const mkGrad = () => ({ addColorStop() {} });
+      const g = new Proxy({}, {
+        get: (_, k) => {
+          if (k === "createLinearGradient" || k === "createRadialGradient") return mkGrad;
+          if (k === "createPattern" || k === "getContext") return () => null;
+          if (k === "measureText") return () => ({ width: 10 });
+          return (...a) => { if (REC.includes(k)) seen.push(k + a.join(",")); };
+        },
+        set: () => true,
+      });
+      drawSceneProps(g, id, 800, 500);
+      out.push(seen.slice(0, 6).join("|"));
+    }
+    return out;
+  })()`);
+  return new Set(sig).size === 5 && sig.every(s => s.length > 10);
+})());
+
 console.log(out.join("\n"));
 console.log("\n规模：矿物", run(`DATA.minerals.length`), "种；外形", report.length, "种；变体总数",
   run(`DATA.minerals.reduce((a,m)=>a+m.habits.reduce((b,h)=>b+Object.keys(h.variants).length,0),0)`));
-

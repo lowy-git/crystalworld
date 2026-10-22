@@ -192,7 +192,7 @@ function cutWithCap(polys, n, d) {
 }
 
 // 一个外形在给定"可见单形掩码"下的几何
-function buildGeometry(mineral, habit, mask) {
+function buildGeometry(mineral, habit, mask, boxHalf) {
   const idxMap = [];
   const sub_forms = [];
   habit.forms.forEach((f, i) => {
@@ -200,7 +200,7 @@ function buildGeometry(mineral, habit, mask) {
   });
   if (!sub_forms.length) return null;
 
-  const res = combination(mineral.cell, mineral.pointGroup, sub_forms);
+  const res = combination(mineral.cell, mineral.pointGroup, sub_forms, boxHalf ? { boxHalf } : {});
   const P = res.poly.verts;
   let domainPts = null;         // 转变双晶的域界截面（只画不参与几何）
   let wholeFaces = null;        // 贯穿双晶的"完整个体"（只在拆解/只看一个体时画）
@@ -300,6 +300,7 @@ function buildGeometry(mineral, habit, mask) {
     domainPts = sectionFromPolys(polys, nd, dmax2 * (habit.twin.domainAt ?? 0));
   } else if (habit.twin) {
     // ── 贯穿双晶：两个完整个体互相穿插，边界取并集 ──
+    // mirror = 双晶面反射；axis = 绕双晶轴转 180°（二次轴）
     const T = habit.twin.mode === "mirror"
       ? (() => { const hkl = habit.twin.plane; const h3 = hkl.length === 4 ? [hkl[0], hkl[1], hkl[3]] : hkl; return twinMatrix(h3, res.L); })()
       : twinAxisMatrix(habit.twin.axis, res.L);
@@ -406,7 +407,9 @@ for (const m of MINERALS) {
     id: m.id, zh: m.zh, en: m.en, formula: m.formula,
     system: m.system, pointGroup: m.pointGroup,
     cell: m.cell, cellText: m.cellText, intro: m.intro, colors: m.colors,
+    about: m.about ?? null,
     luster: m.luster ?? "glass",
+    transp: m.transp ?? null,
     inclusion: m.inclusion ?? null,
     confidence: m.confidence, source: m.source,
     habits: [],
@@ -437,8 +440,20 @@ for (const m of MINERALS) {
     for (let mask = 1; mask < (1 << n); mask++) masks.push(mask | forceMask);
     // 单形多于 4 个时只算"全部"与"去掉一个"，避免体积爆炸
     const use = n <= 4 ? masks : [masks[masks.length - 1], ...masks.filter(x => x !== (1 << n) - 1)];
+    // ── 参考尺寸：完整聚形的三轴半宽 ──
+    // 只选部分单形时往往是开形（六方柱、菱面体单独存在都不闭合），原来按固定系数
+    // 1.45×Dmax 截断，于是"只看六方柱"得到一个短粗六棱柱，而聚形里它被 r/z 面拉得
+    // 很长——完全看不出聚形是怎么拼出来的（用户反馈：六方柱巨粗）。
+    // 现在按完整聚形的实际尺寸截断：同一外形下不管勾选哪些单形，占的空间都一样大。
+    let boxHalf = null;
+    if (n > 1) {
+      const allRes = combination(m.cell, m.pointGroup, h.forms);
+      if (allRes.poly.verts.length) {
+        boxHalf = [0, 1, 2].map(i => Math.max(...allRes.poly.verts.map(p => Math.abs(p[i]))) * 1.02);
+      }
+    }
     for (const mask of use) {
-      const g = buildGeometry(m, h, mask);
+      const g = buildGeometry(m, h, mask, boxHalf);
       if (g) variants[mask.toString(2).padStart(n, "0")] = g;
     }
     const allKey = ((1 << n) - 1).toString(2).padStart(n, "0");
@@ -454,7 +469,7 @@ for (const m of MINERALS) {
       const T0 = h.twin.mode === "mirror" ? twinMatrix(h3, L0)
         : h.twin.mode === "contact" ? twinMatrix(h3, L0)
         : h.twin.mode === "domain" ? twinMatrix(h3, L0)
-        : twinAxisMatrix(h.twin.axis, L0);
+      : twinAxisMatrix(h.twin.axis, L0);
       const cB0 = applyM(T0, [0, 0, 1]);
       view = { yaw: +(Math.atan2(cB0[1], cB0[0]) * 180 / Math.PI).toFixed(2) };
       // 拆解方向（晶体坐标）：接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开

@@ -104,6 +104,15 @@ export function pointGroup(name, L) {
       }
       return out;
     }
+    case 'm-3': {            // 等轴偏形（黄铁矿）：T + 反演，24 阶
+      // 关键：**没有** 4 重轴。所以 {210} 在这里是 12 个五边形的「五角十二面体」，
+      // 而在 m-3m 里同一个 {210} 会给出 24 个面。黄铁矿的立方体面带垂直条纹，
+      // 正是偏形（pyritohedral）对称的标志。
+      const C3 = [[0, 0, 1], [1, 0, 0], [0, 1, 0]];   // 绕 [111] 转 120°
+      const C2x = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+      const inv = [[-1, 0, 0], [0, -1, 0], [0, 0, -1]];
+      return closure([C3, C2x, inv]);
+    }
     case 'mmm': {            // 斜方 holohedral：8（三个互相垂直的镜面，两个只能生成 4 阶）
       return closure([
         [[1,0,0],[0,1,0],[0,0,-1]],
@@ -271,12 +280,14 @@ export function combination(cell, groupName, forms, opts = {}) {
   let poly = buildPolyhedron(planes);
   let clipped = false;
   if ((poly.faces.length === 0 || !isClosedPoly(poly)) && opts.box !== false) {
-    // 开形：半空间交集无界。用辅助方盒截断，截出来的面标 clip，渲染时区别对待
-    const Dmax = Math.max(...planes.map(p => p.D));
-    const H = (opts.boxScale ?? 1.45) * Dmax;
-    for (const n of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
-      planes.push({ n, D: H, formIdx: -1, clip: true });
-    }
+    // 开形：半空间交集无界。用辅助方盒截断，截出来的面标 clip，渲染时区别对待。
+    // boxHalf 给了就按它取（各轴可以不同）：只选部分单形时，必须按**完整聚形**的
+    // 尺寸去截断，否则"只看六方柱"会得到一个短粗六棱柱，而聚形里它被菱面体面
+    // 拉得很长——用户就看不到"聚形是怎么拼出来的"。
+    const H = (opts.boxScale ?? 1.45) * Math.max(...planes.map(p => p.D));
+    const BH = opts.boxHalf && opts.boxHalf.length === 3 ? opts.boxHalf : [H, H, H];
+    const AX = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    AX.forEach((n, i) => planes.push({ n, D: BH[i >> 1], formIdx: -1, clip: true }));
     poly = buildPolyhedron(planes);
     clipped = true;
   }

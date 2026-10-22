@@ -231,6 +231,12 @@
   .sw{width:26px;height:26px;border-radius:7px;border:1px solid rgba(255,255,255,.16);cursor:pointer;transition:.14s;position:relative}
   .sw:hover{transform:translateY(-1px)}
   .sw.on{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--accent)}
+  /* 「单」＝按单形配色：色块列表第一项，用四色拼片表示"每个单形一种颜色" */
+  .sw.swform{
+    background:conic-gradient(#8cbdF7 0 25%,#f79ec8 0 50%,#8cebbe 0 75%,#f8d68c 0);
+    display:flex;align-items:center;justify-content:center;
+    font:700 13px/1 system-ui,sans-serif;color:#12202c;text-shadow:0 1px 0 rgba(255,255,255,.5);
+  }
   .swarning{font-size:10.5px;color:var(--ink3);margin-top:5px;line-height:1.5}
 
   /* 标签 + 控件的一行（下拉/滑杆） */
@@ -273,6 +279,12 @@
   .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px;color:var(--ink2)}
   .kv dt{color:var(--ink3)}
   .kv dd{margin:0;font-variant-numeric:tabular-nums}
+
+  /* 认识它：矿物科普。口径是「给不懂行的人看」——先说什么感觉、上哪儿见，最后才是名字 */
+  .aboutp{margin:2px 0 8px;font-size:12.5px;line-height:1.65;color:var(--ink)}
+  .aboutp.dim{color:var(--ink3);font-size:11.5px;border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+  .aboutrow{display:flex;gap:8px;font-size:12px;line-height:1.55;color:var(--ink2);margin-bottom:5px}
+  .aboutlab{flex:0 0 auto;color:var(--ink3);font-size:11px;letter-spacing:.06em;padding-top:1px}
 
   /* modal */
   .modal{
@@ -339,6 +351,19 @@
       <div class="secbody"><div class="mlist" id="minerals"></div></div>
     </div>
 
+    <!-- 认识它：给不懂行的人看的通俗介绍 + 产地。结晶学参数放右上的「数据」里 -->
+    <div class="sec" data-sec="about">
+      <h3><button class="fold" type="button" aria-expanded="true">认识它 <span style="text-transform:none;letter-spacing:0">About</span></button></h3>
+      <div class="secbody">
+        <dl class="kv" id="aboutKV"></dl>
+        <p class="aboutp" id="aboutZh"></p>
+        <div class="aboutrow"><span class="aboutlab">哪儿能见到</span><span id="aboutWhere"></span></div>
+        <div class="aboutrow"><span class="aboutlab">有多硬</span><span id="aboutHard"></span></div>
+        <div class="aboutrow"><span class="aboutlab">怎么认</span><span id="aboutSpot"></span></div>
+        <p class="aboutp dim" id="aboutIntro"></p>
+      </div>
+    </div>
+
     <div class="sec" data-sec="hab">
       <h3><button class="fold" type="button" aria-expanded="true">外形 <span style="text-transform:none;letter-spacing:0">Habit</span></button></h3>
       <div class="secbody"><div class="hlist" id="habits"></div></div>
@@ -375,10 +400,9 @@
     <div class="sec" data-sec="color">
       <h3><button class="fold" type="button" aria-expanded="true">染色 <span style="text-transform:none;letter-spacing:0">Colour</span></button></h3>
       <div class="secbody">
-        <div class="row">
-          <button class="btn on" id="modeForm">单形配色</button>
-          <button class="btn" id="modeMineral">矿物单色</button>
-        </div>
+        <!-- 颜色列表第一项「单」= 按单形配色；后面是矿物常见色（点了整块统一染该色）。
+             早先是「单形配色 / 矿物单色」两个按钮——单形配色只有一种、没有下级选项，
+             单独占一个按钮既浪费空间又让人以为还有别的选择。 -->
         <div class="swatches" id="swatches"></div>
         <div class="swarning" id="colorHint"></div>
       </div>
@@ -585,13 +609,18 @@ const TINTS = [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76], [0.97
    amb 环境、diff 漫反射、spec 高光强度、shin 高光锐度、fres 掠射角提亮、
    ior 折射率（决定 R0=((n-1)/(n+1))^2 镜面反射率）、envI 环境反射强度、
    metal 金属（R0=1、反射带本体色、无漫反射）、opaqueOnly 该光泽天然不透光 */
+/* 光泽（只指"表面对光的反射方式"）——**不透光/透光归通透度那一栏管**，
+   所以这里刻意不列「不透明」和「透明」：把它们放在光泽里只会和通透度打架
+   （用户反馈："点不透明，透明度应该自动降到 0；点透明，透明度应该自动降到 100%"——
+   两栏做同一件事，必然有人说该联动、有人说该独立）。
+   opaque / transparent 两个定义仍保留，供旧数据与矿物默认值回落，但不出现在 UI 列表里。 */
 const LUSTERS = {
-  opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,  fres: .06, ior: 1.60, envI: .10 },
+  opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,  fres: .06, ior: 1.60, envI: .10, hidden: 1 },
   glass:       { zh: "玻璃",   amb: .40, diff: .55, spec: .75, shin: 14, fres: .34, ior: 1.54, envI: .52 },
-  adamantine:  { zh: "金刚",   amb: .22, diff: .38, spec: 1.0, shin: 22, fres: .48, ior: 2.42, envI: 1.00 },
-  metallic:    { zh: "金属",   amb: .04, diff: .07, spec: .85, shin: 10, fres: .34, ior: 1.00, envI: .95, metal: 1, opaqueOnly: 1 },
+  adamantine:  { zh: "金刚",   amb: .09, diff: .18, spec: 1.0, shin: 40, fres: .48, ior: 2.42, envI: 1.00 },
+  metallic:    { zh: "金属",   amb: .06, diff: .12, spec: .85, shin: 10, fres: .34, ior: 1.00, envI: .95, metal: 1, opaqueOnly: 1 },
   waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .22, shin: 6,  fres: .14, ior: 1.50, envI: .22 },
-  transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16, fres: .52, ior: 1.54, envI: .45 },
+  transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16, fres: .52, ior: 1.54, envI: .45, hidden: 1 },
 };
 const DEFAULT_LUSTER = "glass";
 
@@ -603,7 +632,11 @@ const TRANSP = [
   { id: "clear",   zh: "全透明", alpha: 0.26 },
 ];
 const transpById = (id) => TRANSP.find(t => t.id === id) || null;
+/* 每种矿物的默认光泽与通透度都存在数据里（m.luster / m.transp），
+   换矿物就跟着换——金属矿物默认金属+不透明，萤石/方解石默认玻璃+半透明。
+   没有显式 m.transp 时才按光泽推。 */
 const defaultTransp = (m) => {
+  if (m.transp && transpById(m.transp)) return m.transp;
   const L = m.luster || DEFAULT_LUSTER;
   if (L === "metallic" || L === "opaque") return "opaque";
   if (L === "adamantine" || L === "transparent") return "clear";
@@ -661,46 +694,6 @@ function paintTint(g, project, M) {
    rnd 是确定性伪随机，同一场景每次渲染位置一致。 */
 function backdropRnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
-function drawPropRuler(g, x, y, w) {
-  g.fillStyle = "rgba(226,214,186,.92)"; g.fillRect(x, y, w, w * 0.13);
-  g.strokeStyle = "rgba(60,50,35,.55)"; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w, w * 0.13);
-  const n = 10;
-  for (let i = 0; i <= n; i++) {
-    const tx = x + w * i / n;
-    g.beginPath(); g.moveTo(tx, y); g.lineTo(tx, y + w * 0.13 * (i % 5 === 0 ? 1 : 0.55)); g.stroke();
-  }
-}
-function drawPropTube(g, x, y, h, col) {
-  const w = h * 0.22;
-  g.fillStyle = col; g.fillRect(x, y, w, h);
-  g.fillStyle = "rgba(255,255,255,.35)"; g.fillRect(x, y, w * 0.28, h);
-  g.fillStyle = "rgba(20,30,45,.18)"; g.fillRect(x + w - w * 0.18, y, w * 0.18, h);
-}
-function drawPropPebble(g, x, y, r, col) {
-  g.fillStyle = col;
-  g.beginPath(); g.ellipse(x, y, r, r * 0.72, 0, 0, Math.PI * 2); g.fill();
-  g.fillStyle = "rgba(255,255,255,.18)";
-  g.beginPath(); g.ellipse(x - r * 0.25, y - r * 0.2, r * 0.35, r * 0.2, -0.5, 0, Math.PI * 2); g.fill();
-}
-function drawPropLabel(g, x, y, w, h, tone) {
-  g.fillStyle = tone; g.fillRect(x, y, w, h);
-  g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w, h);
-  g.strokeStyle = "rgba(70,60,45,.45)"; g.lineWidth = 1;
-  for (let i = 1; i <= 3; i++) {
-    const ly = y + h * i / 4;
-    g.beginPath(); g.moveTo(x + w * 0.12, ly); g.lineTo(x + w * (0.85 - 0.12 * (i % 2)), ly); g.stroke();
-  }
-}
-function drawPropGrass(g, x, y, n, col) {
-  g.strokeStyle = col; g.lineWidth = 2; g.lineCap = "round";
-  for (let i = 0; i < n; i++) {
-    const bx = x + (i - n / 2) * 9, hgt = 12 + (i % 3) * 7;
-    g.beginPath(); g.moveTo(bx, y);
-    g.quadraticCurveTo(bx + (i % 2 ? 5 : -5), y - hgt * 0.6, bx + (i % 2 ? 11 : -11), y - hgt);
-    g.stroke();
-  }
-}
-
 const BACKGROUNDS = {
   dark: {
     zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
@@ -730,17 +723,7 @@ const BACKGROUNDS = {
       const sh = g.createLinearGradient(0, h * 0.9, 0, h);       // 桌腿方向的压暗
       sh.addColorStop(0, "rgba(20,30,45,0)"); sh.addColorStop(1, "rgba(20,30,45,.22)");
       g.fillStyle = sh; g.fillRect(0, h * 0.9, w, h * 0.1);
-      // 背景内容物：标尺 + 试管 + 标签，都在台面上、晶体身后
-      const r = backdropRnd(20240517);
-      const u = Math.min(w, h);
-      drawPropRuler(g, w * 0.5 + u * 0.16, ty - u * 0.035, u * 0.34);
-      drawPropTube(g, w * 0.5 - u * 0.30, ty - u * 0.17, u * 0.17, "rgba(150,205,190,.75)");
-      drawPropLabel(g, w * 0.5 - u * 0.40, ty - u * 0.10, u * 0.09, u * 0.07, "rgba(238,232,214,.9)");
-      for (let i = 0; i < 3; i++) {
-        g.fillStyle = "rgba(90,120,150,.13)";
-        const cx = w * (0.16 + 0.24 * i), cy = ty + (h - ty) * (0.3 + 0.2 * r());
-        g.beginPath(); g.ellipse(cx, cy, u * 0.012, u * 0.006, 0, 0, Math.PI * 2); g.fill();
-      }
+      // 仪器/器皿由 drawSceneProps 画（要落在晶体正后方，透过去才看得见）
     },
   },
   nature: {
@@ -764,18 +747,7 @@ const BACKGROUNDS = {
         const y = gy + (h - gy) * (0.12 + 0.13 * i) + (i % 2 ? 6 : -6);
         g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
       }
-      // 背景内容物：草丛 + 石子，长在晶体身后
-      const r = backdropRnd(77031);
-      const u = Math.min(w, h);
-      drawPropGrass(g, w * 0.5 + u * 0.20, gy + 2, 7, "rgba(96,124,64,.75)");
-      drawPropGrass(g, w * 0.5 - u * 0.26, gy + 3, 5, "rgba(84,110,56,.7)");
-      drawPropPebble(g, w * 0.5 + u * 0.32, gy + (h - gy) * 0.10, u * 0.022, "#8d8b80");
-      drawPropPebble(g, w * 0.5 - u * 0.34, gy + (h - gy) * 0.22, u * 0.015, "#77736a");
-      for (let i = 0; i < 8; i++) {                                // 地面碎草点
-        g.fillStyle = `rgba(${120 + r() * 40 | 0},${140 + r() * 30 | 0},${80 + r() * 20 | 0},.5)`;
-        const px = w * (0.1 + 0.8 * r()), py = gy + (h - gy) * (0.05 + 0.3 * r());
-        g.fillRect(px, py, 3, 1.5);
-      }
+      // 河流/树丛/草由 drawSceneProps 画（要落在晶体正后方）
     },
   },
   cabinet: {
@@ -801,13 +773,7 @@ const BACKGROUNDS = {
       const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.25, w * 0.5, h * 0.46, Math.max(w, h) * 0.78);
       vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.55)");
       g.fillStyle = vg; g.fillRect(0, 0, w, h);
-      // 背景内容物：小木块承托 + 手写标签（都在展台上、晶体身后）
-      const u = Math.min(w, h);
-      g.fillStyle = "#4a3826";
-      g.fillRect(w * 0.5 + u * 0.22, sy - u * 0.055, u * 0.10, u * 0.055);
-      g.fillStyle = "rgba(255,220,170,.10)";
-      g.fillRect(w * 0.5 + u * 0.22, sy - u * 0.055, u * 0.10, u * 0.008);
-      drawPropLabel(g, w * 0.5 - u * 0.38, sy - u * 0.075, u * 0.13, u * 0.075, "rgba(214,198,168,.92)");
+      // 木柜板材/搁板/标本签由 drawSceneProps 画（要落在晶体正后方）
     },
   },
   paper: {
@@ -819,24 +785,7 @@ const BACKGROUNDS = {
       const sh = g.createLinearGradient(0, h * 0.8, 0, h);      // 纸面自身的柔和压暗
       sh.addColorStop(0, "rgba(120,105,80,0)"); sh.addColorStop(1, "rgba(120,105,80,.14)");
       g.fillStyle = sh; g.fillRect(0, h * 0.8, w, h * 0.2);
-      // 背景内容物：印刷字行 + 比例尺 + 参考圆
-      const u = Math.min(w, h);
-      g.fillStyle = "rgba(96,86,70,.30)";
-      for (let i = 0; i < 5; i++) {
-        const ly = h * 0.10 + i * u * 0.045;
-        g.fillRect(w * 0.5 + u * 0.06, ly, u * (0.30 - 0.05 * (i % 3)), u * 0.010);
-        g.fillRect(w * 0.5 - u * 0.42, ly, u * (0.22 - 0.04 * (i % 2)), u * 0.010);
-      }
-      g.strokeStyle = "rgba(96,86,70,.35)"; g.lineWidth = 1;
-      g.beginPath(); g.arc(w * 0.5 + u * 0.26, h * 0.60, u * 0.075, 0, Math.PI * 2); g.stroke();
-      drawPropRuler(g, w * 0.5 - u * 0.42, h * 0.70, u * 0.30);
-      g.strokeStyle = "rgba(96,86,70,.45)"; g.lineWidth = 1.4;
-      const sy2 = h * 0.78;
-      g.beginPath(); g.moveTo(w * 0.5 - u * 0.15, sy2); g.lineTo(w * 0.5 + u * 0.15, sy2); g.stroke();
-      for (let i = 0; i <= 6; i++) {
-        const tx = w * 0.5 - u * 0.15 + u * 0.30 * i / 6;
-        g.beginPath(); g.moveTo(tx, sy2); g.lineTo(tx, sy2 + (i % 2 ? 5 : 9)); g.stroke();
-      }
+      // 纸张本身（字行/手绘草图）由 drawSceneProps 画：要落在晶体正后方
     },
   },
 };
@@ -1213,11 +1162,23 @@ const ENV_LIGHTS = [
   { dir: unit([0.72, 0.28, 0.62]),  col: [0.60, 0.72, 1.00], sharp: 26, inten: 0.50 },  // 高位冷侧亮块：较窄，制造锐利的亮斑
   { dir: unit([0.10, -0.85, 0.50]), col: [0.95, 0.78, 0.58], sharp: 2,  inten: 0.26 },  // 下方暖反光板
 ];
-/* 光源方位/高度 → 主光方向。主柔光箱跟着主光一起转，否则高光与环境反射会错位 */
+/* 三盏方向光（漫反射 + 高光各算一遍）。
+   为什么要三盏：单光源下晶体看起来像一块塑料贴图——整块只有一处亮斑。
+   真实影棚里的晶体被多盏灯打出多个亮点，转动时亮点在不同晶面上跳，这才是"晶体感"。
+   轮廓光从后方打来，专门提亮剪影边缘；补光从对侧低位补暗部。 */
+let LIGHTS = [
+  { dir: LIGHT_V.slice(),              col: [1.00, 0.97, 0.92], inten: 1.00, spec: 1.0 },  // 主光（滑杆控制）
+  { dir: unit([0.62, 0.46, -0.64]),    col: [0.72, 0.84, 1.00], inten: 0.60, spec: 1.1 },  // 轮廓光：后方高位冷光
+  { dir: unit([-0.78, -0.32, 0.54]),   col: [1.00, 0.86, 0.68], inten: 0.34, spec: 0.5 },  // 补光：前下暖光
+];
+const LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
+const LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
+/* 光源方位/高度 → 主光方向。主柔光箱与主方向光跟着主光一起转，否则高光与环境反射会错位 */
 function setLight(azDeg, elDeg) {
   const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180, ce = Math.cos(el);
   LIGHT_V = unit([ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)]);
   ENV_LIGHTS[0].dir = LIGHT_V.slice();
+  LIGHTS[0].dir = LIGHT_V.slice();
 }
 function envSample(r) {
   const out = [0, 0, 0];
@@ -1229,14 +1190,22 @@ function envSample(r) {
   const t = Math.max(-1, Math.min(1, r[1]));
   const g = 0.16 * Math.pow(Math.max(0, t), 0.65) + 0.05 * Math.pow(Math.max(0, -t), 0.5);
   out[0] += g * 0.72; out[1] += g * 0.80; out[2] += g * 0.95;
+  // 地平线亮带：影棚围着一圈灯，晶体边缘会映出一条亮环——这是"玻璃/金刚石看起来在发光"的关键
+  const band = 0.17 * Math.exp(-Math.abs(t) * 5.0);
+  out[0] += band * 0.86; out[1] += band * 0.91; out[2] += band * 1.00;
   return out;
 }
 
 function shadeFace(base, n, cw, eye, M) {
-  const lam = Math.max(0, dot(n, LIGHT_V));
   const v = unit(sub(eye, cw));
-  const hv = unit([LIGHT_V[0] + v[0], LIGHT_V[1] + v[1], LIGHT_V[2] + v[2]]);
-  const sp = Math.pow(Math.max(0, dot(n, hv)), M.shin) * M.spec;
+  let lam = 0, sp = 0;
+  for (const L of LIGHTS) {
+    const l = L.dir;
+    lam += L.inten * Math.max(0, dot(n, l));
+    const hv = unit([l[0] + v[0], l[1] + v[1], l[2] + v[2]]);
+    sp += L.inten * L.spec * Math.pow(Math.max(0, dot(n, hv)), M.shin);
+  }
+  lam /= LIGHT_SUM; sp = sp / LIGHT_SPEC_SUM * M.spec;
   const tint = M.tintSpec ? [0.35 + 0.65 * base[0], 0.35 + 0.65 * base[1], 0.35 + 0.65 * base[2]] : null;
   // 反射向量：视线被这个面弹向哪里，就取环境那个方向的颜色
   const d = dot(n, v);
@@ -1295,11 +1264,26 @@ function makeProject(opts) {
 const STRIATION = {
   quartz:   { form: 0, axis: "c",    step: 4.0, light: 0.13, dark: 0.10 },
   fluorite: { form: 0, axis: "diag", step: 5.0, light: 0.12, dark: 0.09 },
+  pyrite:   { form: 0, axis: "edge", step: 3.2, light: 0.16, dark: 0.14 },
 };
+/* 「edge」＝把一条世界坐标轴投到面内，取第一条不塌陷的（x→y→z）。
+   黄铁矿的条纹沿立方体某组棱方向走；直接用 c 轴的话，正面（法线就是 c）
+   会算出零向量、整面没有条纹，所以必须投影。 */
+function inPlaneDir(n) {
+  for (const a of [[1, 0, 0], [0, 1, 0], [0, 0, 1]]) {
+    const k = dot(a, n);
+    const d = [a[0] - n[0] * k, a[1] - n[1] * k, a[2] - n[2] * k];
+    const l = Math.hypot(d[0], d[1], d[2]);
+    if (l > 1e-3) return [d[0] / l, d[1] / l, d[2] / l];
+  }
+  return null;
+}
 function drawStriations(g, it, pts, R, project) {
   const spec = STRIATION[mineral().id];
   if (!spec || it.f.form !== spec.form) return;
-  const ax = spec.axis === "c" ? mv(R, [0, 0, 1]) : mv(R, [1, 1, 1]);
+  const ax = spec.axis === "c" ? mv(R, [0, 0, 1])
+    : (spec.axis === "edge" ? inPlaneDir(it.wn) : mv(R, [1, 1, 1]));
+  if (!ax) return;
   const d = cross(ax, it.wn);
   const dl = Math.hypot(d[0], d[1], d[2]);
   if (dl < 1e-6) return;
@@ -1394,7 +1378,9 @@ precision highp float;
 flat in vec3 vCol;
 flat in float vFront;
 in vec3 vPos; in vec3 vNrm;
-uniform vec3 uLight;
+uniform vec3 uLigDir[3];        // 三盏方向光：主光 / 轮廓光 / 补光
+uniform vec3 uLigCol[3];
+uniform vec3 uLigInt[3];        // x=inten  y=spec
 uniform vec3 uEnvDir[3];
 uniform vec3 uEnvCol[3];
 uniform vec3 uEnvPar[3];      // x=sharp  y=inten
@@ -1411,7 +1397,9 @@ vec3 envSample(vec3 r) {
   }
   float t = clamp(r.y, -1.0, 1.0);
   float g = 0.16 * pow(max(0.0, t), 0.65) + 0.05 * pow(max(0.0, -t), 0.5);
-  return o + g * vec3(0.72, 0.80, 0.95);
+  // 地平线亮带：影棚围灯在晶体边缘映出的那圈亮环
+  float band = 0.17 * exp(-abs(t) * 5.0);
+  return o + g * vec3(0.72, 0.80, 0.95) + band * vec3(0.86, 0.91, 1.00);
 }
 
 void main() {
@@ -1425,9 +1413,20 @@ void main() {
   }
   vec3 n = normalize(vNrm);
   vec3 v = normalize(vec3(0.0, 0.0, uDist) - vPos);
-  vec3 hv = normalize(uLight + v);
-  float lam = max(0.0, dot(n, uLight));
-  float sp = pow(max(0.0, dot(n, hv)), uShin) * uSpec;
+  // 三盏方向光各算一遍漫反射与高光：亮点会在不同晶面上跳，这是"晶体感"的来源
+  float lam = 0.0, sp = 0.0, lamSum = 0.0, spSum = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vec3 l = normalize(uLigDir[i]);
+    float inten = uLigInt[i].x, spec = uLigInt[i].y;
+    lam += inten * max(0.0, dot(n, l));
+    lamSum += inten;
+    vec3 hv = normalize(l + v);
+    float lobe = pow(max(0.0, dot(n, hv)), uShin);
+    sp += inten * spec * lobe;
+    spSum += inten * spec;
+  }
+  lam /= max(lamSum, 1e-4);
+  sp = sp / max(spSum, 1e-4) * uSpec;
   vec3 tint = uTintSpec > 0.5 ? vec3(0.35) + 0.65 * base : vec3(1.0);
   float d = dot(n, v);
   vec3 env = envSample(2.0 * d * n - v);
@@ -1504,7 +1503,7 @@ function glInit() {
   }
   gl.deleteShader(vs); gl.deleteShader(fs);
   for (const n of ["uRot", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
-                   "uLight", "uEnvDir", "uEnvCol", "uEnvPar",
+                   "uLigDir", "uLigCol", "uLigInt", "uEnvDir", "uEnvCol", "uEnvPar",
                    "uAmb", "uDiff", "uSpec", "uShin", "uFres", "uIor", "uEnvI",
                    "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided", "uAlpha"]) glUni[n] = gl.getUniformLocation(glProg, n);
   for (const n of ["aPos", "aNrm", "aCol"]) glAttr[n] = gl.getAttribLocation(glProg, n);
@@ -1559,10 +1558,13 @@ function glRender(project, M, opts) {
     glSize = key;
   }
   // 缓存：几何/单形掩码/只看谁/配色 变了才重传缓冲；旋转只改 uniform。
-  // 配色戳必须含 state.uniform——单色模式换颜色时颜色在顶点属性里，不重传就还是旧色。
+  // 配色戳必须真的哈希 state.uniform 的**内容**——早先写的是 `String(u).length*8`，
+  // 而所有 hex 都是 7 个字符，于是「矿物单色模式下换个颜色」戳不变、缓冲不重传，
+  // 棱线（CPU 现算）换了色、填充（GPU 旧缓冲）还是旧色，看起来就是"只有棱线变色"。
+  const strHash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 16777619); } return (h >>> 0) % 1000003; };
   const gs = (GEO.stamp || 0) * 4 + (state.twinShow === "both" ? 0 : (state.twinShow === "A" ? 1 : 2));
   const cs = (state.colorMode === "mineral" ? 2 : 1) + (state.twinTint ? 1 : 0)
-           + (state.uniform ? 4 : 0) + String(state.uniform).length * 8;
+           + (state.uniform ? 4 : 0) + strHash(String(state.uniform || ""));
   if (gs !== glStamp || cs !== glColStamp) {
     const data = glBuild();
     gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
@@ -1589,7 +1591,11 @@ function glRender(project, M, opts) {
   gl.uniform1f(glUni.uVw, vw);   gl.uniform1f(glUni.uVh, vh);
   const [zn, zf] = glDepthRange(project);
   gl.uniform1f(glUni.uZn, zn); gl.uniform1f(glUni.uZf, zf);
-  const e = ENV_LIGHTS;
+  const e = ENV_LIGHTS, g3 = LIGHTS;
+  gl.uniform3fv(glUni.uLigDir, new Float32Array([...g3[0].dir, ...g3[1].dir, ...g3[2].dir]));
+  gl.uniform3fv(glUni.uLigCol, new Float32Array([...g3[0].col, ...g3[1].col, ...g3[2].col]));
+  gl.uniform3fv(glUni.uLigInt, new Float32Array(
+    [g3[0].inten, g3[0].spec, 0, g3[1].inten, g3[1].spec, 0, g3[2].inten, g3[2].spec, 0]));
   gl.uniform3fv(glUni.uEnvDir, new Float32Array([...e[0].dir, ...e[1].dir, ...e[2].dir]));
   gl.uniform3fv(glUni.uEnvCol, new Float32Array([...e[0].col, ...e[1].col, ...e[2].col]));
   gl.uniform3fv(glUni.uEnvPar, new Float32Array(
@@ -1604,7 +1610,6 @@ function glRender(project, M, opts) {
   gl.uniform1f(glUni.uAlpha, M.alpha == null ? 1 : M.alpha);
   gl.uniform1f(glUni.uAmbK, M.ambK == null ? 1 : M.ambK);
   gl.uniform3fv(glUni.uAmbT, M.ambT || [1, 1, 1]);
-  gl.uniform3fv(glUni.uLight, LIGHT_V);
   const S = GL_STRIDE * 4;
   gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
   gl.enableVertexAttribArray(glAttr.aPos); gl.vertexAttribPointer(glAttr.aPos, 3, gl.FLOAT, false, S, 0);
@@ -1829,46 +1834,130 @@ function fitToTable(opts, tbl) {
 
 /* 主绘制：背景 → 接触阴影 → 本体色层 → 晶体（GL 填充 + 2D 棱线，整体按通透度
    一次合成，避免每片半透明叠加出接缝）→ 内含物 → 坐标轴 */
-/* 透射参考物：确定落在晶体正后方、且对比度够高的东西。
-   这是"透明度"能不能被看见的前提——晶体背后如果只是一片纯色或极淡的网格，
-   再透明也只是"换了个背景色"，用户看到的仍然是"没有透明度"。
-   原来各个场景的标尺/试管/草丛全都摆在晶体**旁边**（x = 中心 ±0.16…0.42），
-   晶体正后方空无一物，所以怎么拉滑杆都透不出东西。
-   现在每个场景都在晶体后方补三件高对比实物：横标尺（带刻度）、竖杆、几枚色块。 */
-const SCENE_PROPS = {
-  dark:    { ink: "rgba(178,208,248,.50)", hi: "rgba(238,248,255,.92)" },
-  lab:     { ink: "rgba(50,62,78,.62)",    hi: "rgba(246,250,255,.95)" },
-  nature:  { ink: "rgba(44,60,36,.58)",    hi: "rgba(206,226,158,.55)" },
-  cabinet: { ink: "rgba(230,208,168,.48)", hi: "rgba(126,96,62,.78)" },
-  paper:   { ink: "rgba(58,52,42,.48)",    hi: "rgba(255,255,255,.92)" },
-};
+/* 场景内容物：每个场景在晶体正后方放**属于这个场景**的东西，透过去才看得见。
+   这是"透明度"能不能被看见的前提——晶体背后如果只是一片纯色，再透明也只是
+   "换了个背景色"，用户看到的仍然是"没有透明度"。
+   两轮教训：
+   ① 第一版把标尺/试管/草丛摆在晶体**旁边**（中心 ±0.16…0.42），正后方空无一物；
+   ② 第二版五场景共用同一套"坐标系 + 白圈 + 横线"，用户反馈"很奇怪的图案"。
+   所以现在是每场景各自的内容：深空=星空银河、实验室=仪器、自然界=河流远山、
+   藏品柜=木柜、纸面=从上往下看的一张纸。 */
 function drawSceneProps(g, id, w, h) {
-  const P = SCENE_PROPS[id] || SCENE_PROPS.dark;
   const u = Math.min(w, h);
-  const cx = w * 0.5, cy = h * 0.40, R = u * 0.34;   // 晶体大致占这一块
-  const th = Math.max(2, u * 0.0055);
+  const cx = w * 0.5, cy = h * 0.40, R = u * 0.34;      // 晶体大致占这一块
   g.save();
-  // 横标尺：尺身 + 刻度
-  const ry = cy + R * 0.05;
-  g.fillStyle = P.ink;
-  g.fillRect(cx - R * 1.55, ry, R * 3.1, th);
-  for (let i = 0; i <= 24; i++) {
-    const x = cx - R * 1.5 + R * 3.0 * i / 24;
-    const hh = (i % 8 === 0) ? u * 0.042 : (i % 2 ? u * 0.013 : u * 0.023);
-    g.fillRect(x, ry - hh, Math.max(1.5, th * 0.8), hh);
-  }
-  // 竖杆 + 刻度，从晶体左后方穿过去
-  const vx = cx - R * 0.50;
-  g.fillRect(vx, cy - R * 1.0, th, R * 2.0);
-  for (let i = 0; i <= 10; i++) {
-    const y = cy - R * 0.96 + R * 1.92 * i / 10;
-    const ww = (i % 5 === 0) ? u * 0.042 : u * 0.020;
-    g.fillRect(vx, y, ww, Math.max(1.5, th * 0.8));
-  }
-  // 几枚高对比色块：像石子 / 气泡 / 星点，同样是"身后的东西"
-  g.fillStyle = P.hi;
-  for (const [dx, dy, dr] of [[0.36, -0.30, 0.050], [0.12, 0.42, 0.036], [-0.22, -0.46, 0.044], [0.48, 0.20, 0.030]]) {
-    g.beginPath(); g.arc(cx + R * dx, cy + R * dy, u * dr, 0, Math.PI * 2); g.fill();
+  if (id === "dark") {
+    const rnd = backdropRnd(9137);
+    for (let i = 0; i < 110; i++) {                       // 星空
+      const x = cx + (rnd() - 0.5) * R * 3.4, y = cy + (rnd() - 0.5) * R * 2.3;
+      const r = 0.5 + rnd() * 1.6, a = 0.22 + rnd() * 0.62;
+      g.fillStyle = `rgba(${215 + rnd() * 40 | 0},${228 + rnd() * 27 | 0},255,${a})`;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    g.globalCompositeOperation = "lighter";               // 银河带
+    const mw = g.createLinearGradient(cx - R * 1.7, cy + R * 0.95, cx + R * 1.7, cy - R * 0.95);
+    mw.addColorStop(0, "rgba(140,170,230,0)"); mw.addColorStop(.5, "rgba(168,196,244,.18)"); mw.addColorStop(1, "rgba(140,170,230,0)");
+    g.fillStyle = mw; g.fillRect(cx - R * 1.75, cy - R * 1.15, R * 3.5, R * 2.3);
+    const neb = g.createRadialGradient(cx + R * 0.9, cy - R * 0.45, 0, cx + R * 0.9, cy - R * 0.45, R * 0.62);
+    neb.addColorStop(0, "rgba(120,110,190,.20)"); neb.addColorStop(1, "rgba(120,110,190,0)");
+    g.fillStyle = neb; g.fillRect(cx + R * 0.3, cy - R * 1.1, R * 1.3, R * 1.3);
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "rgba(232,240,255,.75)";                 // 一颗亮星 + 十字星芒
+    g.beginPath(); g.arc(cx - R * 0.72, cy - R * 0.30, 2.1, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "rgba(232,240,255,.30)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx - R * 0.72 - 7, cy - R * 0.30); g.lineTo(cx - R * 0.72 + 7, cy - R * 0.30);
+    g.moveTo(cx - R * 0.72, cy - R * 0.30 - 7); g.lineTo(cx - R * 0.72, cy - R * 0.30 + 7); g.stroke();
+  } else if (id === "lab") {
+    const th = Math.max(2, u * 0.0055);
+    g.fillStyle = "rgba(60,80,105,.5)";                    // 结晶皿（正后方，圆盘子）
+    g.beginPath(); g.ellipse(cx + R * 0.05, cy + R * 0.42, R * 0.46, R * 0.17, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(150,205,205,.55)";
+    g.beginPath(); g.ellipse(cx + R * 0.05, cy + R * 0.40, R * 0.40, R * 0.13, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(60,80,105,.55)";                   // 烧杯（带液面）
+    const bx = cx + R * 0.62, by = cy - R * 0.55, bw = R * 0.34, bh = R * 0.9;
+    g.fillRect(bx, by, bw, bh); g.fillRect(bx - th, by + bh, bw + th * 2, th * 2);
+    g.fillStyle = "rgba(120,190,190,.62)";
+    g.fillRect(bx + th, by + bh * 0.42, bw - th * 2, bh * 0.58 - th);
+    g.fillStyle = "rgba(255,255,255,.5)"; g.fillRect(bx + bw * 0.16, by + bh * 0.42, bw * 0.1, bh * 0.5);
+    g.fillStyle = "rgba(60,80,105,.45)";                   // 锥形瓶
+    const fx = cx - R * 0.86, fy = cy - R * 0.30;
+    g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx + R * 0.20, fy); g.lineTo(fx + R * 0.30, fy + R * 0.62);
+    g.lineTo(fx - R * 0.10, fy + R * 0.62); g.closePath(); g.fill();
+    g.fillStyle = "rgba(210,150,90,.55)";
+    g.beginPath(); g.moveTo(fx + R * 0.03, fy + R * 0.34); g.lineTo(fx + R * 0.22, fy + R * 0.34);
+    g.lineTo(fx + R * 0.27, fy + R * 0.56); g.lineTo(fx - R * 0.07, fy + R * 0.56); g.closePath(); g.fill();
+    g.strokeStyle = "rgba(60,80,105,.5)"; g.lineWidth = 1.4;   // 显微镜剪影（正后方）
+    const mx = cx + R * 0.02, my = cy + R * 0.72;
+    g.beginPath(); g.moveTo(mx - R * 0.20, my); g.lineTo(mx + R * 0.20, my); g.lineTo(mx + R * 0.10, my - R * 0.30);
+    g.lineTo(mx - R * 0.10, my - R * 0.30); g.closePath(); g.fill();
+    g.fillRect(mx - R * 0.03, my - R * 0.72, R * 0.06, R * 0.42);
+    g.beginPath(); g.arc(mx, my - R * 0.78, R * 0.09, 0, Math.PI * 2); g.fill();
+  } else if (id === "nature") {
+    const gy = h * 0.66;
+    g.fillStyle = "rgba(120,160,190,.55)";                 // 河流：横过晶体正后方
+    for (let i = 0; i < 6; i++) {
+      const yy = cy - R * 0.05 + i * R * 0.16, len = R * (1.7 - 0.12 * i);
+      g.fillRect(cx - len / 2 + (i % 3) * 8, yy, len, R * 0.10);
+    }
+    g.strokeStyle = "rgba(255,255,255,.45)"; g.lineWidth = 1.2;   // 水面反光
+    for (let i = 0; i < 7; i++) {
+      const yy = cy + R * (0.10 + 0.10 * i), len = R * (1.1 - 0.08 * i);
+      g.beginPath(); g.moveTo(cx - len / 2 + (i % 3) * 6, yy); g.lineTo(cx + len / 2 + (i % 3) * 6, yy); g.stroke();
+    }
+    g.fillStyle = "rgba(70,96,62,.6)";                     // 对岸树丛
+    for (const [dx, dr] of [[-0.55, .18], [0.15, .22], [0.75, .16]]) {
+      g.beginPath(); g.ellipse(cx + R * dx, cy - R * 0.18, R * dr, R * dr * 0.72, 0, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = "rgba(96,124,64,.7)";                    // 近处几根草
+    g.lineWidth = 2; g.lineCap = "round";
+    for (const dx of [-1.2, -0.95, 1.1, 1.28]) {
+      g.beginPath(); g.moveTo(cx + R * dx, gy + 6);
+      g.quadraticCurveTo(cx + R * dx + (dx < 0 ? 6 : -6), gy - 12, cx + R * dx + (dx < 0 ? 14 : -14), gy - 26); g.stroke();
+    }
+  } else if (id === "cabinet") {
+    const sy = h * 0.80;
+    g.fillStyle = "rgba(255,224,178,.07)";                  // 木柜竖板缝
+    for (let i = 0; i <= 6; i++) {
+      const x = w * (0.08 + 0.14 * i);
+      g.fillRect(x, h * 0.02, 1.5, sy - h * 0.02);
+    }
+    g.fillStyle = "rgba(0,0,0,.35)";                        // 上一层搁板
+    g.fillRect(0, h * 0.20, w, h * 0.022);
+    g.fillStyle = "rgba(255,224,178,.10)"; g.fillRect(0, h * 0.20, w, 1.5);
+    g.fillStyle = "rgba(150,120,80,.5)";                    // 承托小木块（正后方）
+    g.fillRect(cx - R * 0.11, sy - R * 0.10, R * 0.22, R * 0.10);
+    g.fillStyle = "rgba(255,224,178,.12)"; g.fillRect(cx - R * 0.11, sy - R * 0.10, R * 0.22, 2);
+    g.fillStyle = "rgba(214,198,168,.85)";                  // 柜里的小标本签
+    g.fillRect(cx + R * 0.42, cy - R * 0.70, R * 0.30, R * 0.16);
+    g.strokeStyle = "rgba(90,70,45,.55)"; g.lineWidth = 1;
+    for (let i = 1; i <= 2; i++) {
+      const ly = cy - R * 0.70 + R * 0.16 * i / 3;
+      g.beginPath(); g.moveTo(cx + R * 0.46, ly); g.lineTo(cx + R * 0.46 + R * 0.18, ly); g.stroke();
+    }
+    g.fillStyle = "rgba(120,96,64,.55)";                    // 正后方另一块承托/衬底
+    g.fillRect(cx - R * 0.25, cy - R * 0.10, R * 0.55, R * 0.22);
+    g.fillStyle = "rgba(255,224,178,.10)"; g.fillRect(cx - R * 0.25, cy - R * 0.10, R * 0.55, 2);
+  } else if (id === "paper") {
+    g.save();                                               // 从上往下看的一张纸：微斜
+    g.translate(cx, cy); g.rotate(-0.06); g.translate(-cx, -cy);
+    const pw = R * 2.5, ph = R * 1.75;
+    g.fillStyle = "rgba(255,255,255,.72)";
+    g.fillRect(cx - pw / 2, cy - ph / 2, pw, ph);
+    g.strokeStyle = "rgba(150,140,120,.5)"; g.lineWidth = 1;
+    g.strokeRect(cx - pw / 2, cy - ph / 2, pw, ph);
+    g.strokeStyle = "rgba(190,120,110,.45)";                 // 装订边红线
+    g.beginPath(); g.moveTo(cx - pw / 2 + pw * 0.10, cy - ph / 2); g.lineTo(cx - pw / 2 + pw * 0.10, cy + ph / 2); g.stroke();
+    g.fillStyle = "rgba(96,86,70,.42)";                      // 印刷字行
+    for (let i = 0; i < 8; i++) {
+      const ly = cy - ph * 0.34 + i * ph * 0.10;
+      g.fillRect(cx - pw * 0.34, ly, pw * (0.42 - 0.05 * (i % 3)), Math.max(1.5, u * 0.0055));
+    }
+    g.strokeStyle = "rgba(70,110,150,.55)"; g.lineWidth = 1.3;   // 手绘晶体草图
+    const kx = cx + pw * 0.20, ky = cy + ph * 0.06, s = u * 0.045;
+    g.beginPath();
+    g.moveTo(kx, ky - s); g.lineTo(kx + s * 0.62, ky); g.lineTo(kx, ky + s); g.lineTo(kx - s * 0.62, ky); g.closePath(); g.stroke();
+    g.beginPath(); g.moveTo(kx, ky - s * 1.5); g.lineTo(kx + s * 0.62, ky); g.lineTo(kx, ky + s * 1.5); g.lineTo(kx - s * 0.62, ky); g.stroke();
+    g.restore();
   }
   g.restore();
 }
@@ -2141,10 +2230,12 @@ function renderLusters() {
   const box = document.getElementById("lusters");
   if (!box) return;
   const m = mineral();
-  const def = m.luster || DEFAULT_LUSTER;
+  let def = m.luster || DEFAULT_LUSTER;
+  if (LUSTERS[def] && LUSTERS[def].hidden) def = DEFAULT_LUSTER;   // 旧数据可能是已隐藏的 id
   const cur = state.luster || def;
   box.innerHTML = "";
   for (const [id, L] of Object.entries(LUSTERS)) {
+    if (L.hidden) continue;                       // 不透明/透明归通透度那一栏
     const b = document.createElement("button");
     b.className = "btn" + (cur === id ? " on" : "");
     b.textContent = L.zh;
@@ -2152,7 +2243,7 @@ function renderLusters() {
     box.appendChild(b);
   }
   document.getElementById("lusterHint").innerHTML =
-    `该矿物典型光泽：<b>${LUSTERS[def].zh}</b>。玻璃/金刚＝高光锐利、略有通透；金属＝带色高光；蜡状＝柔和高光。`;
+    `该矿物典型光泽：<b>${LUSTERS[def].zh}</b>。玻璃/金刚＝高光锐利；金属＝带色高光；蜡状＝柔和高光。透不透光看下面的「通透度」。`;
 }
 
 /* 背景：程序化场景。除画面外还带环境光修正（藏品柜更暗、自然光更亮） */
@@ -2222,6 +2313,35 @@ function renderTransp() {
   document.getElementById("transpHint").innerHTML = metal
     ? "金属光泽天然不透明（金属不透光），因此这里不可调。"
     : `当前：<b>${state.transp === "custom" ? "自定义" : (transpById(state.transp) || {}).zh}</b>，透明度 ${transparency}%（不透明度 ${Math.round((state.alpha == null ? 1 : state.alpha) * 100)}%）。透明度越高，晶体后方的标尺越清楚。`;
+}
+
+/* 「认识它」：矿物科普块。优先级：名字 → 一句话是什么 → 哪儿能见到 → 硬度 → 怎么认。
+   结晶学参数（晶系/晶胞/面角）不放这里，那是右上的「数据」面板的职责。 */
+function renderAbout() {
+  const kv = document.getElementById("aboutKV");
+  const zh = document.getElementById("aboutZh");
+  const m = mineral(), a = m.about || null;
+  if (kv) {
+    const rows = [
+      ["名称", `${m.zh} · ${m.en}`],
+      ["化学式", m.formula],
+      ["晶系", `${systemName(m.system)}（点群 ${m.pointGroup}）`],
+      ["光泽", (LUSTERS[m.luster] || {}).zh || "玻璃"],
+      ["通透", (TRANSP.find(t => t.id === defaultTransp(m)) || {}).zh || "半透明"],
+    ];
+    kv.innerHTML = "";
+    for (const [k, v] of rows) {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      kv.appendChild(dt); kv.appendChild(dd);
+    }
+  }
+  if (zh) zh.textContent = a ? a.zh : (m.intro || {}).zh || "";
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set("aboutWhere", a ? a.where : "—");
+  set("aboutHard", a ? a.hard : "—");
+  set("aboutSpot", a ? a.spot : "—");
+  set("aboutIntro", (m.intro || {}).zh || "");
 }
 
 function renderInclusions() {
@@ -2302,6 +2422,13 @@ function renderSwatches() {
   box.innerHTML = "";
   const m = mineral();
   const colors = m.colors || [];
+  // 第一项：「单」＝按单形配色。做成色块列表里的一项，不再单独占一个按钮。
+  const fm = document.createElement("div");
+  fm.className = "sw swform" + (state.colorMode === "form" ? " on" : "");
+  fm.title = "按单形配色（每个单形一种颜色）";
+  fm.textContent = "单";
+  fm.onclick = () => { state.colorMode = "form"; syncPanels(); draw(); };
+  box.appendChild(fm);
   for (const c of colors) {
     const el = document.createElement("div");
     el.className = "sw" + (state.colorMode === "mineral" && state.uniform === c.hex ? " on" : "");
@@ -2316,14 +2443,12 @@ function renderSwatches() {
   }
   document.getElementById("colorHint").textContent =
     state.colorMode === "form"
-      ? "当前按单形配色；点色块＝整块晶体统一染该色（矿物常见色）。"
+      ? "当前按单形配色（每个单形一种颜色）；点后面的色块＝整块晶体统一染该色（矿物常见色）。"
       : `整晶体统一为「${(colors.find(c => c.hex === state.uniform) || {}).zh || "自定义"}」。`;
 }
 
 function syncPanels() {
   const m = mineral(), h = habit();
-  document.getElementById("modeForm").classList.toggle("on", state.colorMode === "form");
-  document.getElementById("modeMineral").classList.toggle("on", state.colorMode === "mineral");
   document.getElementById("modeMouse").classList.toggle("on", state.inputMode === "mouse");
   document.getElementById("modeTouch").classList.toggle("on", state.inputMode === "touch");
   document.getElementById("optAxes").checked = state.axes;
@@ -2334,8 +2459,7 @@ function syncPanels() {
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
     document.getElementById("optTwin").checked = state.twinTint;
-  }
-  // 双晶拆解控件只在"能拆"的双晶习惯出现（转变双晶的两个体同名，拆了毫无意义）；
+  }  // 双晶拆解控件只在"能拆"的双晶习惯出现（转变双晶的两个体同名，拆了毫无意义）；
   // 切到非双晶时复位，免得下次打开残留拆解状态
   const tw = habit().twin;
   const canSplit = !!tw && !tw.noSplit;
@@ -2358,6 +2482,7 @@ function syncPanels() {
   renderTransp();
   renderInclusions();
   renderForms();      // 曾经漏掉这一行：初始化与换矿物后单形列表都是空的，点了也没反应
+  renderAbout();      // 「认识它」：换矿物时同步科普文案
   renderLight();
   renderSwatches();
 
@@ -2392,12 +2517,6 @@ function toast(msg) {
 }
 
 /* 右侧按钮 */
-document.getElementById("modeForm").onclick = () => { state.colorMode = "form"; syncPanels(); draw(); };
-document.getElementById("modeMineral").onclick = () => {
-  state.colorMode = "mineral";
-  if (!state.uniform) state.uniform = (mineral().colors || [{ hex: "#cfe6ff" }])[0].hex;
-  syncPanels(); draw();
-};
 document.getElementById("modeMouse").onclick = () => { state.inputMode = "mouse"; syncPanels(); };
 document.getElementById("modeTouch").onclick = () => { state.inputMode = "touch"; syncPanels(); };
 document.getElementById("optAxes").onchange = (e) => { state.axes = e.target.checked; draw(); };
@@ -2463,7 +2582,8 @@ const FIELDS = [
   ["forms", "所含单形及面数", true],
   ["cell", "晶胞参数", false],
   ["angles", "特征面角", true],
-  ["intro", "矿物简介", true],
+  ["about", "认识它（通俗介绍 + 产地）", true],
+  ["intro", "矿物简介", false],
   ["source", "数据来源与置信度", false],
 ];
 
@@ -2524,6 +2644,7 @@ function buildExportCanvas() {
   if (fields.forms) textRows.push({ t: "forms" });
   if (fields.cell) textRows.push({ t: "cell" });
   if (fields.angles) textRows.push({ t: "angles" });
+  if (fields.about) textRows.push({ t: "about" });
   if (fields.intro) textRows.push({ t: "intro" });
   if (fields.source) textRows.push({ t: "source" });
 
@@ -2557,6 +2678,14 @@ function buildExportCanvas() {
   if (fields.forms) push(F.small, `单形：${formsLabel}`, ink2, 8 * u);
   if (fields.cell) push(F.small, `晶胞参数：${m.cellText}`, ink2, 8 * u);
   if (fields.angles) push(F.small, `特征面角：${angleLabel}${hb.twin ? `　双晶角 ${hb.twin.angle}` : ""}`, ink2, 8 * u);
+  if (fields.about) {
+    const a = m.about || null;
+    if (a) {
+      push(F.body, a.zh, ink, 16 * u);
+      push(F.small, `哪儿能见到：${a.where}`, ink2, 6 * u);
+      push(F.small, `有多硬：${a.hard}　怎么认：${a.spot}`, ink2, 2 * u);
+    }
+  }
   if (fields.intro) push(F.body, m.intro.zh, ink, 16 * u);
   if (fields.source) push(F.small, `数据来源：${m.source}　置信度：${m.confidence}`, ink2, 12 * u);
 

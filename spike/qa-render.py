@@ -14,15 +14,6 @@ LIGHT = np.array([-0.34, 0.62, 0.72])
 LIGHT = LIGHT / np.linalg.norm(LIGHT)
 
 
-def set_light(az_deg, el_deg):
-    """方位角/高度角 → 主光方向（与 demo/crystal_template.html 的 setLight 一致）"""
-    global LIGHT, ENV_LIGHTS
-    az, el = math.radians(az_deg), math.radians(el_deg)
-    ce = math.cos(el)
-    LIGHT = _u([ce * math.sin(az), math.sin(el), ce * math.cos(az)])
-    ENV_LIGHTS[0]["dir"] = LIGHT.copy()
-
-
 def _font(size=16):
     """QA 图要写中文标签，PIL 默认字体不含 CJK，优先挂系统微软雅黑。"""
     from PIL import ImageFont
@@ -38,8 +29,8 @@ def _font(size=16):
 LUSTERS = {
     "opaque":      dict(amb=0.50, diff=0.60, spec=0.05, shin=4,  fres=0.06, ior=1.60, envI=0.10),
     "glass":       dict(amb=0.40, diff=0.55, spec=0.75, shin=14, fres=0.34, ior=1.54, envI=0.52),
-    "adamantine":  dict(amb=0.22, diff=0.38, spec=1.00, shin=22, fres=0.48, ior=2.42, envI=1.00),
-    "metallic":    dict(amb=0.04, diff=0.07, spec=0.85, shin=10, fres=0.34, ior=1.00, envI=0.95, metal=1, opaqueOnly=1),
+    "adamantine":  dict(amb=0.09, diff=0.18, spec=1.00, shin=40, fres=0.48, ior=2.42, envI=1.00),
+    "metallic":    dict(amb=0.06, diff=0.12, spec=0.85, shin=10, fres=0.34, ior=1.00, envI=0.95, metal=1, opaqueOnly=1),
     "waxy":        dict(amb=0.58, diff=0.50, spec=0.22, shin=6,  fres=0.14, ior=1.50, envI=0.22),
     "transparent": dict(amb=0.34, diff=0.42, spec=0.55, shin=16, fres=0.52, ior=1.54, envI=0.45),
 }
@@ -444,12 +435,28 @@ def _u(v):
     return v / np.linalg.norm(v)
 
 
-# 与 demo/crystal_template.html 的 ENV_LIGHTS 保持一致
+# 与 demo/crystal_template.html 的 ENV_LIGHTS / LIGHTS 保持一致
 ENV_LIGHTS = [
     dict(dir=_u([-0.34, 0.62, 0.72]), col=np.array([1.00, 0.98, 0.93]), sharp=3.5, inten=0.75),
     dict(dir=_u([0.72, 0.28, 0.62]),  col=np.array([0.60, 0.72, 1.00]), sharp=26, inten=0.50),
     dict(dir=_u([0.10, -0.85, 0.50]), col=np.array([0.95, 0.78, 0.58]), sharp=2,  inten=0.26),
 ]
+# 三盏方向光：主光 / 轮廓光（后方）/ 补光（前下）
+LIGHTS = [
+    dict(dir=_u([-0.34, 0.62, 0.72]),   inten=1.00, spec=1.0),
+    dict(dir=_u([0.62, 0.46, -0.64]),   inten=0.60, spec=1.1),
+    dict(dir=_u([-0.78, -0.32, 0.54]),  inten=0.34, spec=0.5),
+]
+LIGHT_SUM = sum(L["inten"] for L in LIGHTS)
+LIGHT_SPEC_SUM = sum(L["inten"] * L["spec"] for L in LIGHTS)
+
+
+def set_light(az, el):
+    global LIGHT, LIGHTS
+    ce = math.cos(el)
+    LIGHT = _u([ce * math.sin(az), math.sin(el), ce * math.cos(az)])
+    ENV_LIGHTS[0]["dir"] = LIGHT.copy()
+    LIGHTS[0]["dir"] = LIGHT.copy()
 
 
 def env_sample(r):
@@ -459,16 +466,24 @@ def env_sample(r):
         out = out + k * L["col"]
     t = max(-1.0, min(1.0, float(r[1])))
     g = 0.16 * max(0.0, t) ** 0.65 + 0.05 * max(0.0, -t) ** 0.5
-    return out + g * np.array([0.72, 0.80, 0.95])
+    # 地平线亮带：影棚围灯在晶体边缘映出的亮环
+    band = 0.17 * math.exp(-abs(t) * 5.0)
+    return out + g * np.array([0.72, 0.80, 0.95]) + band * np.array([0.86, 0.91, 1.00])
 
 
 def shade(base, n, c, eye, mat, tint_spec=False):
-    lam = max(0.0, float(np.dot(n, LIGHT)))
     v = eye - c
     v = v / (np.linalg.norm(v) + 1e-9)
-    h = LIGHT + v
-    h = h / (np.linalg.norm(h) + 1e-9)
-    sp = (max(0.0, float(np.dot(n, h))) ** mat["shin"]) * mat["spec"]
+    lam = 0.0
+    sp = 0.0
+    for L in LIGHTS:
+        l = L["dir"]
+        lam += L["inten"] * max(0.0, float(np.dot(n, l)))
+        h = l + v
+        h = h / (np.linalg.norm(h) + 1e-9)
+        sp += L["inten"] * L["spec"] * max(0.0, float(np.dot(n, h))) ** mat["shin"]
+    lam /= LIGHT_SUM
+    sp = sp / LIGHT_SPEC_SUM * mat["spec"]
     b = np.array(base, dtype=float)
     amb = mat["amb"] * mat.get("ambK", 1.0)
     amb_t = mat.get("ambT", np.ones(3))
@@ -488,7 +503,7 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     return np.clip(col, 0, 1)
 
 
-STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0)}
+STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0), "pyrite": ("edge", 3.2)}
 
 
 def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striations=True,
@@ -654,7 +669,21 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         dr.polygon(pts, fill=fill, outline=fill, width=SS)
         if striations and front and f["form"] == 0 and mineral_id in STRIPE:
             axv, step = STRIPE[mineral_id]
-            ax = R @ (np.array([0.0, 0.0, 1.0]) if axv == "c" else np.array([1.0, 1.0, 1.0]))
+            if axv == "c":
+                ax = R @ np.array([0.0, 0.0, 1.0])
+            elif axv == "edge":
+                # 与 demo 的 inPlaneDir 同规则：把世界轴投到面内，取第一条不塌陷的
+                ax = None
+                for a in (np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0]), np.array([0.0, 0, 1.0])):
+                    d = a - wn * float(np.dot(a, wn))
+                    nl0 = float(np.linalg.norm(d))
+                    if nl0 > 1e-3:
+                        ax = d / nl0
+                        break
+                if ax is None:
+                    continue
+            else:
+                ax = R @ np.array([1.0, 1.0, 1.0])
             dv = np.cross(ax, wn)
             nl = float(np.linalg.norm(dv))
             if nl > 1e-6:
@@ -803,7 +832,6 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
         b = vs[0]["col"] * (0.5 if vs[0]["front"] < 0.5 else 1.0)
         alpha = 0.92 if vs[0]["front"] < 0.5 else 1.0
         nrm = vs[0]["wn"]
-        lam_c = max(0.0, float(np.dot(nrm, LIGHT)))            # n 恒定 → lam 是常数
         (x0, y0), (x1, y1), (x2, y2) = vs[0]["s"], vs[1]["s"], vs[2]["s"]
         xmin = int(max(0, math.floor(min(x0, x1, x2))))
         xmax = int(min(W - 1, math.ceil(max(x0, x1, x2))))
@@ -834,28 +862,40 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
         if not win.any():
             continue
         zbuf[ymin:ymax + 1, xmin:xmax + 1] = np.where(win, zpix, sub)
-        # ── 片元着色器：与 GL_FS 逐字对应（v 按像素）──
+        # ── 片元着色器：与 GL_FS 逐字对应（v 按像素，三盏灯各算一遍）──
         A = eye[None, None, :] - wp
         v = A / (np.linalg.norm(A, axis=-1, keepdims=True) + 1e-12)
-        hv = LIGHT[None, None, :] + v
-        hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
-        d = np.sum(nrm[None, None, :] * v, axis=-1)
-        sp = (np.maximum(0.0, np.sum(nrm[None, None, :] * hv, axis=-1)) ** mat["shin"]) * mat["spec"]
-        r = 2.0 * d[..., None] * nrm[None, None, :] - v
+        npx = nrm[None, None, :]
+        lam_p = np.zeros(v.shape[:2])
+        sp = np.zeros(v.shape[:2])
+        for L in LIGHTS:
+            l = L["dir"][None, None, :]
+            lam_p = lam_p + L["inten"] * np.maximum(0.0, np.sum(npx * l, axis=-1))
+            hv = l + v
+            hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
+            sp = sp + L["inten"] * L["spec"] * np.maximum(0.0, np.sum(npx * hv, axis=-1)) ** mat["shin"]
+        lam_p = lam_p / LIGHT_SUM
+        sp = sp / LIGHT_SPEC_SUM * mat["spec"]
+        d = np.sum(npx * v, axis=-1)
+        r = 2.0 * d[..., None] * npx - v
         env = env_sample_vec(r)
         R0 = 1.0 if mat.get("metal") else ((mat["ior"] - 1) / (mat["ior"] + 1)) ** 2
         F = R0 + (1 - R0) * (1 - np.abs(d)) ** 5
         refl = (F * mat["envI"])[..., None]
         tint = (0.35 + 0.65 * b) if tint_spec else np.ones(3)
         fres = ((1 - np.abs(d)) ** 3 * mat.get("fres", 0) * 0.45)[..., None]
-        c = (b[None, None, :] * (mat["amb"] * mat.get("ambK", 1.0) * amb_t
-                                 + mat["diff"] * lam_c)
+        c = (b[None, None, :] * (mat["amb"] * mat.get("ambK", 1.0) * amb_t[None, None, :]
+                                 + (mat["diff"] * lam_p)[..., None])
              + tint[None, None, :] * sp[..., None]
              + (b if mat.get("metal") else np.ones(3))[None, None, :] * refl * env
              + fres * (0.55 + 0.45 * b[None, None, :]))
         c = np.clip(c, 0.0, 1.0)
+        # 逐像素 alpha：高光/掠射反射是表面反射，不随透射淡掉（与 GL_FS 的 pa 同式）
+        ua = mat.get("alpha", 1.0)
+        surf = np.clip(sp + refl[..., 0] * 0.90 + fres[..., 0] * 1.6, 0.0, 1.0)
+        pa = np.clip(ua + (1.0 - ua) * surf, 0.0, 1.0) * alpha
         o = out[ymin:ymax + 1, xmin:xmax + 1]
-        o[win] = np.concatenate([c[win], np.full((int(win.sum()), 1), alpha)], axis=1)
+        o[win] = np.concatenate([c[win], pa[win][..., None]], axis=1)
     cov = float((out[..., 3] > 0).mean())
     return out, zbuf, cov
 
@@ -868,7 +908,9 @@ def env_sample_vec(r):
         out = out + k[..., None] * L["col"][None, None, :]
     t = np.clip(r[..., 1], -1.0, 1.0)
     g = 0.16 * np.maximum(0.0, t) ** 0.65 + 0.05 * np.maximum(0.0, -t) ** 0.5
-    return out + g[..., None] * np.array([0.72, 0.80, 0.95])[None, None, :]
+    band = 0.17 * np.exp(-np.abs(t) * 5.0)
+    return (out + g[..., None] * np.array([0.72, 0.80, 0.95])[None, None, :]
+            + band[..., None] * np.array([0.86, 0.91, 1.00])[None, None, :])
 
 
 def render_gl(mineral_id, habit_id, mask_key=None, w=900, h=700, luster=None, bg="dark",
@@ -917,7 +959,7 @@ def render_gl(mineral_id, habit_id, mask_key=None, w=900, h=700, luster=None, bg
     mat = dict(LUSTERS[luster or m.get("luster", "glass")])
     if alpha is None:
         alpha = 1.0 if mat.get("opaqueOnly") else TRANSP[default_transp(m)]
-    mat["alpha"] = alpha
+    mat["alpha"] = alpha                      # gl_raster 逐像素 alpha 要用
     mat["ambK"] = BG["amb"]
     mat["ambT"] = BG["amb_t"]
     W, H = w * SS, h * SS
@@ -1262,6 +1304,26 @@ if __name__ == "__main__":
             print(f"{mi}/{hi}: GL vs 2D 平均差异 {d * 100:.2f}%")
         out.save("render/qa-gl.png")
         print("saved render/qa-gl.png")
+    elif mode == "newmin":
+        # 第十二轮新矿物：黄铁矿（m-3 偏形）/ 钻石（adamantine）/ 黄玉（斜方柱）
+        tiles = [
+            ("pyrite", "cube", "1", None, "黄铁矿 · 带条纹立方体（金属光泽）"),
+            ("pyrite", "pyritohedron", "1", None, "黄铁矿 · 五角十二面体（m-3 给 12 面）"),
+            ("pyrite", "combo", "111", None, "黄铁矿 · 立方体+五角十二面体聚形"),
+            ("diamond", "octahedron", "1", None, "钻石 · 八面体（金刚光泽）"),
+            ("diamond", "combo", "111", None, "钻石 · 八面体+菱形十二面体"),
+            ("topaz", "prismatic", "1111", None, "黄玉 · 斜方柱（斜方晶系）"),
+        ]
+        T = 400
+        out = Image.new("RGB", (3 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (mi, hi, mk, lu, label) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster=lu)
+            out.paste(im, ((i % 3) * T, (i // 3) * T))
+            dr.text(((i % 3) * T + 12, (i // 3) * T + 8), label, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-newmin.png")
+        print("saved render/qa-newmin.png")
     elif mode == "":
         im = render("quartz", "japan-twin", "111", 760, 760, luster="glass")
         im.save("render/qa-twin.png")
