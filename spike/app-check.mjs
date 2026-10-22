@@ -985,11 +985,11 @@ const secsIn = (panel) => {
 };
 const popFors = [...html.matchAll(/<div class="pop" data-for="([a-z]+)"/g)].map(x => x[1]);
 check("顶部图标按钮共 4 个：视角 / 操作 / 导出 / 数据", popFors.length === 4 && ["view", "input", "export", "data"].every(k => popFors.includes(k)), `pops=${popFors.join(",")}`);
-check("左侧是「选择」（晶系/矿物/认识它/外形/单形/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
+check("左侧是「选择」（晶系/矿物/认识它/外形/单形/组/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
   const left = secsIn("left"), right = secsIn("right");
-  const wantL = ["sys", "min", "about", "hab", "frm", "scene"];
+  const wantL = ["sys", "min", "about", "hab", "frm", "group", "scene"];
   const wantR = ["color", "luster", "incl", "light", "display"];
-  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 6 && right.length === 5;
+  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 7 && right.length === 5;
 })(), `L=${secsIn("left").join(",")} R=${secsIn("right").join(",")}`);
 check("视角/操作/导出/数据已从两侧面板搬到顶部浮出（不重复）", (() => {
   const inPanels = [...secsIn("left"), ...secsIn("right")];
@@ -1107,8 +1107,8 @@ check("统一曝光补偿 uExpo = EXPO（GL 与 2D 同值）", (() => {
 check("有色透射：透明度 > 0 时在轮廓内做 multiply 混本体色（不是把颜色整体淡掉）", (() => {
   const s = String(pfsrc);
   return /globalCompositeOperation\s*=\s*"multiply"/.test(s)
-    && /const\s+tr\s*=\s*1\s*-\s*\(M\.alpha/.test(s)
-    && /crystalPath\s*\(\s*g\s*,\s*project\s*\)/.test(s);
+    && /const\s+tr\s*=\s*1\s*-\s*\(Mi\.alpha/.test(s)
+    && /crystalPath\s*\(\s*g\s*,\s*projOf\(it\)/.test(s);
 })(), "paintFaces 含 multiply 分支=" + /multiply/.test(String(pfsrc)));
 check("全透明档就是 100% 透明（alpha=0），滑杆读数与档位一致", (() => {
   const a = run(`transpById("clear").alpha`);
