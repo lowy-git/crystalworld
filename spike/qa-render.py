@@ -454,6 +454,9 @@ LIGHTS = [
     dict(dir=_u([-0.58, 0.28, -0.76]),  inten=0.26, spec=0.8),
 ]
 LIGHT_SUM = sum(L["inten"] for L in LIGHTS)
+KEY_INTEN = max(LIGHTS[0]["inten"], 0.05)
+KEY_SPEC = max(LIGHTS[0]["inten"] * LIGHTS[0]["spec"], 0.02)
+KEY_EXPO = 0.62
 LIGHT_SPEC_SUM = sum(L["inten"] * L["spec"] for L in LIGHTS)
 
 
@@ -488,7 +491,7 @@ def shade(base, n, c, eye, mat, tint_spec=False):
         h = l + v
         h = h / (np.linalg.norm(h) + 1e-9)
         sp += L["inten"] * L["spec"] * max(0.0, float(np.dot(n, h))) ** mat["shin"]
-    lam = (lam / LIGHT_SUM) ** 1.25
+    lam = (lam / KEY_INTEN) ** 1.12 * KEY_EXPO
     sp = sp / LIGHT_SPEC_SUM * mat["spec"]
     b = np.array(base, dtype=float)
     amb = mat["amb"] * mat.get("ambK", 1.0)
@@ -926,7 +929,7 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
             hv = l + v
             hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
             sp = sp + L["inten"] * L["spec"] * np.maximum(0.0, np.sum(npx * hv, axis=-1)) ** mat["shin"]
-        lam_p = (lam_p / LIGHT_SUM) ** 1.25
+        lam_p = (lam_p / KEY_INTEN) ** 1.12 * KEY_EXPO
         sp = sp / LIGHT_SPEC_SUM * mat["spec"]
         d = np.sum(npx * v, axis=-1)
         r = 2.0 * d[..., None] * npx - v

@@ -631,6 +631,9 @@ const DEFAULT_LUSTER = "glass";
    在最后乘一个常数比逐个调高每一盏灯更省事，也不破坏 lam 的归一化。
    GL_FS 里是 uExpo，Python 复刻层是 EXPO，三处必须一致。 */
 const EXPO = 1.10;
+/* 主光归一化的曝光系数：只按主光归一之后，副光变成纯加法，
+   亮面会超过 1，所以整体压到 0.62。GL_FS 里是 uKeyExpo，Python 复刻层是 KEY_EXPO。 */
+const KEY_EXPO = 0.62;
 
 /* 通透度：独立控制。金属光泽天然不透明（金属不透光），其余任意组合都合法：
    金刚 + 全透明 = 钻石；玻璃 + 全透明 = 石英；金刚 + 不透明 = 石榴石 */
@@ -1280,7 +1283,10 @@ function shadeFace(base, n, cw, eye, M) {
     const hv = unit([l[0] + v[0], l[1] + v[1], l[2] + v[2]]);
     sp += L.inten * L.spec * Math.pow(Math.max(0, dot(n, hv)), M.shin);
   }
-  lam = Math.pow(lam / LIGHT_SUM, 1.25); sp = sp / LIGHT_SPEC_SUM * M.spec;
+  // 归一化只看主光（与 GL_FS 同式）：副光是加法，不再靠加大分母把画面压平
+  const keyI = Math.max(LIGHTS[0].inten, 0.05);
+  const keyS = Math.max(LIGHTS[0].inten * LIGHTS[0].spec, 0.02);
+  lam = Math.pow(lam / keyI, 1.12) * KEY_EXPO; sp = sp / keyS * M.spec * 0.80;
   const tint = M.tintSpec ? [0.35 + 0.65 * base[0], 0.35 + 0.65 * base[1], 0.35 + 0.65 * base[2]] : null;
   // 反射向量：视线被这个面弹向哪里，就取环境那个方向的颜色
   const d = dot(n, v);
@@ -1484,7 +1490,7 @@ uniform vec3 uEnvPar[3];      // x=sharp  y=inten
 uniform float uDist, uAmb, uDiff, uSpec, uShin, uFres, uIor, uEnvI, uMetal, uAmbK;
 uniform vec3 uAmbT;
 uniform float uTintSpec, uTwoSided, uAlpha;
-uniform float uDisp, uExpo;
+uniform float uDisp, uExpo, uKeyExpo;
 out vec4 frag;
 
 vec3 envSample(vec3 r) {
@@ -1523,8 +1529,13 @@ void main() {
     sp += inten * spec * lobe;
     spSum += inten * spec;
   }
-  lam = pow(lam / max(lamSum, 1e-4), 1.25);
-  sp = sp / max(spSum, 1e-4) * uSpec;
+  /* 归一化只看主光（i=0），不按总和 ——
+     否则"多一盏灯"只是把分母加大，画面反而更平（用户反馈"六盏灯看不出区别"就是这个原因）。
+     副光在这里是加法：暗面被补亮一点，明暗关系还在。 */
+  float keyI = max(uLigInt[0].x, 0.05);
+  float keyS = max(uLigInt[0].x * uLigInt[0].y, 0.02);
+  lam = pow(lam / keyI, 1.12) * uKeyExpo;
+  sp = sp / keyS * uSpec * 0.80;
   vec3 tint = uTintSpec > 0.5 ? vec3(0.35) + 0.65 * base : vec3(1.0);
   float d = dot(n, v);
   vec3 rdir = 2.0 * d * n - v;
@@ -1627,7 +1638,7 @@ function glInit() {
   for (const n of ["uRot", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
                    "uLigDir", "uLigCol", "uLigInt", "uEnvDir", "uEnvCol", "uEnvPar",
                    "uAmb", "uDiff", "uSpec", "uShin", "uFres", "uIor", "uEnvI",
-                   "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided", "uAlpha", "uDisp", "uExpo"]) glUni[n] = gl.getUniformLocation(glProg, n);
+                   "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided", "uAlpha", "uDisp", "uExpo", "uKeyExpo"]) glUni[n] = gl.getUniformLocation(glProg, n);
   for (const n of ["aPos", "aNrm", "aCol", "aCen"]) glAttr[n] = gl.getAttribLocation(glProg, n);
   glVBO = gl.createBuffer();
   gl.enable(gl.DEPTH_TEST);
@@ -1734,6 +1745,7 @@ function glRender(project, M, opts) {
   gl.uniform1f(glUni.uAlpha, M.alpha == null ? 1 : M.alpha);
   gl.uniform1f(glUni.uDisp, M.disp == null ? 0 : M.disp);
   gl.uniform1f(glUni.uExpo, EXPO);
+  gl.uniform1f(glUni.uKeyExpo, KEY_EXPO);
   gl.uniform1f(glUni.uAmbK, M.ambK == null ? 1 : M.ambK);
   gl.uniform3fv(glUni.uAmbT, M.ambT || [1, 1, 1]);
   const S = GL_STRIDE * 4;
@@ -2229,7 +2241,7 @@ function loop() {
   // 光源移动：晶体不动、光绕着它转。比自动旋转更能看清"面与面之间的明暗差"，
   // 因为转的是高光而不是物体的轮廓。默认跟主光滑杆同一个方位角，转起来不会跳。
   if (state.lightMove) {
-    lightPhase += 0.0055;
+    lightPhase += 0.0011;
     let az = ((state.lightAz ?? 35) + lightPhase * 57.2958) % 360;
     if (az > 180) az -= 360;
     state.lightAz = Math.round(az);
