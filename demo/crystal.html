@@ -1385,6 +1385,7 @@ function glRender(project, M, opts) {
   if (!glInit()) return false;
   if (!GEO || !GEO.faces.length) return false;
   glLastOpts = opts;                       // 测试要拿它比对 GL/2D 投影是否同源
+  glLastProject = project;                 // 诊断钩子 cwDiag() 要用
   const vw = opts.vw, vh = opts.vh, dpr = opts.dpr || 1;
   const key = Math.round(vw * dpr) + "x" + Math.round(vh * dpr);
   if (key !== glSize) {
@@ -1446,6 +1447,37 @@ function glRender(project, M, opts) {
   gl.drawArrays(gl.TRIANGLES, 0, glN);
   return true;
 }
+
+/* 诊断钩子：GL 填充与 2D 棱线理论上必须逐像素重合，一旦不重合就是「棱飘在晶体外」。
+   本机（开发侧）无法渲染 WebGL，所以把这个钩子暴露给用户在控制台跑，
+   回传真实 opts / 画布尺寸 / 投影包围盒，直接定位是哪一侧的尺寸或比例错了。 */
+let glLastProject = null;
+function cwDiag() {
+  const o = glLastOpts || {}, p = glLastProject;
+  const out = {
+    path: gl ? "webgl2" : (GL_OFF ? "forced-2d(?gl2d=1)" : "canvas2d-fallback"),
+    glFail: glFailMsg,
+    cv: { w: cv.width, h: cv.height, cssW: W, cssH: H, dpr: DPR },
+    glc: gl ? { w: glc.width, h: glc.height } : null,
+    opts: { vw: o.vw, vh: o.vh, cx: o.cx, cy: o.cy, scale: o.scale, dpr: o.dpr,
+            pan: o.pan, table: o.table },
+    proj: p ? { FOC: p.FOC, DIST: p.DIST, cx: p.cx, cy: p.cy } : null,
+    verts: GEO ? GEO.P.length : 0,
+  };
+  if (p && GEO && GEO.P.length) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const v of GEO.P) { const s = p(v); if (s[0] < x0) x0 = s[0]; if (s[0] > x1) x1 = s[0]; if (s[1] < y0) y0 = s[1]; if (s[1] > y1) y1 = s[1]; }
+    out.bbox2d = { x0: +x0.toFixed(1), x1: +x1.toFixed(1), y0: +y0.toFixed(1), y1: +y1.toFixed(1) };
+  }
+  out.uniforms = {};
+  for (const k of ["uFoc", "uCx", "uCy", "uVw", "uVh", "uDist", "uZn", "uZf"]) {
+    const u = gl && glUni[k];
+    if (u) { const b = new Float32Array(1); gl.getUniform(glProg, u, b); out.uniforms[k] = b[0]; }
+  }
+  out.canReadBackGL = !!(gl && glc && glc.width > 1);
+  return out;
+}
+window.cwDiag = cwDiag;
 
 /* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成。
    内含物先画（在晶体下面），于是会被半透明的晶面整体盖住：通透度越低越看得清 */
