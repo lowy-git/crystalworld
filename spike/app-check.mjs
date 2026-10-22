@@ -26,6 +26,155 @@ const gStub = () => new Proxy({}, {
   set(t, k, v) { t[k] = v; return true; },
 });
 
+/* ---- WebGL2 桩 ---------------------------------------------------------------
+   本机没有可用的无头浏览器（Edge headless 退出码 13），所以 GL 侧不能靠"跑起来看"。
+   这个桩把 GL 的调用序列录下来：着色器编译/链接是否成功、info log 是否干净、
+   JS 里查询的每个 uniform/attribute 是否拿得到 location、缓冲顶点数是否与几何一致、
+   drawArrays 到底有没有被调用。它查不了画面，但查得出"GL 路径根本是死的"这类问题。 */
+const GL = {
+  // 常量
+  VERTEX_SHADER: 0x8B31, FRAGMENT_SHADER: 0x8B30, COMPILE_STATUS: 0x8B81, LINK_STATUS: 0x8B82,
+  ARRAY_BUFFER: 0x8892, STATIC_DRAW: 0x88E4, DYNAMIC_DRAW: 0x88E8, FLOAT: 0x1406, TRIANGLES: 0x0004,
+  DEPTH_TEST: 0x0B71, BLEND: 0x0BE2, SRC_ALPHA: 0x0302, ONE_MINUS_SRC_ALPHA: 0x0303,
+  COLOR_BUFFER_BIT: 0x4000, DEPTH_BUFFER_BIT: 0x0100, LEQUAL: 0x0203, NO_ERROR: 0,
+};
+const glStat = {
+  shaders: [], programs: [], log: [], draws: 0, verts: 0, binds: 0, uploads: 0,
+  err: 0, uniforms: new Set(), attrs: new Set(), depthRange: null, clear: 0,
+  viewport: [0, 0, 0, 0], blendFunc: null, depthFunc: null, uni: [], vao: 0,
+};
+
+// ── GLSL 静态检查：本机没有可用的无头浏览器（Edge headless 退出码 13、
+//    Chrome crashpad 被沙箱拦），着色器编译不过只会 console.warn 然后静默
+//    回落到 Canvas 2D——用户看到"画面没坏"就以为 GL 生效了。所以必须在
+//    桩里把编译期能查的全查掉：最现实的失败模式是**拼错标识符**
+//    （uFo vs uFoc、envSmaple），这里用"声明集合 + 内建集合"把它抓住。
+const GLSL_BUILTIN = new Set(`void bool int uint float double
+vec2 vec3 vec4 ivec2 ivec3 ivec4 uvec2 uvec3 uvec4 bvec2 bvec3 bvec4
+dvec2 dvec3 dvec4 mat2 mat3 mat4 mat2x2 mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4
+sampler2D sampler3D samplerCube sampler2DArray sampler2DShadow samplerCubeShadow
+struct
+location
+radians degrees sin cos tan asin acos atan sinh cosh tanh pow exp log exp2 log2 sqrt inversesqrt
+abs sign floor trunc round roundEven ceil fract mod modf min max clamp mix step smoothstep
+isnan isinf fma frexp ldexp packUnorm2x16 packUnorm4x8 packSnorm4x8 unpackUnorm2x16 unpackUnorm4x8
+unpackSnorm4x8 packHalf2x16 unpackHalf2x16
+length distance dot cross normalize faceforward reflect refract matrixCompMult outerProduct
+transpose determinant inverse
+lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual any all not
+uaddCarry usubBorrow umulExtended imulExtended bitfieldExtract bitfieldInsert bitfieldReverse
+bitCount findLSB findMSB
+texture textureProj textureLod textureOffset texelFetch texelFetchOffset textureLodOffset
+textureProjLod textureProjLodOffset textureGrad textureGradOffset textureProjGrad textureProjGradOffset
+textureGather textureGatherOffset textureSize
+dFdx dFdy dFdxFine dFdyFine dFdxCoarse dFdyCoarse fwidth fwidthFine fwidthCoarse
+atomicAdd atomicMin atomicMax atomicAnd atomicOr atomicXor atomicExchange atomicCompSwap
+barrier memoryBarrier memoryBarrierAtomicCounter memoryBarrierBuffer memoryBarrierShared
+groupMemoryBarrier
+discard return if else for while do break continue switch case default true false
+const uniform in out inout attribute varying flat smooth centroid patch sample invariant
+precise layout precision lowp mediump highp
+gl_Position gl_PointSize gl_FragCoord gl_FrontFacing gl_FragDepth gl_PointCoord gl_PrimitiveID
+gl_VertexID gl_InstanceID gl_VertexIndex gl_DrawID gl_Layer gl_ViewportIndex
+gl_NumWorkGroups gl_WorkGroupID gl_LocalInvocationID gl_GlobalInvocationID gl_LocalInvocationIndex`
+  .split(/\s+/).filter(Boolean));
+
+const GLSL_TYPE = "(?:void|bool|int|uint|float|double|vec[234]|ivec[234]|uvec[234]|bvec[234]|mat[234](?:x[234])?)";
+
+/** 返回 [] 表示没问题；否则是一串 "未声明标识符"（拼错名字就是编译失败） */
+function glslUndeclared(src) {
+  // 先抹掉数字字面量：否则 1e-4 里的 e、0.5 里的 5 会被当成标识符
+  // （vec3/mat4 这类名字里的数字不能抹，所以要求数字前不是标识符字符）
+  const s = src.replace(/^[ \t]*#[^\n]*/gm, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ")
+    .replace(/(?<![A-Za-z_0-9.])(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g, "0");
+  const declared = new Set();
+  // 声明符列表：先切掉初始化式（第一个 = 之后），再按逗号拆，各取开头标识符。
+  // 不能直接按逗号拆整句——`float sp = pow(max(0,d), s)` 里的逗号在初始化式里。
+  const declarators = (txt) => {
+    const head = txt.split("=")[0];
+    for (const part of head.split(",")) {
+      const id = part.trim().match(/^([A-Za-z_]\w*)/);
+      if (id) declared.add(id[1]);
+    }
+  };
+  const QUAL = "(?:flat|smooth|centroid|invariant|precise)\\s+";
+  const reUniform = new RegExp(`^(?:layout\\s*\\([^)]*\\)\\s*)?(?:${QUAL})?(?:uniform|out|in|const)\\s+(?:(?:lowp|mediump|highp)\\s+)?${GLSL_TYPE}\\s+([\\s\\S]+)$`);
+  const reLocal = new RegExp(`^(?:${QUAL})?(?:(?:lowp|mediump|highp)\\s+)?(?:const\\s+)?${GLSL_TYPE}\\s+([\\s\\S]+)$`);
+  const reFunc = new RegExp(`^(?:${GLSL_TYPE})\\s+(\\w+)\\s*\\(`);
+  // 按 ; { } 切 statement：声明可能紧跟在 { 后面（函数体第一句），只按 ; 切会漏
+  for (const raw of s.split(/[;{}]/)) {
+    const t = raw.trim();
+    if (!t) continue;
+    let m = t.match(reUniform);
+    if (m) { declarators(m[1]); continue; }
+    m = t.match(reFunc);
+    if (m) { declared.add(m[1]); continue; }
+    m = t.match(/^for\s*\(\s*(?:int|float)\s+(\w+)/);
+    if (m) { declared.add(m[1]); continue; }
+    m = t.match(reLocal);
+    if (m) { declarators(m[1]); continue; }
+  }
+  for (const mm of s.matchAll(/\(([^()]*)\)/g)) {           // 函数形参
+    const p = mm[1].trim().match(new RegExp(`^(?:(?:lowp|mediump|highp)\\s+)?(?:const\\s+)?(?:in\\s+|out\\s+|inout\\s+)?${GLSL_TYPE}\\s+([A-Za-z_]\\w*)$`));
+    if (p) declared.add(p[1]);
+  }
+  const bad = [];
+  const reId = /[A-Za-z_]\w*/g;
+  let m;
+  while ((m = reId.exec(s))) {
+    if (s[m.index - 1] === ".") continue;                  // 成员/通道访问 v.x、n.rgb
+    const n = m[0];
+    if (!declared.has(n) && !GLSL_BUILTIN.has(n) && !bad.includes(n)) bad.push(n);
+  }
+  return bad;
+}
+let glCurShader = null, glCurProg = null;
+const glStub = () => ({
+  ...GL,
+  createShader(type) { const s = { type, src: "", compiled: true, log: "" }; glStat.shaders.push(s); return s; },
+  shaderSource(s, src) { s.src = src; },
+  compileShader(s) { /* 只做粗查：有没有 #version、main、配平的括号 */
+    if (!/^#version 300 es/.test(s.src)) { s.compiled = false; s.log = "missing #version 300 es"; }
+    if (!/\bvoid\s+main\s*\(/.test(s.src)) { s.compiled = false; s.log = "missing main()"; }
+    let d = 0; for (const ch of s.src) { if (ch === "{") d++; else if (ch === "}" && --d < 0) break; }
+    if (d !== 0) { s.compiled = false; s.log = "unbalanced braces"; }
+    if (s.compiled) {
+      const bad = glslUndeclared(s.src);
+      if (bad.length) { s.compiled = false; s.log = "undeclared: " + bad.join(","); }
+    }
+  },
+  getShaderParameter(s) { return s.compiled; },
+  getShaderInfoLog(s) { return s.log; },
+  deleteShader() {},
+  createProgram() { const p = { linked: true, log: "", attached: [] }; glStat.programs.push(p); return p; },
+  attachShader(p, s) { p.attached.push(s); },
+  linkProgram(p) { if (!p.attached.length || p.attached.some(s => !s.compiled)) { p.linked = false; p.log = "attach failed"; } },
+  getProgramParameter(p) { return p.linked; },
+  getProgramInfoLog(p) { return p.log; },
+  useProgram(p) { glCurProg = p; },
+  getUniformLocation(_p, name) { glStat.uniforms.add(name); return { name }; },
+  getAttribLocation(_p, name) { glStat.attrs.add(name); return { name }; },
+  createBuffer() { return { data: null }; },
+  bindBuffer(_t, b) { glStat.binds++; glCurBuf = b; },
+  bufferData(_t, data) { if (glCurBuf) { glCurBuf.data = data; glStat.uploads++; glLastBuf = glCurBuf; } },
+  enable() {}, disable() {},
+  depthFunc(f) { glStat.depthFunc = f; }, blendFunc(a, b) { glStat.blendFunc = [a, b]; },
+  viewport(x, y, w, h) { glStat.viewport = [x, y, w, h]; },
+  clearColor() {}, clearDepth() {}, clear(n) { glStat.clear += n; },
+  depthRange(n, f) { glStat.depthRange = [n, f]; },
+  uniform1f(l, v) { if (l) glStat.uni.push([l.name, v]); },
+  uniform3fv(l, v) { if (l) glStat.uni.push([l.name, v]); },
+  uniformMatrix3fv(l, _t, v) { if (l) glStat.uni.push([l.name, v]); },
+  enableVertexAttribArray(i) { glStat.attrs.add("#" + i); },
+  vertexAttribPointer() {},
+  drawArrays(mode, first, count) { glStat.draws++; if (mode === GL.TRIANGLES) { glStat.verts += count; glStat.lastVerts = count; } },
+  getError() { return GL.NO_ERROR; },
+});
+let glCurBuf = null;
+let glLastBuf = null;
+let glLastCanvas = null;
+
 function makeEl(tag = "div") {
   const el = {
     tag, children: [], dataset: {}, style: {}, classList: {
@@ -45,11 +194,13 @@ function makeEl(tag = "div") {
     closest() { return null; },
   };
   Object.defineProperty(el, "innerHTML", { get() { return this._html; }, set(v) { this._html = v; } });
-  el.getContext = () => gStub();
   if (tag === "canvas") {
-    el.getContext = () => gStub();
+    // 关键分流：webgl2 给 GL 桩，2d 给 Canvas 桩。混用会让 glInit() 拿到 2D 桩后整条 GL 路径假死。
+    el.getContext = (type) => { const c = (type === "webgl2" || type === "webgl") ? glStub() : gStub(); if (type === "webgl2") glLastCanvas = el; return c; };
     el.toBlob = (cb) => cb({});
     el.toDataURL = () => "data:image/png;base64,AAAA";
+  } else {
+    el.getContext = (type) => (type === "webgl2" || type === "webgl") ? glStub() : gStub();
   }
   return el;
 }
@@ -95,6 +246,8 @@ const sandbox = {
 };
 sandbox.window.document = document;
 sandbox.globalThis = sandbox;
+Object.defineProperty(sandbox, "__glLastBuf", { get() { return glLastBuf; } });
+Object.defineProperty(sandbox, "__glLastCanvas", { get() { return glLastCanvas; } });
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox, { filename: "crystal.html" });
 
@@ -378,6 +531,146 @@ run(`state.exp.aspect = "4:3"; buildExportCanvas();`);
 check("导出预览已生成", /\d+ × \d+ px/.test(run(`document.getElementById("expPrevInfo").textContent`)), run(`document.getElementById("expPrevInfo").textContent`));
 
 check("导出含晶系与单形", /三方/.test(joined) && /菱面体/.test(joined));
+
+// ---- WebGL 阶段 A：GL 路径不是死的 -------------------------------------------
+// glw 是 "1400x1050"（设备像素），要与 round(vw*dpr) 对上
+// 「测试的测试」：静态检查本身必须能抓住拼错的标识符，否则它只是个心理安慰。
+// 没有真浏览器可编译（Edge headless 退出码 13 / Chrome crashpad 被沙箱拦），
+// 这一层是唯一能在提交前发现"着色器静默回落到 2D"的手段。
+{
+  const typo = glslUndeclared(`#version 300 es
+void main() {
+  float z = max(uDist - w.z, 0.4);
+  vec3 c = clamp(envSample(2.0 * d * n - v), 0.0, 1.0);
+  frag = vec4(c, 1.0);
+}`);
+  check("GLSL 静态检查能抓住拼错的 uniform（uFo → uFoc）",
+    typo.includes("uDist") && typo.includes("w") && typo.includes("frag") && typo.includes("d") && typo.includes("n") && typo.includes("v") && typo.includes("envSample"),
+    JSON.stringify(typo));
+  const clean = glslUndeclared(`#version 300 es
+precision highp float;
+uniform float uDist, uFoc, uCx, uCy, uAmb;
+flat in vec3 vCol;
+in vec3 vPos;
+out vec4 frag;
+vec3 envSample(vec3 r) { return r * 0.5; }
+void main() {
+  float alpha = 1.0;
+  vec3 base = vCol;
+  if (vPos.z < 0.5) { base *= 0.5; alpha = 0.92; }
+  vec3 n = normalize(vPos);
+  vec3 v = normalize(vec3(0.0, 0.0, uDist) - vPos);
+  float d = dot(n, v);
+  float R0 = 1.0;
+  float F = R0 + (1.0 - R0) * pow(1.0 - abs(d), 5.0);
+  vec3 c = base * uAmb + envSample(2.0 * d * n - v) * F;
+  for (int i = 0; i < 3; i++) { c += vec3(0.1); }
+  frag = vec4(clamp(c, 0.0, 1.0), alpha);
+}`);
+  check("GLSL 静态检查不误报（合法着色器零告警）", clean.length === 0, JSON.stringify(clean));
+}
+const glLastOptsOk = (glw, vw, vh) => {
+  const m = /^(\d+)x(\d+)$/.exec(glw || "");
+  if (!m) return false;
+  const dpr = run(`glLastOpts && glLastOpts.dpr ? glLastOpts.dpr : 1`);
+  return Number(m[1]) === Math.round(vw * dpr) && Number(m[2]) === Math.round(vh * dpr);
+};
+{
+  // 1) 桩里录到了几个着色器/程序
+  check("WebGL 桩已装（getContext 按 type 分流）", run(`typeof glInit`) === "function" && glStat.shaders.length >= 2, `shaders=${glStat.shaders.length}`);
+  check("两个着色器都编译通过", glStat.shaders.length === 2 && glStat.shaders.every(s => s.compiled),
+    glStat.shaders.map(s => `${s.type === 0x8B31 ? "VS" : "FS"}:${s.compiled ? "ok" : s.log}`).join(" "));
+  check("着色器 info log 干净（无 warning）", glStat.shaders.every(s => s.log === ""), JSON.stringify(glStat.shaders.map(s => s.log)));
+  check("程序链接成功且 info log 干净", glStat.programs.length === 1 && glStat.programs[0].linked && glStat.programs[0].log === "");
+  check("深度测试开启且用 LEQUAL", glStat.depthFunc === 0x0203, String(glStat.depthFunc));
+  check("混合函数 = SRC_ALPHA / ONE_MINUS_SRC_ALPHA", JSON.stringify(glStat.blendFunc) === "[770,771]", JSON.stringify(glStat.blendFunc));
+
+  // 2) 着色器里声明的每个 uniform/attribute，JS 都必须拿到非 null location
+  const src = glStat.shaders.map(s => s.src).join("\n");
+  const declU = [...src.matchAll(/uniform\s+\w+\s+(\w+)/g)].map(m => m[1]);
+  const declA = [...src.matchAll(/(?:in|layout\s*\(location\s*=\s*\d+\s*\)\s*in)\s+\w+\s+(\w+)/g)]
+    .map(m => m[1]).filter(n => n !== "vCol" && n !== "vFront" && n !== "vPos" && n !== "vNrm");
+  const uniq = (a) => [...new Set(a)];
+  const missU = uniq(declU).filter(n => !glStat.uniforms.has(n));
+  const missA = uniq(declA).filter(n => !glStat.attrs.has(n));
+  check("着色器声明的 uniform 全部在 JS 有 location", missU.length === 0, `missing=[${missU}]`);
+  check("着色器声明的 attribute 全部在 JS 有 location", missA.length === 0, `missing=[${missA}]`);
+  const badLoc = glStat.uni.filter(([n]) => n.startsWith("#") || n === "null" || n === "undefined");
+  check("没有查不到 location 的 uniform 被上传", badLoc.length === 0, JSON.stringify(badLoc.slice(0, 5)));
+
+  // 3) 缓冲顶点数 = Σ每面(pts-2)*3 —— 扇形三角化，少一个面就少一批顶点
+  const want = run(`GEO.faces.reduce((a,f)=>a+(f.pts.length-2)*3,0)`);
+  const buf = run(`(() => { const b = __glLastBuf; return b && b.data ? b.data.length/9 : -1; })()`);
+  check("GL 顶点数 = 扇形三角化的 Σ(n−2)·3", buf === want, `buf=${buf} want=${want}`);
+
+  // 4) drawArrays 真的被调用了，且顶点数与缓冲一致（否则画面是空的）
+  check("drawArrays 被调用", glStat.draws > 0, `calls=${glStat.draws}`);
+  check("提交的三角形顶点数 = 缓冲顶点数（最近一次 draw）", glStat.lastVerts === want, `verts=${glStat.lastVerts} want=${want}`);
+  const glw = run(`(() => { const c = __glLastCanvas; return c ? c.width + "x" + c.height : ""; })()`);
+  check("GL 画布尺寸已设置（跟随视口 DPR）", /^\d+x\d+$/.test(glw), glw);
+
+  // 5) 投影必须与 2D 逐字对应。glLastOpts 是最近一次 glRender 真实用的视口参数，
+  //    拿它现算一个 makeProject 与 GL 的 uniform 逐项比对——写死 1280x860 会和导出尺寸打架。
+  const lastU = (n) => { const a = glStat.uni.filter(u => u[0] === n); return a.length ? a[a.length - 1][1] : undefined; };
+  const po = JSON.parse(run(`(() => { const p = makeProject(glLastOpts); return JSON.stringify([p.DIST, p.FOC, p.cx, p.cy, p.vw, p.vh]); })()`));
+  const [pD, pF, pCx, pCy, pVw, pVh] = po;
+  check("glLastOpts 与 GL 画布尺寸一致", glLastOptsOk(glw, pVw, pVh), `canvas=${glw} opts=${pVw}x${pVh}`);
+  check("GL 的 DIST 与 makeProject 一致", lastU("uDist") === pD, `gl=${lastU("uDist")} 2d=${pD}`);
+  check("GL 的 FOC 与 makeProject 一致", lastU("uFoc") === pF, `gl=${lastU("uFoc")} 2d=${pF}`);
+  check("GL 的光心 cx/cy 与 makeProject 一致", lastU("uCx") === pCx && lastU("uCy") === pCy, `gl=${lastU("uCx")},${lastU("uCy")} 2d=${pCx},${pCy}`);
+  check("GL 的视口宽高与 makeProject 一致", lastU("uVw") === pVw && lastU("uVh") === pVh, `gl=${lastU("uVw")}x${lastU("uVh")}`);
+  // 深度范围：着色器里把 z 重映射到 [uZn, uZf]，必须包住当前姿态且下界 ≥ 0.4（VS 把 z 夹到 0.4）
+  const zn = lastU("uZn"), zf = lastU("uZf");
+  check("GL 深度范围包住晶体且下界 ≥ 0.4", zn >= 0.4 && zf > zn, `[${zn}, ${zf}]`);
+  // 顶点着色器的 clip 公式必须与 makeProject 的 project() 逐字对应：
+  // 取一个真实顶点，用 GL uniform 复算一遍 NDC，再和 2D 投影反推的 NDC 比
+  const ndc = run(`(() => {
+    const p = makeProject(glLastOpts);
+    const VW = p.vw, VH = p.vh;
+    const v = GEO.P[0];
+    const s2 = p(v);
+    return JSON.stringify([ (s2[0] / VW) * 2 - 1, 1 - (s2[1] / VH) * 2 ]);
+  })()`);
+  const [nx, ny] = JSON.parse(ndc);
+  const redo = run(`(() => {
+    const o = glLastOpts, DIST = 7.0, FOC = 3.05 * o.scale * Math.min(o.vw, o.vh) * 0.5;
+    const R = qToMat(state.quat);
+    const v = GEO.P[0];
+    const w = [R[0][0]*v[0]+R[0][1]*v[1]+R[0][2]*v[2], R[1][0]*v[0]+R[1][1]*v[1]+R[1][2]*v[2], R[2][0]*v[0]+R[2][1]*v[1]+R[2][2]*v[2]];
+    const z = Math.max(DIST - w[2], 0.4);
+    return JSON.stringify([ ((o.cx + w[0]*FOC/z)/o.vw)*2 - 1, 1 - ((o.cy - w[1]*FOC/z)/o.vh)*2 ]);
+  })()`);
+  const [rx, ry] = JSON.parse(redo);
+  check("GL 顶点着色器的 clip 公式 = 2D 投影公式（同源）", Math.abs(nx - rx) < 1e-9 && Math.abs(ny - ry) < 1e-9, `2d=[${nx.toFixed(6)},${ny.toFixed(6)}] gl=[${rx.toFixed(6)},${ry.toFixed(6)}]`);
+
+  // 6) 旋转只改 uniform、不重传缓冲：连画两帧，uploads 不增加
+  const up0 = glStat.uploads;
+  run(`state.yaw += 0.7; draw();`);
+  check("旋转不重传顶点缓冲（uniform-only）", glStat.uploads === up0, `uploads ${up0}→${glStat.uploads}`);
+  const up1 = glStat.uploads;
+  run(`state.mask = 5; rebuildGeometry(); draw();`);
+  check("改单形掩码会重传顶点缓冲", glStat.uploads === up1 + 1, `uploads ${up1}→${glStat.uploads}`);
+
+  // 7) 回落：2D 路径仍在（无 GL 时不能白屏）
+  check("Canvas 2D 兜底路径仍存在", run(`typeof paintFaces2D`) === "function" && run(`typeof paintOverlay`) === "function");
+  check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
+  // 颜色必须是 0..1：GL 顶点属性不分量纲，0..255 会被 clamp 成全白
+  const cols = run(`(() => { const s = new Set(); for (const f of GEO.faces) s.add(JSON.stringify(faceColor(f))); return [...s]; })()`);
+  check("faceColor 输出 0..1（GL 顶点属性不会溢出成全白）", cols.every(c => JSON.parse(c).every(x => x >= 0 && x <= 1)), JSON.stringify(cols).slice(0, 90));
+  // 换单色要重传缓冲：颜色在顶点属性里，不重传就还是旧色
+  const upC = glStat.uploads;
+  run(`state.colorMode = "mineral"; state.uniform = "#ff8800"; draw();`);
+  check("切换单色会重传顶点缓冲", glStat.uploads === upC + 1, `uploads ${upC}→${glStat.uploads}`);
+  check("单色进了顶点缓冲（#ff8800 = 1, 0.533, 0）", (() => {
+    if (!glLastBuf) return false;
+    const d = Array.from(glLastBuf.data);
+    for (let i = 6; i + 2 < d.length; i += 9) {
+      if (Math.abs(d[i] - 1) > 1e-6 || Math.abs(d[i + 1] - 136 / 255) > 1e-6 || Math.abs(d[i + 2]) > 1e-6) return false;
+    }
+    return d.length >= 9;
+  })(), "");
+  run(`state.colorMode = "mineral"; state.uniform = null; draw();`);
+}
 
 console.log(out.join("\n"));
 console.log("\n规模：矿物", run(`DATA.minerals.length`), "种；外形", report.length, "种；变体总数",

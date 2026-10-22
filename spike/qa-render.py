@@ -472,7 +472,8 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     b = np.array(base, dtype=float)
     amb = mat["amb"] * mat.get("ambK", 1.0)
     amb_t = mat.get("ambT", np.ones(3))
-    col = b * (amb + mat["diff"] * lam) * amb_t
+    # 与 JS shadeFace 逐字一致：环境光乘 ambT，漫反射不乘（amb_t 只调制环境光）
+    col = b * (amb * amb_t + mat["diff"] * lam)
     spec_col = b * 0.65 + 0.35 if tint_spec else np.array([1.0, 1.0, 1.0])
     col = col + spec_col * sp
     d = float(np.dot(n, v))
@@ -720,6 +721,231 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
     return bgim.resize((w, h), Image.LANCZOS)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# WebGL 阶段 A 的软件复刻：把 demo 的 GL 路径（顶点缓冲 → 顶点着色器 →
+# z-buffer 光栅化 → 片元着色器 → 离屏合成）用 numpy 老老实实跑一遍。
+#
+# 为什么需要它：本机跑不了无头浏览器（Edge headless 退出码 13 / Chrome
+# crashpad 被沙箱拦），app-check 的桩只能证明"GL 调用序列没死"，证明不了
+# "画面对不对"。这个函数是唯一能让我目检 GL 路径的手段。
+#
+# 与 2D 画家算法的差别（也就是换 GL 的收益）：
+#   ① 深度用 z-buffer，不是按面心排序——互相穿插的双晶不会再画错前后；
+#   ② 高光按像素算（v 逐像素），面内是连续渐变，不是一块常数色；
+#   ③ MSAA 由超采样 SS 代替（glBuild 不变，只是光栅化时多采样）。
+# ══════════════════════════════════════════════════════════════════════════
+TINTS = [[0.55, 0.74, 0.97], [0.97, 0.62, 0.82], [0.55, 0.92, 0.76], [0.97, 0.84, 0.55]]
+CLIP_TINT = (0.58, 0.62, 0.68)
+
+
+def face_color_py(f, color_mode="form", uniform=None, twin_tint=False):
+    """复刻 demo 的 faceColor()"""
+    if f["form"] < 0:
+        return CLIP_TINT
+    if color_mode == "mineral" and uniform:
+        hx = uniform.lstrip("#")
+        base = (int(hx[0:2], 16) / 255.0, int(hx[2:4], 16) / 255.0, int(hx[4:6], 16) / 255.0)
+    else:
+        base = TINTS[f["form"] % len(TINTS)]
+    if f["indiv"] == 1 and twin_tint:
+        base = (base[2] * 0.96, base[0] * 0.96, base[1] * 0.96)
+    return base
+
+
+def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
+              twin_tint=False, tint_spec=False, two_sided=False, out=None, zbuf=None):
+    """z-buffer 光栅化 + 片元着色器。out/zbuf 可外部传入（多面共享一个深度缓冲）。
+    返回 (out, zbuf, 覆盖率)。"""
+    DIST = 7.0
+    eye = np.array([0.0, 0.0, DIST])
+    if out is None:
+        out = np.zeros((H, W, 4), dtype=float)
+    if zbuf is None:
+        zbuf = np.full((H, W), 1e9, dtype=float)
+    # ── glBuild：扇形三角化「全部」面，不按正反面过滤（那件事在顶点着色器里做）──
+    tris = []
+    for f in faces:
+        col = np.array(face_color_py(f, color_mode, uniform, twin_tint), dtype=float)
+        L = f["pts"]
+        for i in range(1, len(L) - 1):
+            tris.append((L[0], L[i], L[i + 1], f["n"], col))
+    # ── 顶点着色器：与 GL_VS 逐字对应 ──
+    amb_t = mat.get("ambT", np.ones(3))
+    for (p0, p1, p2, n, col) in tris:
+        vs = []
+        for p in (p0, p1, p2):
+            wp = R @ p
+            wn = R @ n
+            front = 1.0 if float(np.dot(wn, eye - wp)) >= 0.0 else 0.0
+            z = max(DIST - wp[2], 0.4)
+            vs.append(dict(wp=wp, wn=wn, col=col, front=front,
+                           s=(cx + wp[0] * FOC / z, cy - wp[1] * FOC / z), z=z))
+        if vs[0]["front"] < 0.5 and not two_sided:
+            continue                                          # 背面剔除（与 GL discard 同效）
+        b = vs[0]["col"] * (0.5 if vs[0]["front"] < 0.5 else 1.0)
+        alpha = 0.92 if vs[0]["front"] < 0.5 else 1.0
+        nrm = vs[0]["wn"]
+        lam_c = max(0.0, float(np.dot(nrm, LIGHT)))            # n 恒定 → lam 是常数
+        (x0, y0), (x1, y1), (x2, y2) = vs[0]["s"], vs[1]["s"], vs[2]["s"]
+        xmin = int(max(0, math.floor(min(x0, x1, x2))))
+        xmax = int(min(W - 1, math.ceil(max(x0, x1, x2))))
+        ymin = int(max(0, math.floor(min(y0, y1, y2))))
+        ymax = int(min(H - 1, math.ceil(max(y0, y1, y2))))
+        if xmin > xmax or ymin > ymax:
+            continue
+        den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(den) < 1e-12:
+            continue
+        xs = np.arange(xmin, xmax + 1, dtype=float) + 0.5
+        ys = np.arange(ymin, ymax + 1, dtype=float) + 0.5
+        gx, gy = np.meshgrid(xs, ys)
+        l0 = ((y1 - y2) * (gx - x2) + (x2 - x1) * (gy - y2)) / den
+        l1 = ((y2 - y0) * (gx - x2) + (x0 - x2) * (gy - y2)) / den
+        l2 = 1.0 - l0 - l1
+        inside = (l0 >= -1e-9) & (l1 >= -1e-9) & (l2 >= -1e-9)
+        if not inside.any():
+            continue
+        # 透视校正插值：世界坐标 / z 线性 → 除回来
+        iz = np.array([1.0 / vs[0]["z"], 1.0 / vs[1]["z"], 1.0 / vs[2]["z"]])
+        S = l0 * iz[0] + l1 * iz[1] + l2 * iz[2]
+        wp = ((l0[..., None] * vs[0]["wp"] * iz[0] + l1[..., None] * vs[1]["wp"] * iz[1]
+               + l2[..., None] * vs[2]["wp"] * iz[2]) / S[..., None])
+        zpix = DIST - wp[..., 2]
+        sub = zbuf[ymin:ymax + 1, xmin:xmax + 1]
+        win = inside & (zpix < sub)
+        if not win.any():
+            continue
+        zbuf[ymin:ymax + 1, xmin:xmax + 1] = np.where(win, zpix, sub)
+        # ── 片元着色器：与 GL_FS 逐字对应（v 按像素）──
+        A = eye[None, None, :] - wp
+        v = A / (np.linalg.norm(A, axis=-1, keepdims=True) + 1e-12)
+        hv = LIGHT[None, None, :] + v
+        hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
+        d = np.sum(nrm[None, None, :] * v, axis=-1)
+        sp = (np.maximum(0.0, np.sum(nrm[None, None, :] * hv, axis=-1)) ** mat["shin"]) * mat["spec"]
+        r = 2.0 * d[..., None] * nrm[None, None, :] - v
+        env = env_sample_vec(r)
+        R0 = 1.0 if mat.get("metal") else ((mat["ior"] - 1) / (mat["ior"] + 1)) ** 2
+        F = R0 + (1 - R0) * (1 - np.abs(d)) ** 5
+        refl = (F * mat["envI"])[..., None]
+        tint = (0.35 + 0.65 * b) if tint_spec else np.ones(3)
+        fres = ((1 - np.abs(d)) ** 3 * mat.get("fres", 0) * 0.45)[..., None]
+        c = (b[None, None, :] * (mat["amb"] * mat.get("ambK", 1.0) * amb_t
+                                 + mat["diff"] * lam_c)
+             + tint[None, None, :] * sp[..., None]
+             + (b if mat.get("metal") else np.ones(3))[None, None, :] * refl * env
+             + fres * (0.55 + 0.45 * b[None, None, :]))
+        c = np.clip(c, 0.0, 1.0)
+        o = out[ymin:ymax + 1, xmin:xmax + 1]
+        o[win] = np.concatenate([c[win], np.full((int(win.sum()), 1), alpha)], axis=1)
+    cov = float((out[..., 3] > 0).mean())
+    return out, zbuf, cov
+
+
+def env_sample_vec(r):
+    """env_sample 的向量版：r 为 (...,3)"""
+    out = np.zeros_like(r)
+    for L in ENV_LIGHTS:
+        k = (np.maximum(0.0, np.sum(r * L["dir"][None, None, :], axis=-1)) ** L["sharp"]) * L["inten"]
+        out = out + k[..., None] * L["col"][None, None, :]
+    t = np.clip(r[..., 1], -1.0, 1.0)
+    g = 0.16 * np.maximum(0.0, t) ** 0.65 + 0.05 * np.maximum(0.0, -t) ** 0.5
+    return out + g[..., None] * np.array([0.72, 0.80, 0.95])[None, None, :]
+
+
+def render_gl(mineral_id, habit_id, mask_key=None, w=900, h=700, luster=None, bg="dark",
+              light=(-25, 38), yaw=0.0, pitch=0.0, on_table=False, alpha=None,
+              color_mode="form", uniform=None, twin_tint=False, tint_spec=False,
+              split=0.0, split_dir=None, indiv=None, inclusion=None, dens=0.6):
+    """GL 路径的完整复刻：背景 → z-buffer 光栅化（多面共享一个 zbuf）→ 按 alpha 合成。
+    不含内含物/晶纹/棱线（那些留在 Canvas 2D，见 demo 的 paintOverlay）。"""
+    D = load()
+    m = next(x for x in D["minerals"] if x["id"] == mineral_id)
+    hab = next(x for x in m["habits"] if x["id"] == habit_id)
+    if mask_key is None:
+        mask_key = sorted(hab["variants"])[-1]
+    v = hab["variants"][mask_key] if mask_key in hab["variants"] else hab["variants"][sorted(hab["variants"])[-1]]
+    P = np.array(v["v"], dtype=float).reshape(-1, 3)
+    if split > 0.001 and split_dir is not None:
+        sd = np.array(split_dir, dtype=float)
+        sd = sd / (np.linalg.norm(sd) + 1e-12)
+        off = sd * split * 1.5
+    else:
+        off = None
+    faces = []
+    for fi, loop in enumerate(v["f"]):
+        if indiv is not None and v["indiv"][fi] != indiv:
+            continue
+        pts = P[loop]
+        if off is not None and v["indiv"][fi] == 1:
+            pts = pts + off
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+        n = n / (np.linalg.norm(n) + 1e-12)
+        faces.append(dict(pts=pts, n=n, c=pts.mean(0), form=v["form"][fi],
+                          indiv=v["indiv"][fi], clip=v["clip"][fi], loop=loop))
+
+    q = Q_VIEW
+    if hab.get("view") and hab["view"].get("yaw") is not None:
+        q = q_mul(Q_VIEW, q_axis(0, 0, 1, math.radians(hab["view"]["yaw"])))
+        q = q / np.linalg.norm(q)
+    if yaw or pitch:
+        q = q_mul(q, q_axis(0, 0, 1, math.radians(yaw)))
+        q = q_mul(q, q_axis(1, 0, 0, math.radians(pitch)))
+        q = q / np.linalg.norm(q)
+    R = q_mat(q)
+
+    set_light(light[0], light[1])
+    BG = BACKGROUNDS[bg]
+    mat = dict(LUSTERS[luster or m.get("luster", "glass")])
+    if alpha is None:
+        alpha = 1.0 if mat.get("opaqueOnly") else TRANSP[default_transp(m)]
+    mat["alpha"] = alpha
+    mat["ambK"] = BG["amb"]
+    mat["ambT"] = BG["amb_t"]
+    W, H = w * SS, h * SS
+    bgim = draw_bg(bg, W, H).convert("RGBA")
+    cx, cy = W / 2, H / 2
+    FOC = 3.05 * min(W, H) * 0.5
+    table_y = BG["table_y"] if on_table else None
+    if table_y is not None:
+        allwp = [R @ p for p in P]
+
+        def _xy(wp, sc=1.0):
+            k = FOC / max(DIST - wp[2], 0.4) * sc
+            return (cx + wp[0] * k, cy - wp[1] * k)
+        floor_y = table_y * H
+        ys = [_xy(wp)[1] for wp in allwp]
+        half = (max(ys) - min(ys)) / 2
+        room = (floor_y - H * 0.05) / 2
+        sc = min(1.0, room / half) if half > 0 else 1.0
+        xys = [_xy(wp, sc) for wp in allwp]
+        cy = floor_y - max(y for _, y in xys)
+        FOC = FOC * sc
+    # twoSided：有补盖面或开形（与 demo 的 uTwoSided 同条件）
+    two_sided = any(f["clip"] == 1 for f in faces) or not v.get("closed", True)
+    layer = np.zeros((H, W, 4), dtype=float)
+    zbuf = np.full((H, W), 1e9, dtype=float)
+    layer, zbuf, cov = gl_raster(faces, R, W, H, cx, cy, FOC, mat,
+                                 color_mode=color_mode, uniform=uniform, twin_tint=twin_tint,
+                                 tint_spec=tint_spec, two_sided=two_sided,
+                                 out=layer, zbuf=zbuf)
+    lay = Image.fromarray((np.clip(layer, 0, 1) * 255).astype(np.uint8), "RGBA")
+    if alpha < 0.995:
+        a = lay.split()[3].point(lambda val: int(val * alpha))
+        lay.putalpha(a)
+    bgim.paste(lay, (0, 0), lay)
+    return bgim.resize((w, h), Image.LANCZOS)
+
+
+def _diff_ratio(a, b):
+    """两张图的平均相对差异（0..1），用于并排对照 2D 与 GL 两条路径"""
+    x = np.asarray(a.convert("RGB"), dtype=float) / 255.0
+    y = np.asarray(b.convert("RGB"), dtype=float) / 255.0
+    if x.shape != y.shape:
+        y = np.asarray(b.convert("RGB").resize((x.shape[1], x.shape[0])), dtype=float) / 255.0
+    return float(np.abs(x - y).mean())
+
+
 def _debug_inc(mineral_id="quartz", habit_id="prismatic", inclusion="rutile", dens=1.0):
     """打印 inc 生成/绘制链路各环节计数（排查包体不显示时用）"""
     D = load()
@@ -960,7 +1186,37 @@ if __name__ == "__main__":
                 dr.text((i * T + 14, r * T + 10), lab, fill=(205, 214, 228), font=fnt)
         out.save("render/qa-transp2.png")
         print("saved render/qa-transp2.png")
-    else:
+    elif mode == "gl":
+        # WebGL 阶段 A 的复刻层：上排 GL（z-buffer + 逐像素），下排 2D（画家算法）
+        # 两排必须"看起来几乎一样"——GL 路径是替换渲染，不是改内容；
+        # 差异只该出现在面内渐变（逐像素 vs 常数色）与深度判据（z-buffer vs 排序）。
+        T = 400
+        tiles = [
+            ("fluorite", "cube", "1", "glass", None, "fluorite cube / glass"),
+            ("garnet", "combined", "111", "adamantine", None, "garnet combo / adamantine"),
+            ("garnet", "combined", "111", "metallic", None, "garnet combo / metallic"),
+            ("quartz", "japan-twin", "1111", "glass", None, "quartz Japan twin"),
+            ("fluorite", "spinel-twin", "1", "glass", None, "fluorite spinel twin"),
+            ("calcite", "scalenohedron", "11", "transparent", None, "calcite / transparent"),
+        ]
+        out = Image.new("RGB", (3 * T, 4 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (mi, hi, mk, lu, iv, lab) in enumerate(tiles):
+            kw = dict(luster=lu, indiv=iv)
+            a = render_gl(mi, hi, mk, T, T, **kw)
+            b = render(mi, hi, mk, T, T, **kw)
+            out.paste(a, ((i % 3) * T, (i // 3) * T))
+            out.paste(b, ((i % 3) * T, (i // 3 + 2) * T))
+            d = _diff_ratio(a, b)
+            dr.text(((i % 3) * T + 12, (i // 3) * T + 8),
+                    f"GL  {lab}  差异 {d * 100:.1f}%", fill=(140, 200, 255), font=fnt)
+            dr.text(((i % 3) * T + 12, (i // 3 + 2) * T + 8),
+                    f"2D  {lab}", fill=(205, 214, 228), font=fnt)
+            print(f"{mi}/{hi}: GL vs 2D 平均差异 {d * 100:.2f}%")
+        out.save("render/qa-gl.png")
+        print("saved render/qa-gl.png")
+    elif mode == "":
         im = render("quartz", "japan-twin", "111", 760, 760, luster="glass")
         im.save("render/qa-twin.png")
         im2 = render("fluorite", "spinel-twin", "1", 760, 760, luster="glass")

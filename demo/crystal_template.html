@@ -803,7 +803,8 @@ function rebuildGeometry() {
   for (const [k, list] of edgeMap) {
     if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
   }
-  GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))) };
+  GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))),
+          stamp: (GEO ? GEO.stamp + 1 : 1) };   // WebGL 层靠这个戳判断要不要重传顶点缓冲
   buildInclusions();
 }
 
@@ -1128,7 +1129,9 @@ function makeProject(opts) {
     const k = FOC / Math.max(z, 0.4);
     return [cx + w[0] * k + pan[0], cy - w[1] * k + pan[1], z];
   };
-  project.R = R; project.DIST = DIST;
+  project.R = R; project.DIST = DIST; project.FOC = FOC;
+  // cx/cy/vw/vh 一并挂上：WebGL 的顶点着色器要用同一组数，测试才能逐项比对
+  project.cx = cx + pan[0]; project.cy = cy + pan[1]; project.vw = vw; project.vh = vh;
   return project;
 }
 
@@ -1178,17 +1181,326 @@ function drawStriations(g, it, pts, R, project) {
   g.restore();
 }
 
+/* ==================== WebGL2 晶体渲染层（M1 阶段 A） ====================
+   职责只一件事：把 GEO 的面片画进一张透明背景的 WebGL 画布。
+   替换的是 shadeFace + 画家算法这两件事：
+     · 平法线（按面）+ 逐像素高光/菲涅耳/环境反射（按像素）
+       ——结晶学要的是"棱清楚"，不是光滑着色；所以法线取面法线，绝不平滑。
+     · 深度缓冲替掉画家排序 —— 双晶/拆解/半透明互相穿插时画家算法一直在打补丁
+       （按个体排序、接缝补描边），深度缓冲从根上消掉这类 artifact。
+   背景、UI、棱线、晶纹、内含物、导出排版全部仍走 Canvas 2D：那一千多行是调过
+   并且验证过的，一行不改。GL 画布用 drawImage 合成上去，所以单文件零依赖不变
+   （裸 WebGL2，着色器就是两个内联字符串，不引 three.js/Babylon）。
+   拿不到 webgl2 时自动回落到下面的 Canvas 2D 路径（glRender 返回 false）。   */
+let glc = null, gl = null, glProg = null, glReady = false;
+let glVBO = null, glUni = {}, glAttr = {};
+let glN = 0;                                     // 上次上传的顶点数
+let glLastOpts = null;                           // 最近一次 glRender 的视口参数（测试比对用）
+let glStamp = -1, glColStamp = -1, glSize = "";  // 缓存失效戳
+const GL_STRIDE = 9;                             // pos3 + nrm3 + col3
+const GL_DIST = 7.0;                             // 与 makeProject 的 DIST 一致
+
+/* 顶点着色器：与 makeProject() 逐字对应（同一个 FOC / 同一个 max(z,0.4)），
+   保证 GL 画面与 2D 棱线/晶纹/内含物的投影完全重合——不然棱会飘在晶面外面。
+   正反面判定也放在这里（而不是 CPU 过滤）：否则晶体每转一点，正反面就会翻转，
+   顶点缓冲就得整个重传。放在顶点着色器里，缓冲内容就只取决于几何与颜色。 */
+const GL_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec3 aCol;
+uniform mat3 uRot;
+uniform float uDist, uFoc, uCx, uCy, uVw, uVh, uZn, uZf;
+flat out vec3 vCol;
+flat out float vFront;
+out vec3 vPos; out vec3 vNrm;
+void main() {
+  vec3 w = uRot * aPos;
+  vPos = w; vNrm = uRot * aNrm; vCol = aCol;
+  vFront = step(0.0, dot(vNrm, vec3(0.0, 0.0, uDist) - w));
+  float z = max(uDist - w.z, 0.4);
+  gl_Position = vec4(
+    ((uCx + w.x * uFoc / z) / uVw) * 2.0 - 1.0,
+    1.0 - ((uCy - w.y * uFoc / z) / uVh) * 2.0,
+    (2.0 * (z - uZn) / max(uZf - uZn, 1e-4)) - 1.0,
+    z);
+}`;
+
+/* 片元着色器：shadeFace() 的逐像素版。数学逐条对应，只有两处不同：
+   ① v（视线）按像素算而不是按面心算 —— 高光于是在一个面上有平滑衰减，
+      这是"塑料感 vs 晶体感"的分界，也是换 GL 最大的单项收益；
+   ② 法线是精确面法线（顶点属性在整个面上恒定），不平滑。                 */
+const GL_FS = `#version 300 es
+precision highp float;
+flat in vec3 vCol;
+flat in float vFront;
+in vec3 vPos; in vec3 vNrm;
+uniform vec3 uLight;
+uniform vec3 uEnvDir[3];
+uniform vec3 uEnvCol[3];
+uniform vec3 uEnvPar[3];      // x=sharp  y=inten
+uniform float uDist, uAmb, uDiff, uSpec, uShin, uFres, uIor, uEnvI, uMetal, uAmbK;
+uniform vec3 uAmbT;
+uniform float uTintSpec, uTwoSided;
+out vec4 frag;
+
+vec3 envSample(vec3 r) {
+  vec3 o = vec3(0.0);
+  for (int i = 0; i < 3; i++) {
+    float k = pow(max(0.0, dot(r, uEnvDir[i])), uEnvPar[i].x) * uEnvPar[i].y;
+    o += k * uEnvCol[i];
+  }
+  float t = clamp(r.y, -1.0, 1.0);
+  float g = 0.16 * pow(max(0.0, t), 0.65) + 0.05 * pow(max(0.0, -t), 0.5);
+  return o + g * vec3(0.72, 0.80, 0.95);
+}
+
+void main() {
+  // 背面：开形（如单独的六方柱）要画，闭形不要画——与 2D 版的 twoSided 判定一致
+  float alpha = 1.0;
+  vec3 base = vCol;
+  if (vFront < 0.5) {
+    if (uTwoSided < 0.5) discard;
+    base *= 0.5;
+    alpha = 0.92;
+  }
+  vec3 n = normalize(vNrm);
+  vec3 v = normalize(vec3(0.0, 0.0, uDist) - vPos);
+  vec3 hv = normalize(uLight + v);
+  float lam = max(0.0, dot(n, uLight));
+  float sp = pow(max(0.0, dot(n, hv)), uShin) * uSpec;
+  vec3 tint = uTintSpec > 0.5 ? vec3(0.35) + 0.65 * base : vec3(1.0);
+  float d = dot(n, v);
+  vec3 env = envSample(2.0 * d * n - v);
+  float R0 = uMetal > 0.5 ? 1.0 : pow((uIor - 1.0) / (uIor + 1.0), 2.0);
+  float F = R0 + (1.0 - R0) * pow(1.0 - abs(d), 5.0);
+  float refl = F * uEnvI;
+  float fres = pow(1.0 - abs(d), 3.0) * uFres * 0.45;
+  vec3 c = base * (uAmb * uAmbK * uAmbT + uDiff * lam)
+         + tint * sp
+         + (uMetal > 0.5 ? base : vec3(1.0)) * refl * env
+         + fres * (0.55 + 0.45 * base);
+  frag = vec4(clamp(c, 0.0, 1.0), alpha);
+}`;
+
+function glCompile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.warn("shader:", gl.getShaderInfoLog(s));
+    gl.deleteShader(s);
+    return null;
+  }
+  return s;
+}
+
+function glInit() {
+  if (glReady) return !!gl;
+  glReady = true;                                  // 只试一次，失败就走 2D 兜底
+  try {
+    glc = document.createElement("canvas");
+    gl = glc.getContext("webgl2", {
+      alpha: true, antialias: true, depth: true,      // MSAA + 深度缓冲，两个白捡的升级
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: true,                    // 任意时刻（点导出按钮）都能 drawImage 读回
+      powerPreference: "low-power",
+    });
+  } catch (err) { gl = null; }
+  if (!gl) { console.warn("webgl2 不可用，回落到 Canvas 2D 渲染"); return false; }
+  const vs = glCompile(gl.VERTEX_SHADER, GL_VS);
+  const fs = glCompile(gl.FRAGMENT_SHADER, GL_FS);
+  if (!vs || !fs) { gl = null; return false; }
+  glProg = gl.createProgram();
+  gl.attachShader(glProg, vs); gl.attachShader(glProg, fs);
+  gl.linkProgram(glProg);
+  if (!gl.getProgramParameter(glProg, gl.LINK_STATUS)) {
+    console.warn("link:", gl.getProgramInfoLog(glProg));
+    gl = null; return false;
+  }
+  gl.deleteShader(vs); gl.deleteShader(fs);
+  for (const n of ["uRot", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
+                   "uLight", "uEnvDir", "uEnvCol", "uEnvPar",
+                   "uAmb", "uDiff", "uSpec", "uShin", "uFres", "uIor", "uEnvI",
+                   "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided"]) glUni[n] = gl.getUniformLocation(glProg, n);
+  for (const n of ["aPos", "aNrm", "aCol"]) glAttr[n] = gl.getAttribLocation(glProg, n);
+  glVBO = gl.createBuffer();
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.BLEND);                              // 仅用于背面半透明片（alpha 0.92）
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  return true;
+}
+
+/* 面片 → 三角形顶点流。**不按正反面过滤**（那件事在顶点着色器里做），
+   所以缓冲内容只取决于几何与颜色，旋转时一个字节都不用重传。 */
+function glBuild() {
+  const a = [];
+  for (const f of GEO.faces) {
+    const col = faceColor(f);
+    const L = f.pts;
+    for (let i = 1; i + 1 < L.length; i++) {                 // 扇形三角化（面都是凸的）
+      for (const j of [0, i, i + 1]) {
+        const p = L[j];
+        a.push(p[0], p[1], p[2], f.n[0], f.n[1], f.n[2], col[0], col[1], col[2]);
+      }
+    }
+  }
+  return new Float32Array(a);
+}
+
+/* 深度范围取当前姿态下的紧外框：范围越窄，深度缓冲精度越高 */
+function glDepthRange(project) {
+  const R = project.R, DIST = project.DIST;
+  let lo = 1e9, hi = -1e9;
+  for (const p of GEO.P) { const z = DIST - mv(R, p)[2]; if (z < lo) lo = z; if (z > hi) hi = z; }
+  return [Math.max(0.4, lo - 1.0), hi + 1.0];
+}
+
+/* 把晶体画进 glc。返回 false 表示该走 2D 兜底。 */
+function glRender(project, M, opts) {
+  if (!glInit()) return false;
+  if (!GEO || !GEO.faces.length) return false;
+  glLastOpts = opts;                       // 测试要拿它比对 GL/2D 投影是否同源
+  const vw = opts.vw, vh = opts.vh, dpr = opts.dpr || 1;
+  const key = Math.round(vw * dpr) + "x" + Math.round(vh * dpr);
+  if (key !== glSize) {
+    glc.width = Math.max(1, Math.round(vw * dpr));
+    glc.height = Math.max(1, Math.round(vh * dpr));
+    glSize = key;
+  }
+  // 缓存：几何/单形掩码/只看谁/配色 变了才重传缓冲；旋转只改 uniform。
+  // 配色戳必须含 state.uniform——单色模式换颜色时颜色在顶点属性里，不重传就还是旧色。
+  const gs = (GEO.stamp || 0) * 4 + (state.twinShow === "both" ? 0 : (state.twinShow === "A" ? 1 : 2));
+  const cs = (state.colorMode === "mineral" ? 2 : 1) + (state.twinTint ? 1 : 0)
+           + (state.uniform ? 4 : 0) + String(state.uniform).length * 8;
+  if (gs !== glStamp || cs !== glColStamp) {
+    const data = glBuild();
+    gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    glN = data.length / GL_STRIDE;
+    glStamp = gs; glColStamp = cs;
+  }
+  if (!glN) return true;                          // 没有可画的面
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clearDepth(1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(glProg);
+  // R 是行主 3x3，GLSL mat3 要列主
+  const R = project.R;
+  gl.uniformMatrix3fv(glUni.uRot, false, new Float32Array(
+    [R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]));
+  gl.uniform1f(glUni.uFoc, 3.05 * opts.scale * Math.min(vw, vh) * 0.5);
+  gl.uniform1f(glUni.uDist, GL_DIST);
+  gl.uniform1f(glUni.uCx, opts.cx); gl.uniform1f(glUni.uCy, opts.cy);
+  gl.uniform1f(glUni.uVw, vw);   gl.uniform1f(glUni.uVh, vh);
+  const [zn, zf] = glDepthRange(project);
+  gl.uniform1f(glUni.uZn, zn); gl.uniform1f(glUni.uZf, zf);
+  const e = ENV_LIGHTS;
+  gl.uniform3fv(glUni.uEnvDir, new Float32Array([...e[0].dir, ...e[1].dir, ...e[2].dir]));
+  gl.uniform3fv(glUni.uEnvCol, new Float32Array([...e[0].col, ...e[1].col, ...e[2].col]));
+  gl.uniform3fv(glUni.uEnvPar, new Float32Array(
+    [e[0].sharp, e[0].inten, 0, e[1].sharp, e[1].inten, 0, e[2].sharp, e[2].inten, 0]));
+  gl.uniform1f(glUni.uAmb, M.amb); gl.uniform1f(glUni.uDiff, M.diff);
+  gl.uniform1f(glUni.uSpec, M.spec); gl.uniform1f(glUni.uShin, M.shin);
+  gl.uniform1f(glUni.uFres, M.fres || 0); gl.uniform1f(glUni.uIor, M.ior || 1.5);
+  gl.uniform1f(glUni.uEnvI, M.envI == null ? 0 : M.envI);
+  gl.uniform1f(glUni.uMetal, M.metal ? 1 : 0);
+  gl.uniform1f(glUni.uTintSpec, M.tintSpec ? 1 : 0);
+  gl.uniform1f(glUni.uTwoSided, (GEO.faces.some(f => f.clip === 1) || !variant().closed) ? 1 : 0);
+  gl.uniform1f(glUni.uAmbK, M.ambK == null ? 1 : M.ambK);
+  gl.uniform3fv(glUni.uAmbT, M.ambT || [1, 1, 1]);
+  gl.uniform3fv(glUni.uLight, LIGHT_V);
+  const S = GL_STRIDE * 4;
+  gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
+  gl.enableVertexAttribArray(glAttr.aPos); gl.vertexAttribPointer(glAttr.aPos, 3, gl.FLOAT, false, S, 0);
+  gl.enableVertexAttribArray(glAttr.aNrm); gl.vertexAttribPointer(glAttr.aNrm, 3, gl.FLOAT, false, S, 12);
+  gl.enableVertexAttribArray(glAttr.aCol); gl.vertexAttribPointer(glAttr.aCol, 3, gl.FLOAT, false, S, 24);
+  gl.drawArrays(gl.TRIANGLES, 0, glN);
+  return true;
+}
+
 /* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成。
    内含物先画（在晶体下面），于是会被半透明的晶面整体盖住：通透度越低越看得清 */
 function paintFaces(g, opts, project, M) {
   const { vw, vh } = opts;
   if (!GEO) return;
+  const dpr = opts.dpr || 1;
+  // GL 画填充，2D 只画叠在上面的棱线/晶纹/补缝描边——两条路出的是同一张图
+  let layer = null;
+  if (glRender(project, M, opts)) {
+    layer = document.createElement("canvas");
+    layer.width = Math.max(1, Math.round(vw * dpr));
+    layer.height = Math.max(1, Math.round(vh * dpr));
+    const lg = layer.getContext("2d");
+    if (lg) {
+      lg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      lg.clearRect(0, 0, vw, vh);
+      try { lg.drawImage(glc, 0, 0, vw, vh); } catch (err) { /* 桩环境 */ }
+    } else layer = null;
+  }
+  if (layer) paintOverlay(layer.getContext("2d"), opts, project, M);
+  else paintFaces2D(g, opts, project, M);          // 无 webgl2：整条走 2D（含填充）
+  if (layer) {
+    g.save();
+    g.globalAlpha = M.alpha == null ? 1 : M.alpha;
+    try { g.drawImage(layer, 0, 0, vw, vh); } catch (err) { /* 桩环境 */ }
+    g.restore();
+  }
+}
+
+/* 只画叠在晶面上的部分：同色补缝描边、晶纹、真棱。填充归 GL。
+   补缝描边按「棱的三维中点」着色，而不是按面心：GL 是逐像素着色的，
+   面心色和逐像素填充会差几个百分点，1px 的缝看起来就像一圈描边。 */
+function paintOverlay(g, opts, project, M) {
   const R = project.R, DIST = project.DIST;
   const eye = [0, 0, DIST];
-  const cx = opts.cx, cy = opts.cy;
+  for (const f of GEO.faces) {
+    if (state.twinShow !== "both" && f.indiv !== (state.twinShow === "A" ? 0 : 1)) continue;
+    const wn = mv(R, f.n), cw = mv(R, f.c);
+    if (dot(wn, sub(eye, cw)) <= 0) continue;      // 只描正面（2D 版同样只描正面）
+    const pts = f.pts.map(project);
+    const L = f.loop;
+    // 逐棱补缝：颜色取该棱中点处的视线，与 GL 在该像素上的着色一致
+    g.lineWidth = 1;
+    for (let i = 0; i < L.length; i++) {
+      const j = (i + 1) % L.length;
+      const q0 = f.pts[i], q1 = f.pts[j];
+      const mid = [(q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2, (q0[2] + q1[2]) / 2];
+      g.strokeStyle = rgbStr(shadeFace(faceColor(f), wn, mv(R, mid), eye, M));
+      g.beginPath();
+      g.moveTo(pts[i][0], pts[i][1]);
+      g.lineTo(pts[j][0], pts[j][1]);
+      g.stroke();
+    }
+    if (state.striations) drawStriations(g, { f, wn, cw }, pts, R, project);
+    if (!state.edges) continue;
+    g.beginPath();
+    let any = false;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i], b = L[(i + 1) % L.length];
+      const key = a < b ? a + "," + b : b + "," + a;
+      if (!GEO.realEdges.has(key)) continue;
+      const p0 = pts[i], p1 = pts[(i + 1) % L.length];
+      g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]);
+      any = true;
+    }
+    if (any) {
+      g.lineWidth = 1.15;
+      g.strokeStyle = "rgba(12,22,34,.6)";
+      g.stroke();
+    }
+  }
+}
+
+/* Canvas 2D 兜底：无 webgl2 时整条走这里（就是迁移前的 paintFaces） */
+function paintFaces2D(g, opts, project, M) {
+  const R = project.R, DIST = project.DIST;
+  const eye = [0, 0, DIST];
   const twoSided = GEO.faces.some(f => f.clip === 1) || !variant().closed;
-  // 拆解后是两个互不穿插的独立凸体：画家算法必须先按个体（远→近）再按面，
-  // 否则一个个体的远侧面会画到另一个个体的近侧面之上，接缝处打出空洞。
+  // 拆解后是两个互不穿插的独立凸体：2D 兜底路径靠画家算法，必须先按个体（远→近）
+  // 再按面，否则一个个体的远侧面会画到另一个体的近侧面之上，接缝处打出空洞。
+  // （GL 路径有深度缓冲，不需要这个特例。）
   const splitOn = (state.twinSplit || 0) > 0.001;
   let indOrder = null;
   if (splitOn) {
@@ -1285,10 +1597,11 @@ function fitToTable(opts, tbl) {
   return { ...o, cy: floorY - b.ymax };                 // 底边（最低顶点）贴到桌面线
 }
 
+/* 主绘制：背景 → 接触阴影 → 本体色层 → 晶体（GL 填充 + 2D 棱线，整体按通透度
+   一次合成，避免每片半透明叠加出接缝）→ 内含物 → 坐标轴 */
 function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
-  const dpr = opts.dpr || 1;
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
   if (!opts.noBg) BG.draw(g, opts.vw, opts.vh);          // 程序化背景：渐变/展台/远山/纸面（导出时由调用方先画，故可跳过）
   // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
@@ -1302,26 +1615,8 @@ function paint(g, opts) {
   } else {
     project = makeProject(opts);
   }
-  if (M.alpha < 0.995) {
-    paintTint(g, project, M);                    // 先罩一层本体色，颜色不随 alpha 淡掉
-    const off = document.createElement("canvas");
-    off.width = Math.max(1, Math.round(opts.vw * dpr));
-    off.height = Math.max(1, Math.round(opts.vh * dpr));
-    const g2 = off.getContext("2d");
-    if (g2) {
-      g2.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g2.clearRect(0, 0, opts.vw, opts.vh);
-      paintFaces(g2, opts, project, M);
-      g.save();
-      g.globalAlpha = M.alpha;
-      try { g.drawImage(off, 0, 0, opts.vw, opts.vh); } catch (err) { /* 桩环境 */ }
-      g.restore();
-    } else {
-      paintFaces(g, opts, project, M);
-    }
-  } else {
-    paintFaces(g, opts, project, M);
-  }
+  if (M.alpha < 0.995) paintTint(g, project, M);   // 先罩一层本体色，颜色不随 alpha 淡掉
+  paintFaces(g, opts, project, M);
   paintInclusions(g, opts, project, M);   // 在晶体之上：半透明才看得见，越透明越清晰
   if (state.axes) drawAxes(g, project.R, project, opts.scale);
 }
