@@ -191,7 +191,10 @@ function makeEl(tag = "div") {
     addEventListener() {},
     setPointerCapture() {},
     querySelector() { return makeEl("input"); },
+    querySelectorAll() { return []; },
     closest() { return null; },
+    matches() { return false; },
+    contains() { return false; },
   };
   Object.defineProperty(el, "innerHTML", {
     get() { return this._html; },
@@ -232,6 +235,7 @@ const document = {
   createElement(tag) { return makeEl(tag); },
   body: makeEl("body"),
   addEventListener() {},
+  documentElement: { dataset: { theme: "light" }, setAttribute(k, v) { if (k === "data-theme") this.dataset.theme = v; }, getAttribute(k) { return k === "data-theme" ? this.dataset.theme : null; } },
   querySelectorAll(sel) {
     if (sel.indexOf("[data-sec]") >= 0 && sel.indexOf(".fold") >= 0) return foldSecs.map(s => foldEl(s)._btn);
     if (sel.indexOf("[data-sec]") >= 0) return foldSecs.map(s => foldEl(s));
@@ -247,11 +251,16 @@ const sandbox = {
   requestAnimationFrame(fn) { if (rafCount++ < 2) fn(); },
   setTimeout, clearTimeout, navigator: {}, URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
   ClipboardItem: class {}, Image: class {},
-  localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+  localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })(),
   // URL 加 ?gl2d=1 可强制走 Canvas 2D 路径（A/B 定位用）；沙箱里没有 location，得补一个
   location: { search: "", href: "" },
+  matchMedia: (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }),
+  
 };
 sandbox.window.document = document;
+sandbox.window.matchMedia = sandbox.matchMedia;
+sandbox.window.localStorage = sandbox.localStorage;
+sandbox.window.location = sandbox.location;
 sandbox.globalThis = sandbox;
 Object.defineProperty(sandbox, "__glLastBuf", { get() { return glLastBuf; } });
 Object.defineProperty(sandbox, "__glLastCanvas", { get() { return glLastCanvas; } });
@@ -774,6 +783,22 @@ const glLastOptsOk = (glw, vw, vh) => {
   cmpNdc("平移后 GL 与 2D 仍逐顶点同源（pan 不能漏传给 GL）");
   run(`state.pan = [0, 0]; draw();`);
 
+  // 5c) 【同类致命 bug 的第二道防线】上面的比对是「照着重写一遍公式」，
+  //     所以它只能证明我重写的公式对，**证明不了 GPU 真正看到的 clip 空间**。
+  //     GPU 会把 gl_Position.xyz 除以 gl_Position.w。xy 既然已经是换算好的 NDC，
+  //     第 4 个分量就必须是常量 1.0；一旦写成 z（≈6–8），画面会整体缩成 1/z 并往中心吸，
+  //     而 2D 棱线不除 —— 正是"棱线飘在晶体外、且随旋转呼吸"。
+  //     这里从着色器源码里把 gl_Position 的四个分量抠出来，按 GPU 的规则除一遍再比。
+  check("gl_Position.w 是常量 1.0（GPU 的透视除法不会把画面再缩一遍）", (() => {
+    const src = String(run(`GL_VS`) || "");
+    const m = /gl_Position\s*=\s*vec4\s*\(([\s\S]*?)\)\s*;/.exec(src);
+    if (!m) return "找不到 gl_Position";
+    const parts = m[1].split(",").map(s => s.trim());
+    if (parts.length !== 4) return "分量数不是 4：" + parts.length;
+    const w = parts[3];
+    return w === "1.0" ? "ok" : `第 4 分量是 ${w}（应为 1.0）`;
+  })(), String(run(`/gl_Position\\s*=\\s*vec4\\s*\\(([\\s\\S]*?)\\)\\s*;/.exec(GL_VS)[1].replace(/\\s+/g," ").slice(0,140)`) || ""));
+
   // 6) 旋转只改 uniform、不重传缓冲：连画两帧，uploads 不增加
   const up0 = glStat.uploads;
   run(`state.yaw += 0.7; draw();`);
@@ -874,6 +899,100 @@ const glLastOptsOk = (glw, vw, vh) => {
     return v > 0.15 && v < 0.40;
   })(), `v=${(glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1]}`);
 }
+
+/* ── 第十轮：标题栏 + 主题三态 + 左右分栏（UI 重构）────────────────── */
+check("标题是「晶体世界 · Crystal World」", /<title>[^<]*晶体世界/.test(html), html.match(/<title>([^<]*)<\/title>/)?.[1]);
+check("默认主题是亮色（data-theme=light），不是深色", (() => {
+  const t = run(`document.documentElement.dataset.theme`);
+  const stored = (() => { try { return vm.runInContext(`localStorage.getItem("crystalworld.theme")`, sandbox); } catch (e) { return null; } })();
+  return t === "light" && (stored === null || stored === "light");
+})());
+check("主题三态循环 light → dark → auto → light", (() => {
+  const seq = [];
+  const btn = document.getElementById("tbTheme");
+  for (let i = 0; i < 4; i++) {
+    seq.push(run(`document.documentElement.dataset.theme`));
+    // 直接调用处理器：桩元素没有真实 onclick 派发
+    run(`document.getElementById("tbTheme").onclick();`);
+  }
+  return seq.join(",") === "light,dark,auto,light";
+})(), () => run(`document.documentElement.dataset.theme`));
+check("主题写进 localStorage（下次打开记住）", (() => {
+  // 从当前态再点满三轮，落到 light 时应把 light 写回去（关键是 setItem 真被调用）
+  const before = (() => { try { return vm.runInContext(`localStorage.getItem("crystalworld.theme")`, sandbox); } catch (e) { return null; } })();
+  run(`document.getElementById("tbTheme").onclick();`);
+  const after = (() => { try { return vm.runInContext(`localStorage.getItem("crystalworld.theme")`, sandbox); } catch (e) { return null; } })();
+  return before !== null && after !== null && before !== after;
+})());
+check("图标随主题切换（三个图标只显示一个）", (() => {
+  const shown = ["icSun", "icMoon", "icAuto"].filter(k => {
+    const el = document.getElementById(k);
+    return el && el.style.display === "";
+  });
+  return shown.length === 1;
+})(), `可见=${["icSun", "icMoon", "icAuto"].filter(k => { const el = document.getElementById(k); return el && el.style.display === ""; }).join("/") || "无"}`);
+// 面板归属必须从 HTML 源码读——桩的 querySelectorAll 不认 ".panel.left [data-sec]" 这类选择器
+const secsIn = (panel) => {
+  const m = html.match(new RegExp(`<aside class="panel ${panel}">([\\s\\S]*?)</aside>`));
+  return m ? [...m[1].matchAll(/data-sec="([a-z]+)"/g)].map(x => x[1]) : [];
+};
+const popFors = [...html.matchAll(/<div class="pop" data-for="([a-z]+)"/g)].map(x => x[1]);
+check("顶部图标按钮共 4 个：视角 / 操作 / 导出 / 数据", popFors.length === 4 && ["view", "input", "export", "data"].every(k => popFors.includes(k)), `pops=${popFors.join(",")}`);
+check("左侧是「选择」（晶系/矿物/外形/单形/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
+  const left = secsIn("left"), right = secsIn("right");
+  const wantL = ["sys", "min", "hab", "frm", "scene"];
+  const wantR = ["color", "luster", "incl", "light", "display"];
+  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 5 && right.length === 5;
+})(), `L=${secsIn("left").join(",")} R=${secsIn("right").join(",")}`);
+check("视角/操作/导出/数据已从两侧面板搬到顶部浮出（不重复）", (() => {
+  const inPanels = [...secsIn("left"), ...secsIn("right")];
+  return !["view", "input", "export", "data"].some(k => inPanels.includes(k));
+})());
+check("场景选择器只有一个（#bgs 未因搬家而重复）", (() => {
+  const a = html.split(/id="bgs"/).length - 1;
+  return a === 1 && document.getElementById("bgs") !== null;
+})(), `html=${html.split(/id="bgs"/).length - 1}`);
+check("顶栏是细条（42px 行高，不抢戏）", /grid-template-rows:\s*42px\s+1fr/.test(html) && /\.topbar\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/.test(html));
+check("三套主题变量都定义（dark / light / auto）", (() => {
+  const has = (sel) => new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{").test(html);
+  return has(':root[data-theme="dark"]') && has(':root[data-theme="light"]') && has(':root[data-theme="auto"]');
+})());
+check("gl_Position.w 是常量 1.0（GPU 会除掉它，给了 z 画面会被吸进中心）", (() => {
+  const src = run(`GL_VS`);
+  // 分量里还有括号（max(uZf-uZn,1e-4)），不能按 [^)]* 截
+  const m = /gl_Position\s*=\s*vec4\(/.exec(src);
+  if (!m) return false;
+  const body = src.slice(m.index + m[0].length, src.indexOf(");", m.index) + 1);
+  // 按顶层逗号切
+  let depth = 0, parts = [], cur = "";
+  for (const ch of body) {
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (ch === "," && depth === 0) { parts.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  if (parts.length === 4) parts[3] = parts[3].replace(/\)\s*$/, "");   // 尾巴上还带一个右括号
+  return parts.length === 4 && parts[3] === "1.0";
+})(), () => { const m = /gl_Position\s*=\s*vec4\(/.exec(run(`GL_VS`)); return m ? run(`GL_VS`).slice(m.index, m.index + 120).replace(/\s+/g, " ") : "未找到"; });
+check("HUD 文字颜色跟着场景明暗走（浅场景深字、深场景浅字）", (() => {
+  const cls = (bg) => { run(`state.bg = "${bg}"; draw();`); return [...document.body.classList._s].join(","); };
+  const paper = cls("paper"), dark = cls("dark");
+  run(`state.bg = "lab"; draw();`);
+  return paper.includes("lightbg") && !paper.includes("darkbg") && dark.includes("darkbg") && !dark.includes("lightbg");
+})(), `paper=${(() => { run(`state.bg = "paper"; draw();`); return [...document.body.classList._s].join(","); })()}`);
+check("顶栏图标按钮是 4 个（视角/操作/导出/数据）", (() => {
+  const m = html.match(/<nav class="tb-tools" id="tbTools">([\s\S]*?)<\/nav>/);
+  return !!m && (m[1].match(/class="tbtn"/g) || []).length === 4;
+})(), `n=${(() => { const m = html.match(/<nav class="tb-tools" id="tbTools">([\s\S]*?)<\/nav>/); return m ? (m[1].match(/class="tbtn"/g) || []).length : 0; })()}`);
+check("顶栏没有把 logo 做得很大（图标钮 30×26）", /\.tbtn\{[^}]*width:30px;height:26px/.test(html));
+check("JS 里 getElementById 的每个 id 在 HTML 里都真实存在（防搬家后拼错/漏搬）", (() => {
+  const want = new Set();
+  for (const m of html.matchAll(/getElementById\("([^"]+)"\)/g)) want.add(m[1]);
+  const have = new Set([...html.matchAll(/id="([^"]+)"/g)].map(x => x[1]));
+  const missing = [...want].filter(k => !have.has(k));
+  return missing.length === 0;
+})(), `缺=${(() => { const want = new Set(); for (const m of html.matchAll(/getElementById\("([^"]+)"\)/g)) want.add(m[1]); const have = new Set([...html.matchAll(/id="([^"]+)"/g)].map(x => x[1])); return [...want].filter(k => !have.has(k)).join(",") || "无"; })()}`);
 
 console.log(out.join("\n"));
 console.log("\n规模：矿物", run(`DATA.minerals.length`), "种；外形", report.length, "种；变体总数",
