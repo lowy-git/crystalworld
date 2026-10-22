@@ -658,7 +658,10 @@ const DEFAULT_LUSTER = "glass";
 const EXPO = 1.10;
 /* 主光归一化的曝光系数：只按主光归一之后，副光变成纯加法，
    亮面会超过 1，所以整体压到 0.62。GL_FS 里是 uKeyExpo，Python 复刻层是 KEY_EXPO。 */
-const KEY_EXPO = 0.62;
+const KEY_EXPO = 0.55;
+/* 副光增益：归一化改成只看主光之后，副光是纯加法——不放大它们根本看不出来
+   （用户原话"六盏灯和原来完全没区别"）。1.6 倍之后暗面从 0.06 补到 0.15 左右。 */
+const FILL_GAIN = 1.6;
 
 /* 通透度：独立控制。金属光泽天然不透明（金属不透光），其余任意组合都合法：
    金刚 + 全透明 = 钻石；玻璃 + 全透明 = 石英；金刚 + 不透明 = 石榴石 */
@@ -1385,11 +1388,12 @@ function envSample(r) {
 function shadeFace(base, n, cw, eye, M) {
   const v = unit(sub(eye, cw));
   let lam = 0, sp = 0;
-  for (const L of LIGHTS) {
-    const l = L.dir;
-    lam += L.inten * Math.max(0, dot(n, l));
+  for (let i = 0; i < LIGHTS.length; i++) {
+    const L = LIGHTS[i], l = L.dir;
+    const g = i === 0 ? 1 : FILL_GAIN;      // 副光加成放大，否则"六盏灯"看不出多
+    lam += g * L.inten * Math.max(0, dot(n, l));
     const hv = unit([l[0] + v[0], l[1] + v[1], l[2] + v[2]]);
-    sp += L.inten * L.spec * Math.pow(Math.max(0, dot(n, hv)), M.shin);
+    sp += g * L.inten * L.spec * Math.pow(Math.max(0, dot(n, hv)), M.shin);
   }
   // 归一化只看主光（与 GL_FS 同式）：副光是加法，不再靠加大分母把画面压平
   const keyI = Math.max(LIGHTS[0].inten, 0.05);
@@ -1604,7 +1608,7 @@ uniform vec3 uEnvPar[3];      // x=sharp  y=inten
 uniform float uDist, uAmb, uDiff, uSpec, uShin, uFres, uIor, uEnvI, uMetal, uAmbK;
 uniform vec3 uAmbT;
 uniform float uTintSpec, uTwoSided, uAlpha;
-uniform float uDisp, uExpo, uKeyExpo;
+uniform float uDisp, uExpo, uKeyExpo, uFillGain;
 out vec4 frag;
 
 vec3 envSample(vec3 r) {
@@ -1636,11 +1640,12 @@ void main() {
   for (int i = 0; i < 6; i++) {
     vec3 l = normalize(uLigDir[i]);
     float inten = uLigInt[i].x, spec = uLigInt[i].y;
-    lam += inten * max(0.0, dot(n, l));
+    float gain = (i == 0) ? 1.0 : uFillGain;   // 副光加成放大：不然六盏灯看不出多
+    lam += gain * inten * max(0.0, dot(n, l));
     lamSum += inten;
     vec3 hv = normalize(l + v);
     float lobe = pow(max(0.0, dot(n, hv)), uShin);
-    sp += inten * spec * lobe;
+    sp += gain * inten * spec * lobe;
     spSum += inten * spec;
   }
   /* 归一化只看主光（i=0），不按总和 ——
@@ -1848,6 +1853,7 @@ function glRender(project, M, opts, list) {
     [e[0].sharp, e[0].inten, 0, e[1].sharp, e[1].inten, 0, e[2].sharp, e[2].inten, 0]));
   gl.uniform1f(glUni.uExpo, EXPO);
   gl.uniform1f(glUni.uKeyExpo, KEY_EXPO);
+  gl.uniform1f(glUni.uFillGain, FILL_GAIN);
   const S = GL_STRIDE * 4;
   gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
   gl.enableVertexAttribArray(glAttr.aPos); gl.vertexAttribPointer(glAttr.aPos, 3, gl.FLOAT, false, S, 0);

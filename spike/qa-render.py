@@ -456,7 +456,8 @@ LIGHTS = [
 LIGHT_SUM = sum(L["inten"] for L in LIGHTS)
 KEY_INTEN = max(LIGHTS[0]["inten"], 0.05)
 KEY_SPEC = max(LIGHTS[0]["inten"] * LIGHTS[0]["spec"], 0.02)
-KEY_EXPO = 0.62
+KEY_EXPO = 0.55
+FILL_GAIN = 1.6
 LIGHT_SPEC_SUM = sum(L["inten"] * L["spec"] for L in LIGHTS)
 
 
@@ -485,14 +486,15 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     v = v / (np.linalg.norm(v) + 1e-9)
     lam = 0.0
     sp = 0.0
-    for L in LIGHTS:
+    for li, L in enumerate(LIGHTS):
         l = L["dir"]
-        lam += L["inten"] * max(0.0, float(np.dot(n, l)))
+        g = 1.0 if li == 0 else FILL_GAIN      # 与 demo 的 shadeFace 一致
+        lam += g * L["inten"] * max(0.0, float(np.dot(n, l)))
         h = l + v
         h = h / (np.linalg.norm(h) + 1e-9)
-        sp += L["inten"] * L["spec"] * max(0.0, float(np.dot(n, h))) ** mat["shin"]
+        sp += g * L["inten"] * L["spec"] * max(0.0, float(np.dot(n, h))) ** mat["shin"]
     lam = (lam / KEY_INTEN) ** 1.12 * KEY_EXPO
-    sp = sp / LIGHT_SPEC_SUM * mat["spec"]
+    sp = sp / KEY_SPEC * mat["spec"] * 0.80
     b = np.array(base, dtype=float)
     amb = mat["amb"] * mat.get("ambK", 1.0)
     amb_t = mat.get("ambT", np.ones(3))
@@ -923,14 +925,15 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
         npx = nrm[None, None, :]
         lam_p = np.zeros(v.shape[:2])
         sp = np.zeros(v.shape[:2])
-        for L in LIGHTS:
+        for li, L in enumerate(LIGHTS):
             l = L["dir"][None, None, :]
-            lam_p = lam_p + L["inten"] * np.maximum(0.0, np.sum(npx * l, axis=-1))
+            g = 1.0 if li == 0 else FILL_GAIN
+            lam_p = lam_p + g * L["inten"] * np.maximum(0.0, np.sum(npx * l, axis=-1))
             hv = l + v
             hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
-            sp = sp + L["inten"] * L["spec"] * np.maximum(0.0, np.sum(npx * hv, axis=-1)) ** mat["shin"]
+            sp = sp + g * L["inten"] * L["spec"] * np.maximum(0.0, np.sum(npx * hv, axis=-1)) ** mat["shin"]
         lam_p = (lam_p / KEY_INTEN) ** 1.12 * KEY_EXPO
-        sp = sp / LIGHT_SPEC_SUM * mat["spec"]
+        sp = sp / KEY_SPEC * mat["spec"] * 0.80
         d = np.sum(npx * v, axis=-1)
         r = 2.0 * d[..., None] * npx - v
         env = env_sample_vec(r)
