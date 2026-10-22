@@ -1149,6 +1149,25 @@ check("五个场景的背景内容物互不相同（不再共用坐标系+白圈
   return new Set(sig).size === 5 && sig.every(s => s.length > 10);
 })());
 
+/* ── 第十六轮：光源绕行必须匀速（用户反馈"越转越快"） ── */
+check("光源绕行每步角度恒定（不会越转越快）", (() => {
+  run(`lightPhase = 0; lightBase = null; state.lightAz = 0; state.lightMove = true;`);
+  const a = [];
+  for (let i = 0; i < 8; i++) a.push(run(`stepLightOrbit()`));
+  const d = [];
+  for (let i = 1; i < a.length; i++) {
+    let x = a[i] - a[i - 1];
+    if (x > 180) x -= 360; if (x < -180) x += 360;
+    d.push(x);
+  }
+  // 读数四舍五入到整度，前几步会差 1 度；只看后 4 步是否一致
+  const tail = d.slice(4);
+  return tail.every(x => Math.abs(x - tail[0]) <= 1.001) && Math.abs(tail[0]) > 0.05 && Math.abs(tail[0]) < 2;
+})(), "d=" + run(`(() => { lightPhase = 0; lightBase = null; state.lightAz = 0; const a=[]; for (let i=0;i<8;i++) a.push(stepLightOrbit()); const d=[]; for (let i=1;i<a.length;i++){let x=a[i]-a[i-1]; if(x>180)x-=360; if(x<-180)x+=360; d.push(x.toFixed(2));} return d.join(","); })()`));
+check("光源绕行不把 state.lightAz 当基数（基点单独存 lightBase）", /let\s+lightBase\s*=\s*null/.test(html)
+  && /lightBase\s*\+\s*lightPhase/.test(html)
+  && !/az\s*=\s*\(\(state\.lightAz\s*\?\?\s*35\)\s*\+\s*lightPhase/.test(html));
+
 console.log(out.join("\n"));
 console.log("\n规模：矿物", run(`DATA.minerals.length`), "种；外形", report.length, "种；变体总数",
   run(`DATA.minerals.reduce((a,m)=>a+m.habits.reduce((b,h)=>b+Object.keys(h.variants).length,0),0)`));

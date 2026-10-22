@@ -2395,9 +2395,18 @@ function draw() {
   }
 }
 
-/* ============ 动画 ============ */
-let spinning = false;
 let lightPhase = 0;
+let lightBase = null;   // 绕行的基点：必须和显示用的 state.lightAz 分开——
+                        // 否则 az_{n+1}=(az_n+step) 里 step 本身在涨，就会越转越快
+/* 光源绕行的一步。抽成函数是为了能单测：连续调用时每步的角度增量必须恒定。 */
+function stepLightOrbit() {
+  if (lightBase === null) lightBase = state.lightAz ?? 35;
+  lightPhase += 0.0011;
+  let az = (lightBase + lightPhase * 57.2958) % 360;
+  if (az > 180) az -= 360;
+  state.lightAz = Math.round(az);   // 只驱动滑杆读数，不再当计算的基数
+  return az;
+}
 function loop() {
   if (state.spin) {
     state.quat = qNorm(qMul(qAxis(0, 1, 0, 0.0075), state.quat));
@@ -2406,11 +2415,7 @@ function loop() {
   // 光源移动：晶体不动、光绕着它转。比自动旋转更能看清"面与面之间的明暗差"，
   // 因为转的是高光而不是物体的轮廓。默认跟主光滑杆同一个方位角，转起来不会跳。
   if (state.lightMove) {
-    lightPhase += 0.0011;
-    let az = ((state.lightAz ?? 35) + lightPhase * 57.2958) % 360;
-    if (az > 180) az -= 360;
-    state.lightAz = Math.round(az);
-    setLight(az, state.lightEl ?? 34);
+    setLight(stepLightOrbit(), state.lightEl ?? 34);
     renderLight();
     if (!state.spin) draw();
   }
@@ -2762,7 +2767,9 @@ document.getElementById("incSize").oninput = (e) => {
   buildInclusions(); renderInclusions(); draw();
 };
 document.getElementById("lightAz").oninput = (e) => {
-  state.lightAz = Number(e.target.value); setLight(state.lightAz, state.lightEl); renderLight(); draw();
+  state.lightAz = Number(e.target.value);
+  lightBase = state.lightAz;      // 手动拖滑杆时重新取基点，绕行从这里接着转
+  setLight(state.lightAz, state.lightEl); renderLight(); draw();
 };
 document.getElementById("lightEl").oninput = (e) => {
   state.lightEl = Number(e.target.value); setLight(state.lightAz, state.lightEl); renderLight(); draw();
