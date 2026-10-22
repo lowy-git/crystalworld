@@ -1149,6 +1149,38 @@ check("五个场景的背景内容物互不相同（不再共用坐标系+白圈
   return new Set(sig).size === 5 && sig.every(s => s.length > 10);
 })());
 
+/* ── 第十七轮：多晶体的锁定 / 晶簇 / 基岩底座 ── */
+check("组：锁定整组后左键转的是整组（刚体），不锁定才逐颗拖动", (() => {
+  run(`state.extras = []; state.extras.push(mkExtra(state.mineralId)); state.extraSel = 0;`);
+  run(`state.groupLock = false; state.moveMode = true; state.groupYaw = 0;`);
+  const a = run(`(() => { const e = state.extras[0]; return instXform(e, [1, 0, 0])[0]; })()`);
+  run(`state.groupLock = true; state.groupYaw = Math.PI / 2;`);
+  const b = run(`(() => { const e = state.extras[0]; return instXform(e, [1, 0, 0])[2]; })()`);
+  // 锁定 + 整组转 90°：rotYv([1,0,0], π/2) = [0,0,-1]，世界 x 归零、z 变成 -1
+  return Math.abs(a - 1) < 1e-6 && Math.abs(b + 1) < 1e-6 && Math.abs(a) > 0.5;
+})(), "a=" + run(`(() => { state.extras=[]; state.extras.push(mkExtra(state.mineralId)); state.groupLock=false; state.groupYaw=0; return instXform(state.extras[0],[1,0,0])[0]; })()`));
+check("组：锁定状态在 UI 里互斥（锁定时 moveMode 关闭）", /state\.groupLock\)\s*state\.moveMode\s*=\s*false/.test(html));
+check("组：晶簇按钮一次加 4 颗且不超过上限", (() => {
+  run(`state.extras = []; addCluster();`);
+  const n = run(`state.extras.length`);
+  run(`addCluster(); addCluster();`);
+  const n2 = run(`state.extras.length`);
+  return n === 4 && n2 === Number(run(`MAX_CRYSTALS`)) - 1;
+})(), "n=" + run(`(() => { state.extras = []; addCluster(); return state.extras.length; })()`));
+check("基岩：四种底座各自给出台面高度", (() => {
+  const ys = run(`Object.fromEntries(Object.entries(BASES).map(([k, v]) => [k, v.y]))`);
+  return ys.none === null && ys.slab > 0.7 && ys.geode > 0.7 && ys.wood > 0.7 && ys.slab < ys.wood;
+})(), "ys=" + JSON.stringify(run(`Object.fromEntries(Object.entries(BASES).map(([k, v]) => [k, v.y]))`)));
+check("基岩：每个底座都能正常画一帧（含放在桌面上）", (() => {
+  for (const id of Object.keys(run(`BASES`))) {
+    run(`state.base = ${JSON.stringify(id)}; state.onTable = true; draw();`);
+  }
+  run(`state.base = "none"; state.onTable = true; draw();`);
+  return true;
+})());
+check("基岩：导出背景也画底座（预览与保存同源）", /drawBase\(g,\s*state\.base,\s*w,\s*h\)/.test(html));
+check("基岩：无底座时退回场景自带的桌面线", /BASES\[state\.base\]\s*&&\s*BASES\[state\.base\]\.y\)\s*\|\|\s*\(BG\.table\s*&&\s*BG\.table\.y\)/.test(html));
+
 /* ── 第十六轮：光源绕行必须匀速（用户反馈"越转越快"） ── */
 check("光源绕行每步角度恒定（不会越转越快）", (() => {
   run(`lightPhase = 0; lightBase = null; state.lightAz = 0; state.lightMove = true;`);

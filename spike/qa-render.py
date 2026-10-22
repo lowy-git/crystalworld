@@ -158,7 +158,7 @@ def draw_bg(kind, W, H):
 def _rnd(seed):
     """确定性伪随机（复刻 demo 的 backdropRnd）"""
     h = 2166136261
-    for ch in seed:
+    for ch in str(seed):
         h ^= ord(ch)
         h = (h * 16777619) & 0xFFFFFFFF
     def f():
@@ -536,10 +536,56 @@ def shade(base, n, c, eye, mat, tint_spec=False):
 
 STRIPE = {"quartz": ("c", 4.0), "fluorite": ("diag", 5.0), "pyrite": ("edge", 3.2)}
 
+# 基岩/底座：复刻 demo 的 BASES（y = 台面在画面高度上的位置）
+BASES = {"none": 0.0, "slab": 0.80, "geode": 0.78, "wood": 0.84}
+
+
+def draw_base(dr, bid, W, H):
+    """石板 / 晶洞 / 木座 —— 与 demo/crystal_template.html 的 drawBase 同几何。"""
+    if bid not in BASES or BASES[bid] <= 0:
+        return None
+    y = BASES[bid] * H
+    cx = W * 0.5
+    u = min(W, H)
+    rnd = _rnd(4821)
+    if bid == "slab":
+        hw, hh = u * 0.62, u * 0.20
+        dr.polygon([(cx - hw, y), (cx + hw, y), (cx + hw * 0.86, y + hh), (cx - hw * 0.86, y + hh)],
+                   fill=(93, 90, 83))
+        dr.line([(cx - hw, y), (cx + hw, y)], fill=(255, 255, 255, 41), width=max(1, int(u * 0.0016)))
+        for _ in range(90):
+            x = cx + (rnd() - 0.5) * hw * 1.9
+            yy = y + rnd() * u * 0.02
+            c = (255, 255, 250) if rnd() > .5 else (30, 30, 25)
+            a = int((0.05 + rnd() * 0.10) * 255)
+            dr.ellipse([x - 1.6, yy - 1.6, x + 1.6, yy + 1.6], fill=c + (a,))
+    elif bid == "geode":
+        rw, rh = u * 0.72, u * 0.20
+        dr.ellipse([cx - rw * 0.5, y - rh * 0.08, cx + rw * 0.5, y + rh * 0.92], fill=(52, 52, 58))
+        for _ in range(60):
+            a = math.pi + rnd() * math.pi
+            rr = 0.82 + rnd() * 0.22
+            x = cx + math.cos(a) * rw * 0.5 * rr
+            yy = y + rh * 0.42 + math.sin(a) * rh * 0.5 * rr
+            c = (int(120 + rnd() * 60), int(116 + rnd() * 55), int(124 + rnd() * 50))
+            al = int((0.35 + rnd() * 0.4) * 255)
+            dr.ellipse([x - 3, yy - 3, x + 3, yy + 3], fill=c + (al,))
+        dr.ellipse([cx - rw * 0.44, y + rh * 0.06, cx + rw * 0.44, y + rh * 0.86], fill=(8, 8, 12, 140))
+    elif bid == "wood":
+        hw, hh = u * 0.58, u * 0.13
+        dr.polygon([(cx - hw, y), (cx + hw, y), (cx + hw * 0.9, y + hh), (cx - hw * 0.9, y + hh)],
+                   fill=(138, 90, 51))
+        dr.line([(cx - hw, y), (cx + hw, y)], fill=(255, 235, 205, 51), width=max(1, int(u * 0.0016)))
+        for i in range(14):
+            yy = y + (i + 0.5) / 14 * hh
+            dr.line([(cx - hw, yy), (cx + hw, yy)],
+                    fill=(40, 24, 12, int((0.10 + rnd() * 0.16) * 255)), width=1)
+    return y
+
 
 def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striations=True,
            alpha=None, inclusion=None, dens=0.6, light=(-25, 38), yaw=0.0, pitch=0.0,
-           indiv=None, on_table=False, split=0.0, split_dir=None, tint=True):
+           indiv=None, on_table=False, split=0.0, split_dir=None, tint=True, base="none"):
     D = load()
     m = next(x for x in D["minerals"] if x["id"] == mineral_id)
     hab = next(x for x in m["habits"] if x["id"] == habit_id)
@@ -610,6 +656,8 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
     show_edges = True
     W, H = w * SS, h * SS
     bgim = draw_bg(bg, W, H).convert("RGBA")
+    if on_table and base and base != "none":
+        draw_base(ImageDraw.Draw(bgim, "RGBA"), base, W, H)   # 基岩画在背景层、晶体之下
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img, "RGBA")
     cx, cy = W / 2, H / 2
@@ -623,7 +671,8 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         return (cx + wp[0] * k, cy - wp[1] * k)
 
     # ── 放在桌面上：底边贴到桌面线 + 接触阴影（先量外框，太高就整体缩小）──
-    table_y = BACKGROUNDS[bg]["table_y"] if on_table else None
+    #    有基岩时贴到基岩表面（比场景自带的线更靠下，看起来才"坐在上面"）
+    table_y = (BASES.get(base) or BACKGROUNDS[bg]["table_y"]) if on_table else None
     if table_y is not None:
         allwp = [R @ p for p in P]
 
@@ -632,11 +681,13 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
             return (cx + wp[0] * k, cy - wp[1] * k)
         floor_y = table_y * H
         ys = [_xy(wp)[1] for wp in allwp]
-        half = (max(ys) - min(ys)) / 2
-        room = (floor_y - H * 0.05) / 2                  # 顶部留 5% 余量
-        sc = min(1.0, room / half) if half > 0 else 1.0
+        h0 = max(ys) - min(ys)
+        avail = floor_y - H * 0.05                            # 顶部留 5% 余量
+        # 晶体是"坐"在桌面线上，可用的竖向空间不是 floor_y/2 而是 floor_y-余量
+        sc = min(1.0, avail / h0) if h0 > 0 else 1.0
         xys = [_xy(wp, sc) for wp in allwp]
-        cy = floor_y - max(y for _, y in xys)            # 最低顶点贴到桌面线
+        # y_new = cy - (cy_old - y_old)*sc；令最低顶点等于桌面线解出 cy
+        cy = floor_y + sc * (cy - max(y for _, y in xys))            # 最低顶点贴到桌面线
         draw_contact_shadow(dr, (min(x for x, _ in xys) + max(x for x, _ in xys)) / 2,
                             floor_y, max(6.0, (max(x for x, _ in xys) - min(x for x, _ in xys)) * 0.52))
         # 缩小/平移后 proj 也要跟着变
@@ -1039,11 +1090,11 @@ def render_gl(mineral_id, habit_id, mask_key=None, w=900, h=700, luster=None, bg
             return (cx + wp[0] * k, cy - wp[1] * k)
         floor_y = table_y * H
         ys = [_xy(wp)[1] for wp in allwp]
-        half = (max(ys) - min(ys)) / 2
-        room = (floor_y - H * 0.05) / 2
-        sc = min(1.0, room / half) if half > 0 else 1.0
+        h0 = max(ys) - min(ys)
+        avail = floor_y - H * 0.05
+        sc = min(1.0, avail / h0) if h0 > 0 else 1.0
         xys = [_xy(wp, sc) for wp in allwp]
-        cy = floor_y - max(y for _, y in xys)
+        cy = floor_y + sc * (cy - max(y for _, y in xys))
         FOC = FOC * sc
     # twoSided：有补盖面或开形（与 demo 的 uTwoSided 同条件）
     two_sided = any(f["clip"] == 1 for f in faces) or not v.get("closed", True)
@@ -1217,6 +1268,24 @@ if __name__ == "__main__":
             dr.text(((i % 2) * T + 12, (i // 2) * T + 8), lab, fill=(205, 214, 228), font=fnt)
         out.save("render/qa-table.png")
         print("saved render/qa-table.png")
+    elif mode == "base":
+        # 基岩/底座：石板 / 晶洞 / 木座 × 无基岩对照，检查晶体是否"坐在上面"
+        T = 380
+        tiles = [
+            ("quartz", "prismatic", "111", "lab", "石板 · 石英", "slab"),
+            ("fluorite", "cuboctahedron", "11", "cabinet", "晶洞 · 萤石", "geode"),
+            ("calcite", "scalenohedron", "11", "paper", "木座 · 方解石", "wood"),
+            ("garnet", "combined", "111", "dark", "无基岩（对照）", "none"),
+        ]
+        out = Image.new("RGB", (2 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        for i, (mi, hi, mk, bgk, lab, bid) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster="glass", bg=bgk, on_table=True, base=bid)
+            out.paste(im, ((i % 2) * T, (i // 2) * T))
+            dr.text(((i % 2) * T + 12, (i // 2) * T + 8), lab, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-base.png")
+        print("saved render/qa-base.png")
     elif mode == "sweep":
         # 细粒度旋转扫描：日本律双晶 12 个方位角 + 3 个俯仰角，找"旋转出错"的角度
         T = 300

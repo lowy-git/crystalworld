@@ -383,8 +383,11 @@
         <div class="srow" style="margin-top:8px">
           <button class="btn" id="exAdd" type="button">＋ 加一个晶体</button>
           <button class="btn" id="exDel" type="button">删除</button>
+          <button class="btn" id="exCluster" type="button" title="一颗主晶体 + 四颗小的，围在四周">晶簇</button>
         </div>
         <label class="ck" style="margin-top:8px"><input type="checkbox" id="exMove"> 拖动位置（左键拖着走）</label>
+        <label class="ck" style="margin-top:4px"><input type="checkbox" id="exLock"> 锁定整组（左键转整组，作为刚体）</label>
+        <div class="srow" style="margin-top:6px"><span>整组转角 <b id="grpYawVal" class="val"></b></span><input type="range" id="grpYaw" min="0" max="360" step="5"></div>
         <div id="exCtl" style="margin-top:8px;display:none">
           <div class="srow"><span>矿物</span></div>
           <select id="exMin" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line2)"></select>
@@ -393,8 +396,7 @@
           <div class="srow" style="margin-top:6px"><span>大小 <b id="exScaleVal" class="val"></b></span><input type="range" id="exScale" min="35" max="180" step="5"></div>
           <div class="srow"><span>朝向 <b id="exYawVal" class="val"></b></span><input type="range" id="exYaw" min="0" max="360" step="5"></div>
         </div>
-        <div class="swarning" id="exHint">最多 6 个（含主晶体）。拖动只改位置，不改变结晶学参数。</div>
-      </div>
+        <div class="swarning" id="exHint">最多 6 个（含主晶体）。拖动只改位置，不改变结晶学参数。<br>摆放：逐颗拖动位置；锁定：整组作为刚体一起转。</div>      </div>
     </div>
     <div class="sec" data-sec="scene">
       <h3><button class="fold" type="button" aria-expanded="true">场景 <span style="text-transform:none;letter-spacing:0">Scene</span></button></h3>
@@ -403,6 +405,7 @@
         <div class="row" style="margin-top:6px">
           <label style="flex:1"><input type="checkbox" id="onTable"> 放在桌面上（贴合 + 接触阴影）</label>
         </div>
+        <div class="row wrap" id="bases" style="margin-top:6px"></div>
         <div class="swarning" id="tableHint">贴合台面高度并加一圈接触阴影；关掉则晶体悬在场景中央。</div>
         <div class="swarning" id="bgHint"></div>
       </div>
@@ -917,6 +920,7 @@ const state = {
   bg: "paper",         // 启动时按当地时间定（见 daytimeBg），用户一选就钉住
   bgPicked: false,     // 用户手动选过场景没有
   onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
+  base: "none",        // 基岩/底座：none / slab / geode / wood
   inclusion: "none",   // 默认无：内含物由用户主动开启
   incDensity: 0.6,     // 只控制「出现多少个」
   incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
@@ -928,6 +932,8 @@ const state = {
   extras: [],          // 附加晶体（不含主晶体），最多 MAX_CRYSTALS - 1 个
   extraSel: -1,        // 当前选中的附加晶体下标
   moveMode: false,     // 「拖动位置」：左键拖着选中的晶体在桌面上走
+  groupLock: false,    // 锁定整组：锁上后左键转的是整组（刚体），拆开时才能逐颗摆位置
+  groupYaw: 0,         // 整组绕 y 的转角：所有晶体（含主晶体）作为刚体一起转
   showDomain: true,    // 转变双晶（道芬/巴西律）的域界虚线：纯示意，可关掉
   uniform: null,       // {hex}
   exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
@@ -1068,15 +1074,18 @@ function extraMat(e, bgId) {
   const alpha = L.opaqueOnly ? 1 : defaultAlpha(m);
   return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
 }
-/* 实例变换：先绕 y 轴自转，再缩放，再平移到世界坐标 */
+/* 绕 y 轴转一个三维点（自转用） */
 function rotYv(p, a) {
   const c = Math.cos(a || 0), s = Math.sin(a || 0);
   return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
 }
+/* 实例变换：先绕 y 轴自转，再缩放，再平移到世界坐标。
+   摆放位置先过"整组旋转" groupYaw——锁定后整组作为刚体一起转。 */
 function instXform(inst, p) {
   const q = rotYv(p, inst.yaw);
   const k = inst.scale == null ? 1 : inst.scale;
-  return [q[0] * k + inst.pos[0], q[1] * k + inst.pos[1], q[2] * k + inst.pos[2]];
+  const w = rotYv([q[0] * k + inst.pos[0], q[1] * k + inst.pos[1], q[2] * k + inst.pos[2]], state.groupYaw);
+  return w;
 }
 /* 场景列表：主晶体在 index 0。按"离相机由远到近"排序——半透明实例必须从远往近画，
    否则前面画过的东西会被后面的 alpha 混合覆盖（GL 的 blend 不支持乱序）。 */
@@ -1955,7 +1964,7 @@ function paintFaces(g, opts, project, M) {
       lg.setTransform(dpr, 0, 0, dpr, 0, 0);
       lg.clearRect(0, 0, vw, vh);
       try { lg.drawImage(glc, 0, 0, vw, vh); } catch (err) { /* 桩环境 */ }
-      for (const it of list) paintOverlay(lg, opts, projOf(it), it.M, it);  // 棱线/晶纹叠在 GL 填充之上
+      for (const it of list) paintOverlay(lg, opts, project, it.M, it);     // 棱线/晶纹叠在 GL 填充之上
     } else layer = null;
   }
   g.save();
@@ -1966,7 +1975,7 @@ function paintFaces(g, opts, project, M) {
     // 无 webgl2：整条走 2D（含填充），逐实例整层乘 alpha
     for (const it of list) {
       g.globalAlpha = it.M.alpha == null ? 1 : it.M.alpha;
-      paintFaces2D(g, opts, projOf(it), it.M, it);
+      paintFaces2D(g, opts, project, it.M, it);
     }
     g.globalAlpha = 1;
   }
@@ -2002,6 +2011,9 @@ function paintFaces(g, opts, project, M) {
    面心色和逐像素填充会差几个百分点，1px 的缝看起来就像一圈描边。 */
 function paintOverlay(g, opts, project, M, inst) {
   const R0 = project.R, DIST = project.DIST;
+  // 附加晶体：project 传进来的仍是**主晶体的**投影（R/DIST 等元数据都在它上面），
+  // 只是点要先过 instXform。早期直接传包装函数进来，project.R 读成 undefined。
+  const P = (inst && !inst.main) ? (p) => project(instXform(inst, p)) : project;
   const G = (inst && inst.geo) || GEO;
   const ts = inst ? (inst.main ? state.twinShow : "both") : state.twinShow;
   // 实例自转会改变法线方向（投影函数里点已经转过了，法线得自己转一圈）
@@ -2042,6 +2054,7 @@ function paintOverlay(g, opts, project, M, inst) {
 function paintFaces2D(g, opts, project, M, inst) {
   const G = (inst && inst.geo) || GEO;
   const R0 = project.R, DIST = project.DIST;
+  const P = (inst && !inst.main) ? (p) => project(instXform(inst, p)) : project;
   const RN = (v) => ((inst && inst.yaw) ? mv(R0, rotYv(v, inst.yaw)) : mv(R0, v));
   const R = R0;
   const ts = inst ? (inst.main ? state.twinShow : "both") : state.twinShow;
@@ -2072,7 +2085,7 @@ function paintFaces2D(g, opts, project, M, inst) {
   list.sort((a, b) => (b.rank - a.rank) || (b.depth - a.depth));
 
   for (const it of list) {
-    const pts = it.f.pts.map(project);
+    const pts = it.f.pts.map(P);
     g.beginPath();
     pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
     g.closePath();
@@ -2157,6 +2170,80 @@ function fitToTable(opts, tbl) {
    ② 第二版五场景共用同一套"坐标系 + 白圈 + 横线"，用户反馈"很奇怪的图案"。
    所以现在是每场景各自的内容：深空=星空银河、实验室=仪器、自然界=河流远山、
    藏品柜=木柜、纸面=从上往下看的一张纸。 */
+/* ── 基岩 / 底座 ─────────────────────────────────────────────
+   放在场景最底层（在背景之后、晶体之前）。除了好看，它还提供一个"台面高度"：
+   勾了「放在桌面上」的晶体会落在这个表面上，而不是场景自带的那条线。 */
+const BASES = {
+  none:  { zh: "无",   y: null, dark: 1.00 },
+  slab:  { zh: "石板", y: 0.80, dark: 0.98 },
+  geode: { zh: "晶洞", y: 0.78, dark: 0.92 },
+  wood:  { zh: "木座", y: 0.84, dark: 1.02 },
+};
+function drawBase(g, id, w, h) {
+  const B = BASES[id];
+  if (!B || !B.y) return null;
+  const y = B.y * h, cx = w * 0.5, u = Math.min(w, h);
+  const rnd = backdropRnd(4821);
+  g.save();
+  if (id === "slab") {                                  // 一块平整的石板（带透视的梯形台面）
+    const hw = u * 0.62, hh = u * 0.20;
+    g.beginPath();
+    g.moveTo(cx - hw, y); g.lineTo(cx + hw, y);
+    g.lineTo(cx + hw * 0.86, y + hh); g.lineTo(cx - hw * 0.86, y + hh);
+    g.closePath();
+    const gr = g.createLinearGradient(0, y, 0, y + hh);
+    gr.addColorStop(0, "#6d6a63"); gr.addColorStop(1, "#413f3a");
+    g.fillStyle = gr; g.fill();
+    g.strokeStyle = "rgba(255,255,255,.16)"; g.lineWidth = Math.max(1, u * 0.0016); g.stroke();
+    g.save(); g.beginPath(); g.rect(cx - hw, y, hw * 2, u * 0.012); g.clip();
+    for (let i = 0; i < 90; i++) {                      // 石面麻点
+      const x = cx + (rnd() - 0.5) * hw * 1.9, yy = y + rnd() * u * 0.02;
+      g.fillStyle = `rgba(${rnd() > .5 ? 255 : 30},${rnd() > .5 ? 255 : 30},${rnd() > .5 ? 250 : 25},${0.05 + rnd() * 0.10})`;
+      g.beginPath(); g.arc(x, yy, 0.8 + rnd() * 2.6, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+  } else if (id === "geode") {                          // 晶洞：一圈岩壳围出一个凹坑，晶体站在坑沿
+    const rw = u * 0.72, rh = u * 0.20;
+    g.beginPath();
+    g.ellipse(cx, y + rh * 0.42, rw * 0.5, rh * 0.5, 0, Math.PI, 0);
+    g.closePath();
+    const gr = g.createLinearGradient(0, y - rh, 0, y + rh);
+    gr.addColorStop(0, "#4a4a52"); gr.addColorStop(1, "#22222a");
+    g.fillStyle = gr; g.fill();
+    g.strokeStyle = "rgba(255,255,255,.13)"; g.lineWidth = Math.max(1, u * 0.0018); g.stroke();
+    for (let i = 0; i < 60; i++) {                      // 岩壳上的碎块
+      const a = Math.PI + rnd() * Math.PI, rr = 0.82 + rnd() * 0.22;
+      const x = cx + Math.cos(a) * rw * 0.5 * rr, yy = y + rh * 0.42 + Math.sin(a) * rh * 0.5 * rr;
+      g.fillStyle = `rgba(${120 + rnd() * 60 | 0},${116 + rnd() * 55 | 0},${124 + rnd() * 50 | 0},${0.35 + rnd() * 0.4})`;
+      g.beginPath(); g.arc(x, yy, 1 + rnd() * 3.4, 0, Math.PI * 2); g.fill();
+    }
+    g.beginPath();                                       // 坑内的暗部
+    g.ellipse(cx, y + rh * 0.46, rw * 0.44, rh * 0.40, 0, 0, Math.PI * 2);
+    g.fillStyle = "rgba(8,8,12,.55)"; g.fill();
+  } else if (id === "wood") {                           // 一个抛光的木座
+    const hw = u * 0.58, hh = u * 0.13;
+    g.beginPath();
+    g.moveTo(cx - hw, y); g.lineTo(cx + hw, y);
+    g.lineTo(cx + hw * 0.9, y + hh); g.lineTo(cx - hw * 0.9, y + hh);
+    g.closePath();
+    const gr = g.createLinearGradient(0, y, 0, y + hh);
+    gr.addColorStop(0, "#8a5a33"); gr.addColorStop(1, "#4d3119");
+    g.fillStyle = gr; g.fill();
+    g.strokeStyle = "rgba(255,235,205,.20)"; g.lineWidth = Math.max(1, u * 0.0016); g.stroke();
+    g.save(); g.beginPath(); g.rect(cx - hw, y, hw * 2, hh); g.clip();
+    for (let i = 0; i < 14; i++) {                      // 木纹
+      const yy = y + (i + 0.5) / 14 * hh;
+      g.strokeStyle = `rgba(40,24,12,${0.10 + rnd() * 0.16})`;
+      g.lineWidth = 0.6 + rnd() * 1.6;
+      g.beginPath(); g.moveTo(cx - hw, yy);
+      g.bezierCurveTo(cx - hw * 0.3, yy + (rnd() - 0.5) * 5, cx + hw * 0.3, yy + (rnd() - 0.5) * 5, cx + hw, yy);
+      g.stroke();
+    }
+    g.restore();
+  }
+  g.restore();
+  return y;
+}
 function drawSceneProps(g, id, w, h) {
   const u = Math.min(w, h);
   const cx = w * 0.5, cy = h * 0.40, R = u * 0.34;      // 晶体大致占这一块
@@ -2284,14 +2371,18 @@ function paint(g, opts) {
   if (!opts.noBg) {                                     // 程序化背景：渐变/展台/远山/纸面
     BG.draw(g, opts.vw, opts.vh);
     drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh);   // 晶体后方的透射参考物
+    drawBase(g, state.base, opts.vw, opts.vh);                 // 基岩/底座（也在晶体身后）
   }
   // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
-  const tbl = (state.onTable && !opts.noTable) ? BG.table : null;
+  //    有基岩时贴到基岩的表面（比场景自带的线更靠下，看起来才"坐在上面"）
+  const tbl = (state.onTable && !opts.noTable)
+    ? { y: (BASES[state.base] && BASES[state.base].y) || (BG.table && BG.table.y) } : null;
+  const tbl2 = (tbl && tbl.y) ? tbl : null;
   let project;
-  if (tbl) {
-    opts = fitToTable(opts, tbl);
+  if (tbl2) {
+    opts = fitToTable(opts, tbl2);
     const b = projectedBox(makeProject(opts));
-    drawContactShadow(g, (b.xmin + b.xmax) / 2, tbl.y * opts.vh, Math.max(6, (b.xmax - b.xmin) * 0.52));
+    drawContactShadow(g, (b.xmin + b.xmax) / 2, tbl2.y * opts.vh, Math.max(6, (b.xmax - b.xmin) * 0.52));
     project = makeProject(opts);
   } else {
     project = makeProject(opts);
@@ -2435,7 +2526,7 @@ cv.addEventListener("pointerdown", (e) => {
   cv.setPointerCapture(e.pointerId);
   // 「拖动位置」模式：左键拖着选中的附加晶体在世界里走（不旋转视角）
   const ex = state.extras[state.extraSel];
-  const moving = state.moveMode && e.button === 0 && !e.shiftKey && !!ex;
+  const moving = state.moveMode && !state.groupLock && e.button === 0 && !e.shiftKey && !!ex;
   drag = { x: e.clientX, y: e.clientY, pan: !moving && (e.button === 2 || e.shiftKey), move: moving, id: e.pointerId };
 });
 cv.addEventListener("pointermove", (e) => {
@@ -2453,6 +2544,14 @@ cv.addEventListener("pointermove", (e) => {
     }
   } else if (drag.pan) {
     state.pan = [state.pan[0] + dx, state.pan[1] + dy];
+  } else if (state.groupLock) {
+    // 锁定整组：左键转的是整组（刚体），每颗晶体自己的朝向不变
+    const k = state.inputMode === "touch" ? 0.0125 : 0.0085;
+    state.groupYaw += dx * k;
+    if (document.getElementById("grpYaw")) {
+      document.getElementById("grpYaw").value = String(Math.round(state.groupYaw * 57.2958) % 360);
+      renderExtras();
+    }
   } else {
     const k = state.inputMode === "touch" ? 0.0125 : 0.0085;
     state.quat = qNorm(qMul(qMul(qAxis(0, 1, 0, dx * k), qAxis(1, 0, 0, dy * k)), state.quat));
@@ -2577,6 +2676,21 @@ function renderForms() {
     : (h.forms.length > 1
       ? "取消勾选 → 其余单形重新闭合为完整晶形（不是挖掉面）。"
       : "该外形只有一种单形。");
+}
+
+/* 基岩/底座按钮 */
+function renderBases() {
+  const box = document.getElementById("bases");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const [id, B] of Object.entries(BASES)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn" + (state.base === id ? " on" : "");
+    b.textContent = B.zh;
+    b.onclick = () => { state.base = id; renderBases(); draw(); };
+    box.appendChild(b);
+  }
 }
 
 function renderLusters() {
@@ -2880,6 +2994,27 @@ function renderExtras() {
   if (sc) { sc.value = Math.round((e.scale == null ? 1 : e.scale) * 100); if (sv) sv.textContent = sc.value + "%"; }
   const yw = document.getElementById("exYaw"), yv = document.getElementById("exYawVal");
   if (yw) { yw.value = Math.round(e.yaw || 0); if (yv) yv.textContent = yw.value + "°"; }
+  const gk = document.getElementById("grpYaw"), gv = document.getElementById("grpYawVal");
+  if (gk) { gk.value = String(((Math.round(state.groupYaw * 57.2958) % 360) + 360) % 360); if (gv) gv.textContent = gk.value + "°"; }
+}
+/* 晶簇：主晶体 + 4 颗小的，围在四周、朝向随机但大小分档。
+   位置用固定的一组黄金角方向，保证不重叠也看不出"排得太齐"。 */
+function addCluster() {
+  if (state.extras.length >= MAX_CRYSTALS - 1) return;
+  const ang = [0.6, 2.4, 3.9, 5.3];
+  const rad = [1.35, 1.15, 1.30, 1.20];
+  const sc = [0.42, 0.34, 0.46, 0.30];
+  for (let i = 0; i < 4 && state.extras.length < MAX_CRYSTALS - 1; i++) {
+    const e = mkExtra(state.mineralId);
+    e.pos = [Math.cos(ang[i]) * rad[i], 0.05, Math.sin(ang[i]) * rad[i]];
+    e.scale = sc[i];
+    e.yaw = Math.round((ang[i] + 0.7) * 57.2958) % 360;
+    state.extras.push(e);
+  }
+  state.extraSel = state.extras.length - 1;
+  state.moveMode = true;
+  state.groupLock = false;
+  renderExtras(); draw();
 }
 function bindExtras() {
   const a = document.getElementById("exAdd");
@@ -2906,6 +3041,30 @@ function bindExtras() {
   if (mm && !mm.dataset.done) {
     mm.dataset.done = "1";
     mm.onchange = () => { state.moveMode = mm.checked; renderExtras(); draw(); };
+  }
+  const lk = document.getElementById("exLock");
+  if (lk && !lk.dataset.done) {
+    lk.dataset.done = "1";
+    lk.onchange = () => {
+      state.groupLock = lk.checked;
+      if (state.groupLock) state.moveMode = false;   // 锁了就一起转，不再逐颗拖动
+      renderExtras(); draw();
+    };
+  }
+  const cl = document.getElementById("exCluster");
+  if (cl && !cl.dataset.done) {
+    cl.dataset.done = "1";
+    cl.onclick = addCluster;
+  }
+  const gk = document.getElementById("grpYaw");
+  if (gk && !gk.dataset.done) {
+    gk.dataset.done = "1";
+    gk.oninput = () => {
+      state.groupYaw = Number(gk.value) / 57.2958;
+      const gv = document.getElementById("grpYawVal");
+      if (gv) gv.textContent = gk.value + "°";
+      draw();
+    };
   }
   const sc = document.getElementById("exScale");
   if (sc && !sc.dataset.done) {
@@ -2964,6 +3123,7 @@ function syncPanels() {
   document.getElementById("spB").classList.toggle("on", state.twinShow === "B");
   renderLusters();
   renderBackgrounds();
+  renderBases();
   renderTransp();
   renderInclusions();
   renderForms();      // 曾经漏掉这一行：初始化与换矿物后单形列表都是空的，点了也没反应
@@ -3120,7 +3280,7 @@ function buildExportCanvas() {
   const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
   const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
 
-  if (BG) { BG.draw(g, w, h); drawSceneProps(g, bg, w, h); }
+  if (BG) { BG.draw(g, w, h); drawSceneProps(g, bg, w, h); drawBase(g, state.base, w, h); }
 
   // 晶体区域
   const m = mineral(), hb = habit(), v = variant();
@@ -3399,6 +3559,7 @@ if (!state.bgPicked) {
   state.exp.bg = state.bg;
   applySceneLights(state.bg);
   renderBackgrounds();
+  renderBases();
   draw();
 }
 </script>
