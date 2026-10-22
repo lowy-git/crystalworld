@@ -444,11 +444,14 @@ ENV_LIGHTS = [
     dict(dir=_u([0.72, 0.28, 0.62]),  col=np.array([0.60, 0.72, 1.00]), sharp=26, inten=0.50),
     dict(dir=_u([0.10, -0.85, 0.50]), col=np.array([0.95, 0.78, 0.58]), sharp=2,  inten=0.26),
 ]
-# 三盏方向光：主光 / 轮廓光（后方）/ 补光（前下）
+# 六盏方向光：主光 / 轮廓光（后方）/ 补光（前下）/ 顶光 / 底反光 / 后左侧光
 LIGHTS = [
-    dict(dir=_u([-0.34, 0.62, 0.72]),   inten=1.00, spec=1.0),
-    dict(dir=_u([0.62, 0.46, -0.64]),   inten=0.60, spec=1.1),
-    dict(dir=_u([-0.78, -0.32, 0.54]),  inten=0.34, spec=0.5),
+    dict(dir=_u([-0.34, 0.62, 0.72]),   inten=1.60, spec=1.0),
+    dict(dir=_u([0.62, 0.46, -0.64]),   inten=0.55, spec=1.1),
+    dict(dir=_u([-0.78, -0.32, 0.54]),  inten=0.26, spec=0.5),
+    dict(dir=_u([0.08, 1.00, 0.16]),    inten=0.38, spec=0.9),
+    dict(dir=_u([-0.24, -0.92, 0.26]),  inten=0.16, spec=0.3),
+    dict(dir=_u([-0.58, 0.28, -0.76]),  inten=0.26, spec=0.8),
 ]
 LIGHT_SUM = sum(L["inten"] for L in LIGHTS)
 LIGHT_SPEC_SUM = sum(L["inten"] * L["spec"] for L in LIGHTS)
@@ -485,7 +488,7 @@ def shade(base, n, c, eye, mat, tint_spec=False):
         h = l + v
         h = h / (np.linalg.norm(h) + 1e-9)
         sp += L["inten"] * L["spec"] * max(0.0, float(np.dot(n, h))) ** mat["shin"]
-    lam /= LIGHT_SUM
+    lam = (lam / LIGHT_SUM) ** 1.25
     sp = sp / LIGHT_SPEC_SUM * mat["spec"]
     b = np.array(base, dtype=float)
     amb = mat["amb"] * mat.get("ambK", 1.0)
@@ -496,19 +499,33 @@ def shade(base, n, c, eye, mat, tint_spec=False):
     d = float(np.dot(n, v))
     rd = 2 * d * n - v
     env = env_sample(rd)
-    # 色散（火彩）：与 GL_FS / shadeFace 同一个式子
-    disp = mat.get("disp", 0.0)
-    phase = float(np.dot(rd, [0.5773, 0.5773, 0.5773])) * 1.7 + d * 0.6
-    fire = 0.5 + 0.5 * np.cos(6.28318 * (np.array([0.0, 0.33, 0.67]) + phase))
-    fire_col = 1.0 + (fire - 1.0) * disp
-    col = col + spec_col * sp * fire_col
+    # 表面高光与反射保持白色（纯菲涅耳），色散只出现在晶体内部——见下方 internal
+    col = col + spec_col * sp
     R0 = 1.0 if mat.get("metal") else ((mat["ior"] - 1) / (mat["ior"] + 1)) ** 2
     F = R0 + (1 - R0) * (1 - abs(d)) ** 5
     refl = F * mat["envI"]
     tint_ref = b if mat.get("metal") else np.ones(3)
-    col = col + tint_ref * refl * env * fire_col
+    col = col + tint_ref * refl * env
     fres = (1 - abs(d)) ** 3 * mat.get("fres", 0) * 0.45
     col = col + fres * (0.55 + 0.45 * b)
+    # 内部火彩：红/绿/蓝三个折射率各折射一次、分别采样环境（与 GL_FS 同式）
+    disp = mat.get("disp", 0.0)
+    if disp > 0:
+        ior = max(1.01, mat["ior"])
+        out = np.zeros(3)
+        for ch, k in ((0, 0.975), (1, 1.0), (2, 1.025)):
+            eta = 1.0 / max(1.01, ior * k)
+            inc = -v
+            cosi = -float(np.dot(n, inc))
+            kk = 1.0 - eta * eta * (1.0 - cosi * cosi)
+            if kk < 0:
+                rd2 = np.zeros(3)
+            else:
+                rd2 = eta * inc + (eta * cosi - math.sqrt(kk)) * n
+            out[ch] = env_sample(rd2)[ch]
+        see = 1.0 - float(mat.get("alpha", 1.0))
+        amt = disp * (0.30 + 0.70 * see) * (0.45 + 0.55 * (1 - abs(d)) ** 2)
+        col = col + out * amt * (1 - F) * 0.85
     return np.clip(col * EXPO, 0, 1)
 
 
@@ -909,7 +926,7 @@ def gl_raster(faces, R, W, H, cx, cy, FOC, mat, color_mode="form", uniform=None,
             hv = l + v
             hv = hv / (np.linalg.norm(hv, axis=-1, keepdims=True) + 1e-12)
             sp = sp + L["inten"] * L["spec"] * np.maximum(0.0, np.sum(npx * hv, axis=-1)) ** mat["shin"]
-        lam_p = lam_p / LIGHT_SUM
+        lam_p = (lam_p / LIGHT_SUM) ** 1.25
         sp = sp / LIGHT_SPEC_SUM * mat["spec"]
         d = np.sum(npx * v, axis=-1)
         r = 2.0 * d[..., None] * npx - v

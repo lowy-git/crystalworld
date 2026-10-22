@@ -446,6 +446,7 @@
           <label class="ck"><input type="checkbox" id="optStri" checked> 晶纹 Striations</label>
           <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
           <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
+          <label class="ck"><input type="checkbox" id="optLMove"> 光源绕行 Light orbit</label>
           <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
         </div>
         <!-- 双晶拆解：只在双晶习惯出现。0＝合在一起；>0＝个体 B 沿拆解方向平移 -->
@@ -807,6 +808,58 @@ const BACKGROUNDS = {
   },
 };
 
+/* 每个场景一套自己的灯 —— 换场景不只换底图，光的性格也换：
+   深空=冷、单一强主光、几乎无补光；实验室=顶光为主、平、冷白；
+   自然界=高角度暖太阳 + 天光蓝补光 + 地面绿反弹；藏品柜=顶前暖射灯、暗环境；
+   纸面=柔和满光（白天窗边），对比最低。dir 为 null 表示"由主光滑杆控制"。 */
+const SCENE_RIGS = {
+  dark:    [ {dir:null, col:[0.78,0.86,1.00], inten:1.70, spec:1.2},
+             {dir:[0.60,0.44,-0.68], col:[0.50,0.64,1.00], inten:0.50, spec:1.0},
+             {dir:[-0.80,-0.30,0.52], col:[0.55,0.62,0.85], inten:0.12, spec:0.3},
+             {dir:[0.05,1.00,0.10],  col:[0.62,0.70,0.95], inten:0.18, spec:0.5},
+             {dir:[-0.20,-0.95,0.20], col:[0.40,0.46,0.70], inten:0.06, spec:0.2},
+             {dir:[-0.55,0.26,-0.79], col:[0.48,0.60,1.00], inten:0.34, spec:1.0} ],
+  lab:     [ {dir:null, col:[1.00,1.00,1.00], inten:1.30, spec:0.8},
+             {dir:[0.62,0.46,-0.64], col:[0.86,0.92,1.00], inten:0.55, spec:0.9},
+             {dir:[-0.78,-0.32,0.54], col:[1.00,0.98,0.94], inten:0.40, spec:0.5},
+             {dir:[0.04,1.00,0.06],  col:[1.00,1.00,1.00], inten:0.85, spec:0.7},
+             {dir:[-0.18,-0.96,0.20], col:[0.92,0.94,0.98], inten:0.22, spec:0.2},
+             {dir:[-0.60,0.30,-0.74], col:[0.88,0.94,1.00], inten:0.25, spec:0.6} ],
+  nature:  [ {dir:null, col:[1.00,0.94,0.80], inten:1.75, spec:1.1},
+             {dir:[0.58,0.52,-0.62], col:[0.72,0.84,1.00], inten:0.75, spec:0.8},
+             {dir:[-0.76,-0.34,0.55], col:[0.78,0.92,0.62], inten:0.34, spec:0.4},
+             {dir:[0.02,1.00,0.04],  col:[0.86,0.92,1.00], inten:0.70, spec:0.5},
+             {dir:[-0.22,-0.94,0.24], col:[0.72,0.82,0.52], inten:0.26, spec:0.2},
+             {dir:[-0.52,0.34,-0.78], col:[0.80,0.90,0.78], inten:0.18, spec:0.5} ],
+  cabinet: [ {dir:null, col:[1.00,0.92,0.76], inten:1.90, spec:1.3},
+             {dir:[0.64,0.40,-0.66], col:[1.00,0.84,0.62], inten:0.34, spec:1.0},
+             {dir:[-0.80,-0.28,0.52], col:[0.74,0.64,0.50], inten:0.16, spec:0.3},
+             {dir:[0.06,1.00,0.08],  col:[1.00,0.90,0.74], inten:0.40, spec:0.8},
+             {dir:[-0.18,-0.96,0.22], col:[0.60,0.50,0.38], inten:0.10, spec:0.2},
+             {dir:[-0.56,0.28,-0.78], col:[0.96,0.78,0.56], inten:0.22, spec:0.7} ],
+  paper:   [ {dir:null, col:[1.00,0.98,0.94], inten:1.06, spec:0.5},
+             {dir:[0.60,0.48,-0.62], col:[0.92,0.95,1.00], inten:0.42, spec:0.4},
+             {dir:[-0.78,-0.30,0.55], col:[1.00,0.96,0.90], inten:0.55, spec:0.3},
+             {dir:[0.03,1.00,0.05],  col:[1.00,0.99,0.96], inten:0.80, spec:0.4},
+             {dir:[-0.20,-0.95,0.22], col:[0.96,0.94,0.90], inten:0.45, spec:0.2},
+             {dir:[-0.58,0.30,-0.76], col:[0.94,0.96,1.00], inten:0.20, spec:0.4} ],
+};
+/* 换场景时把灯换成该场景的一套；主光方向仍然归滑杆管 */
+function applySceneLights(id) {
+  const rig = SCENE_RIGS[id] || SCENE_RIGS.dark;
+  for (let i = 0; i < LIGHTS.length; i++) {
+    const r = rig[i] || rig[rig.length - 1];
+    LIGHTS[i].col = r.col.slice();
+    LIGHTS[i].inten = r.inten;
+    LIGHTS[i].spec = r.spec;
+    if (r.dir) LIGHTS[i].dir = unit(r.dir.slice());
+  }
+  setLight(state.lightAz, state.lightEl);
+  // 归一化的分母必须跟着换：否则换场景后"单灯 lam=1"这条不变式就断了，整体曝光会漂
+  LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
+  LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
+}
+
 const state = {
   system: "all",
   mineralId: DATA.minerals[0].id,
@@ -821,12 +874,14 @@ const state = {
   luster: null,
   transp: null,        // 通透度档位：opaque / transl / clear / custom
   alpha: null,         // 实际通透度 0–1
-  bg: "dark",
+  bg: "paper",         // 启动时按当地时间定（见 daytimeBg），用户一选就钉住
+  bgPicked: false,     // 用户手动选过场景没有
   onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
   inclusion: "none",   // 默认无：内含物由用户主动开启
   incDensity: 0.6,     // 只控制「出现多少个」
   incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
   lightAz: -25, lightEl: 38,
+  lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
   twinTint: false,
   twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
   twinShow: "both",    // both / A / B：只显示其中一个个体
@@ -1184,12 +1239,15 @@ const ENV_LIGHTS = [
    真实影棚里的晶体被多盏灯打出多个亮点，转动时亮点在不同晶面上跳，这才是"晶体感"。
    轮廓光从后方打来，专门提亮剪影边缘；补光从对侧低位补暗部。 */
 let LIGHTS = [
-  { dir: LIGHT_V.slice(),              col: [1.00, 0.97, 0.92], inten: 1.00, spec: 1.0 },  // 主光（滑杆控制）
-  { dir: unit([0.62, 0.46, -0.64]),    col: [0.72, 0.84, 1.00], inten: 0.60, spec: 1.1 },  // 轮廓光：后方高位冷光
-  { dir: unit([-0.78, -0.32, 0.54]),   col: [1.00, 0.86, 0.68], inten: 0.34, spec: 0.5 },  // 补光：前下暖光
+  { dir: LIGHT_V.slice(),              col: [1.00, 0.97, 0.92], inten: 1.60, spec: 1.0 },  // 主光（滑杆控制）
+  { dir: unit([0.62, 0.46, -0.64]),    col: [0.72, 0.84, 1.00], inten: 0.55, spec: 1.1 },  // 轮廓光：后方高位冷光
+  { dir: unit([-0.78, -0.32, 0.54]),   col: [1.00, 0.86, 0.68], inten: 0.26, spec: 0.5 },  // 补光：前下暖光
+  { dir: unit([0.08, 1.00, 0.16]),     col: [0.94, 0.96, 1.00], inten: 0.38, spec: 0.9 },  // 顶光：正上方，压住上表面
+  { dir: unit([-0.24, -0.92, 0.26]),   col: [1.00, 0.90, 0.74], inten: 0.16, spec: 0.3 },  // 底反光：台面反弹上来的暖光
+  { dir: unit([-0.58, 0.28, -0.76]),   col: [0.80, 0.88, 1.00], inten: 0.26, spec: 0.8 },  // 后左侧光：勾另一侧轮廓
 ];
-const LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
-const LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
+let LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
+let LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
 /* 光源方位/高度 → 主光方向。主柔光箱与主方向光跟着主光一起转，否则高光与环境反射会错位 */
 function setLight(azDeg, elDeg) {
   const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180, ce = Math.cos(el);
@@ -1222,7 +1280,7 @@ function shadeFace(base, n, cw, eye, M) {
     const hv = unit([l[0] + v[0], l[1] + v[1], l[2] + v[2]]);
     sp += L.inten * L.spec * Math.pow(Math.max(0, dot(n, hv)), M.shin);
   }
-  lam /= LIGHT_SUM; sp = sp / LIGHT_SPEC_SUM * M.spec;
+  lam = Math.pow(lam / LIGHT_SUM, 1.25); sp = sp / LIGHT_SPEC_SUM * M.spec;
   const tint = M.tintSpec ? [0.35 + 0.65 * base[0], 0.35 + 0.65 * base[1], 0.35 + 0.65 * base[2]] : null;
   // 反射向量：视线被这个面弹向哪里，就取环境那个方向的颜色
   const d = dot(n, v);
@@ -1417,9 +1475,9 @@ precision highp float;
 flat in vec3 vCol;
 flat in float vFront;
 in vec3 vPos; in vec3 vNrm;
-uniform vec3 uLigDir[3];        // 三盏方向光：主光 / 轮廓光 / 补光
-uniform vec3 uLigCol[3];
-uniform vec3 uLigInt[3];        // x=inten  y=spec
+uniform vec3 uLigDir[6];        // 六盏方向光：主光 / 轮廓光 / 补光 / 顶光 / 底反光 / 后侧光
+uniform vec3 uLigCol[6];
+uniform vec3 uLigInt[6];        // x=inten  y=spec
 uniform vec3 uEnvDir[3];
 uniform vec3 uEnvCol[3];
 uniform vec3 uEnvPar[3];      // x=sharp  y=inten
@@ -1453,9 +1511,9 @@ void main() {
   }
   vec3 n = normalize(vNrm);
   vec3 v = normalize(vec3(0.0, 0.0, uDist) - vPos);
-  // 三盏方向光各算一遍漫反射与高光：亮点会在不同晶面上跳，这是"晶体感"的来源
+  // 六盏方向光各算一遍漫反射与高光：亮点会在不同晶面上跳，这是"晶体感"的来源
   float lam = 0.0, sp = 0.0, lamSum = 0.0, spSum = 0.0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 6; i++) {
     vec3 l = normalize(uLigDir[i]);
     float inten = uLigInt[i].x, spec = uLigInt[i].y;
     lam += inten * max(0.0, dot(n, l));
@@ -1465,27 +1523,39 @@ void main() {
     sp += inten * spec * lobe;
     spSum += inten * spec;
   }
-  lam /= max(lamSum, 1e-4);
+  lam = pow(lam / max(lamSum, 1e-4), 1.25);
   sp = sp / max(spSum, 1e-4) * uSpec;
   vec3 tint = uTintSpec > 0.5 ? vec3(0.35) + 0.65 * base : vec3(1.0);
   float d = dot(n, v);
   vec3 rdir = 2.0 * d * n - v;
   vec3 env = envSample(rdir);
-  /* 色散（火彩）：金刚石 n 在 2.407(红)…2.465(紫) 之间变，一束白光进去折射角不同，
-     高光与反射的边缘就被拆成彩虹。真实色散要红绿蓝各算一条光路，这里做便宜的近似：
-     用反射方向的相位生成一条循环谱色，只乘在高光与环境反射上（漫反射不带色散）。
-     uDisp 由光泽给：金刚 0.62、金属 0.10、玻璃 0.07、蜡状 0。 */
-  float phase = dot(rdir, vec3(0.5773, 0.5773, 0.5773)) * 1.7 + dot(n, v) * 0.6;
-  vec3 fire = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + phase));
-  vec3 specCol = mix(vec3(1.0), fire, clamp(uDisp, 0.0, 1.0));
+  /* 色散（火彩）：真实金刚石的 n 在 2.407(红)…2.465(紫) 之间变，一束白光进去被拆成彩虹。
+     关键是——**火彩发生在晶体内部**（光折射进去、在背面全反射、再折射出来），
+     而表面那层反射不管什么宝石都只是"更强的白光反光"，不该是彩虹的。
+     所以这里分两件事做：
+       ① 表面：高光与环境反射保持白色（纯菲涅耳），金刚因为 ior 2.42 的 R0≈0.17
+          远高于玻璃的 0.045，反光本来就强得多；
+       ② 内部：按红/绿/蓝三个折射率各折射一次、分别采样环境，得到真正"从里面透出来的彩边"。
+      uDisp 由光泽给：金刚 0.55、金属 0.10、玻璃 0.07、蜡状 0。 */
   float R0 = uMetal > 0.5 ? 1.0 : pow((uIor - 1.0) / (uIor + 1.0), 2.0);
   float F = R0 + (1.0 - R0) * pow(1.0 - abs(d), 5.0);
   float refl = F * uEnvI;
   float fres = pow(1.0 - abs(d), 3.0) * uFres * 0.45;
+  // 内部火彩：三个折射率各采一次环境，取各自的通道
+  float etaR = 1.0 / max(1.01, uIor * 0.975);
+  float etaG = 1.0 / max(1.01, uIor);
+  float etaB = 1.0 / max(1.01, uIor * 1.025);
+  vec3 fireIn = vec3(envSample(refract(-v, n, etaR)).r,
+                     envSample(refract(-v, n, etaG)).g,
+                     envSample(refract(-v, n, etaB)).b);
+  float seeThrough = 1.0 - clamp(uAlpha, 0.0, 1.0);
+  float fireAmt = clamp(uDisp, 0.0, 1.0) * (0.30 + 0.70 * seeThrough) * (0.45 + 0.55 * pow(1.0 - abs(d), 2.0));
+  vec3 internal = fireIn * fireAmt * (1.0 - F) * 0.85;
   vec3 c = base * (uAmb * uAmbK * uAmbT + uDiff * lam)
-         + tint * sp * specCol
-         + (uMetal > 0.5 ? base : vec3(1.0)) * refl * env * specCol
-         + fres * (0.55 + 0.45 * base);
+         + tint * sp                      // 表面高光：白，不掺彩虹
+         + (uMetal > 0.5 ? base : vec3(1.0)) * refl * env
+         + fres * (0.55 + 0.45 * base)
+         + internal;                      // 内部火彩：只有这里带色散
   c *= uExpo;
   // 逐像素透明度：透射由 uAlpha 决定，而**镜面高光与掠射反射是表面反射，不该跟着透射淡掉**。
   // 真玻璃就是这样：身体透明，高光依旧刺眼。整层统一乘 alpha 会把高光一起洗成灰雾，
@@ -1645,10 +1715,11 @@ function glRender(project, M, opts) {
   const [zn, zf] = glDepthRange(project);
   gl.uniform1f(glUni.uZn, zn); gl.uniform1f(glUni.uZf, zf);
   const e = ENV_LIGHTS, g3 = LIGHTS;
-  gl.uniform3fv(glUni.uLigDir, new Float32Array([...g3[0].dir, ...g3[1].dir, ...g3[2].dir]));
-  gl.uniform3fv(glUni.uLigCol, new Float32Array([...g3[0].col, ...g3[1].col, ...g3[2].col]));
-  gl.uniform3fv(glUni.uLigInt, new Float32Array(
-    [g3[0].inten, g3[0].spec, 0, g3[1].inten, g3[1].spec, 0, g3[2].inten, g3[2].spec, 0]));
+  // 灯的数量由 LIGHTS 决定（现在是 6 盏），三组 uniform 都用循环拼，别再写死下标
+  const litArr = (f) => { const out = []; for (const L of g3) out.push(...f(L)); return new Float32Array(out); };
+  gl.uniform3fv(glUni.uLigDir, litArr(L => L.dir));
+  gl.uniform3fv(glUni.uLigCol, litArr(L => L.col));
+  gl.uniform3fv(glUni.uLigInt, litArr(L => [L.inten, L.spec, 0]));
   gl.uniform3fv(glUni.uEnvDir, new Float32Array([...e[0].dir, ...e[1].dir, ...e[2].dir]));
   gl.uniform3fv(glUni.uEnvCol, new Float32Array([...e[0].col, ...e[1].col, ...e[2].col]));
   gl.uniform3fv(glUni.uEnvPar, new Float32Array(
@@ -2149,10 +2220,22 @@ function draw() {
 
 /* ============ 动画 ============ */
 let spinning = false;
+let lightPhase = 0;
 function loop() {
   if (state.spin) {
     state.quat = qNorm(qMul(qAxis(0, 1, 0, 0.0075), state.quat));
     draw();
+  }
+  // 光源移动：晶体不动、光绕着它转。比自动旋转更能看清"面与面之间的明暗差"，
+  // 因为转的是高光而不是物体的轮廓。默认跟主光滑杆同一个方位角，转起来不会跳。
+  if (state.lightMove) {
+    lightPhase += 0.0055;
+    let az = ((state.lightAz ?? 35) + lightPhase * 57.2958) % 360;
+    if (az > 180) az -= 360;
+    state.lightAz = Math.round(az);
+    setLight(az, state.lightEl ?? 34);
+    renderLight();
+    if (!state.spin) draw();
   }
   requestAnimationFrame(loop);
 }
@@ -2320,6 +2403,12 @@ function renderLusters() {
 }
 
 /* 背景：程序化场景。除画面外还带环境光修正（藏品柜更暗、自然光更亮） */
+/* 默认场景按当地时间挑：白天纸面（亮、像在桌上摆一张纸），夜里深空（暗、晶体自己发光）。
+   只在用户还没手动选过场景时生效——选过就记住，不再跟着时间跳。 */
+function daytimeBg() {
+  const h = new Date().getHours();
+  return (h >= 7 && h < 19) ? "paper" : "dark";
+}
 function renderBackgrounds() {
   const box = document.getElementById("bgs");
   if (!box) return;
@@ -2328,7 +2417,7 @@ function renderBackgrounds() {
     const b = document.createElement("button");
     b.className = "btn" + (state.bg === id ? " on" : "");
     b.textContent = B.zh;
-    b.onclick = () => { state.bg = id; renderBackgrounds(); draw(); };
+    b.onclick = () => { state.bg = id; state.bgPicked = true; applySceneLights(id); renderBackgrounds(); draw(); };
     box.appendChild(b);
   }
   const B = BACKGROUNDS[state.bg] || BACKGROUNDS.dark;
@@ -2528,6 +2617,7 @@ function syncPanels() {
   document.getElementById("optEdges").checked = state.edges;
   document.getElementById("optStri").checked = state.striations;
   document.getElementById("optSpin").checked = state.spin;
+  document.getElementById("optLMove").checked = state.lightMove;
   const twinRow = document.getElementById("twinRow");
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
@@ -2596,6 +2686,7 @@ document.getElementById("optAxes").onchange = (e) => { state.axes = e.target.che
 document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.checked; draw(); };
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
+document.getElementById("optLMove").onchange = (e) => { state.lightMove = e.target.checked; };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
 document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 
@@ -2977,6 +3068,16 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePop(); });
 closePop();
+
+/* 启动时按当地时间定默认场景（白天纸面、夜里深空）。
+   放在最后：上面所有 UI 都已就绪，改完再统一重画一次。 */
+if (!state.bgPicked) {
+  state.bg = daytimeBg();
+  state.exp.bg = state.bg;
+  applySceneLights(state.bg);
+  renderBackgrounds();
+  draw();
+}
 </script>
 </body>
 </html>

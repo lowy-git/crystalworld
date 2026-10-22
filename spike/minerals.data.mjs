@@ -29,6 +29,7 @@ export const MINERALS = [
       { zh: "无色", en: "Colorless", hex: "#dfe8ee" },
       { zh: "绿色", en: "Green",     hex: "#4fae7a" },
       { zh: "紫色", en: "Purple",    hex: "#8a63b8" },
+      { zh: "红色", en: "Red",       hex: "#c2544f" },
       { zh: "蓝色", en: "Blue",      hex: "#4a7fc1" },
     ],
     intro: {
@@ -358,6 +359,25 @@ export const MINERALS = [
           { hkl: [2, 1, 1], k: 1.4, idx: "{21-31}", zh: "偏三角面体", en: "Scalenohedron" },
           { hkl: [1, 0, 4], k: 1.2, idx: "{10-14}", zh: "菱面体", en: "Rhombohedron" },
         ],
+      },
+      {
+        id: "ditrigonal", zh: "复三方双锥", en: "Ditrigonal dipyramid",
+        note: "单形 {11-23} 在 -3m 里给 12 个三角面，上下各 6 面 —— 中文习惯叫「复三方双锥」，因为它是由两个三方锥错开 60° 叠出来的",
+        forms: [
+          { hkl: [1, 1, 3], k: 1.0, idx: "{11-23}", zh: "复三方双锥", en: "Ditrigonal dipyramid" },
+          { hkl: [1, 0, 0], k: 1.0, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.2, idx: "{0001}", zh: "底轴面", en: "Basal pinacoid" },
+        ],
+      },
+      {
+        id: "shuriken-twin", zh: "双晶：两个复三方双锥横连（忍者镖）", en: "Ditrigonal twin",
+        note: "两个复三方双锥沿 {10-10} 柱面接合，四个尖端横向张开，正面看像忍者镖。这不是方解石最著名的双晶律（那是 {01-12} 蝴蝶双晶），是按你描述的形态建模的",
+        forms: [
+          { hkl: [1, 1, 3], k: 1.0, idx: "{11-23}", zh: "复三方双锥", en: "Ditrigonal dipyramid" },
+          { hkl: [1, 0, 0], k: 1.0, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.2, idx: "{0001}", zh: "底轴面", en: "Basal pinacoid" },
+        ],
+        twin: { mode: "contact", plane: [1, 0, -1, 0], angle: 0 },
       },
     ],
   },

@@ -1094,9 +1094,9 @@ check("换光泽会立刻刷新通透度（金属立刻禁用滑杆，切回玻�
   run(`state.luster = null; renderLusters(); renderTransp();`);
   return metalOff === true && glassOff === false;
 })(), `金属=${run(`(()=>{state.luster="metallic";renderLusters();renderTransp();const d=document.getElementById("alphaR").disabled;state.luster=null;renderLusters();renderTransp();return d})()`)} 玻璃=${run(`(()=>{state.luster="glass";renderLusters();renderTransp();const d=document.getElementById("alphaR").disabled;state.luster=null;renderLusters();renderTransp();return d})()`)}`);
-check("金刚光泽带色散（GL_FS 有 uDisp，且金刚 > 玻璃 > 蜡状=0）", (() => {
+check("金刚光泽带色散：火彩在晶体内部（三次不同折射率采样），表面高光保持白色", (() => {
   const src = run(`GL_FS`);
-  const has = /uniform\s+float\s+[^;]*uDisp/.test(src) && /mix\s*\(\s*vec3\(1\.0\)\s*,\s*fire/.test(src);
+  const has = /uniform\s+float\s+[^;]*uDisp/.test(src) && /refract\(\s*-v\s*,\s*n\s*,\s*etaR\s*\)/.test(src) && /vec3\s+internal\s*=/.test(src);
   const d = (k) => run(`LUSTERS["${k}"].disp`);
   return has && d("adamantine") > d("glass") && d("glass") > d("waxy");
 })(), `disp=${run(`LUSTER_ORDER.map(k=>k+"="+LUSTERS[k].disp).join(",")`)}`);
@@ -1115,15 +1115,15 @@ check("全透明档就是 100% 透明（alpha=0），滑杆读数与档位一致
   const r = run(`(() => { state.transp = "clear"; state.alpha = transpById("clear").alpha; renderTransp(); const v = document.getElementById("alphaVal").textContent; state.transp = null; state.alpha = null; renderTransp(); return v; })()`);
   return Math.abs(a) < 1e-9 && r === "100%";
 })(), `alpha=${run(`transpById("clear").alpha`)} 读数=${run(`(() => { state.transp = "clear"; state.alpha = transpById("clear").alpha; renderTransp(); const v = document.getElementById("alphaVal").textContent; state.transp = null; state.alpha = null; renderTransp(); return v; })()`)}`);
-check("三光源：主光 + 轮廓光 + 补光，且按强度归一化（单灯 lam=1 时曝光不变）", (() => {
+check("六光源：主光/轮廓光/补光/顶光/底反光/后侧光，且按强度归一化（单灯 lam=1 时曝光不变）", (() => {
   const n = run(`LIGHTS.length`);
   const s = run(`LIGHT_SUM`);
   const spec = run(`LIGHT_SPEC_SUM`);
   const raw = run(`LIGHTS.reduce((a,L)=>a+L.inten,0)`);
   const rawSpec = run(`LIGHTS.reduce((a,L)=>a+L.inten*L.spec,0)`);
-  return n === 3 && Math.abs(s - raw) < 1e-9 && Math.abs(spec - rawSpec) < 1e-9 && raw > 1;
+  return n === 6 && Math.abs(s - raw) < 1e-9 && Math.abs(spec - rawSpec) < 1e-9 && raw > 1;
 })(), "n=" + run(`LIGHTS.length`) + " sum=" + run(`LIGHT_SUM`));
-check("GL_FS 里 uniform 是三灯数组 uLigDir/uLigCol/uLigInt（与 shadeFace 同源）", /uniform\s+vec3\s+uLigDir\[3\]/.test(html) && /uniform\s+vec3\s+uLigCol\[3\]/.test(html) && /uniform\s+vec3\s+uLigInt\[3\]/.test(html) && /float\s+inten\s*=\s*uLigInt\[i\]\.x/.test(html));
+check("GL_FS 里 uniform 是六灯数组 uLigDir/uLigCol/uLigInt（与 shadeFace 同源）", /uniform\s+vec3\s+uLigDir\[6\]/.test(html) && /uniform\s+vec3\s+uLigCol\[6\]/.test(html) && /uniform\s+vec3\s+uLigInt\[6\]/.test(html) && /float\s+inten\s*=\s*uLigInt\[i\]\.x/.test(html));
 check("环境采样有地平线亮带（影棚围灯在晶体边缘的亮环）", /band\s*=\s*0\.17\s*\*\s*exp\(/.test(html) && /exp\(-abs\(t\)\s*\*\s*5\.0\)/.test(html));
 check("五个场景的背景内容物互不相同（不再共用坐标系+白圈+横线）", (() => {
   const sig = run(`(() => {
