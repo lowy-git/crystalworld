@@ -79,6 +79,118 @@ const orient = (pts, nRef) => {
   return dot(n, nRef) >= 0 ? pts : pts.slice().reverse();
 };
 
+// ---------- 截面 / 凸包 / 半空间切割 ----------
+// 2D 凸包（Andrew 单调链）。截面用来补平底、也用来画双晶域界。
+function hull2D(pts) {
+  const p = pts.slice().sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+  if (p.length < 3) return p;
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  const up = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop();
+    up.push(q);
+  }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+
+// 平面 n·x = d 与一组多边形（可非凸、可多体）的截面轮廓，返回 3D 凸包顶点
+// 做法：收集所有"跨过该平面"的边与平面的交点，投影到平面内求凸包。
+// 用于补平底（日本律被基质截断的底部）与画双晶域界。
+function sectionFromPolys(polys, n, d) {
+  const u = Math.abs(n[0]) < 0.9 ? norm(cross(n, [1, 0, 0])) : norm(cross(n, [0, 1, 0]));
+  const v = cross(n, u);
+  const o = [n[0] * d, n[1] * d, n[2] * d];
+  const flat = [];
+  const push = (p) => flat.push([dot(sub(p, o), u), dot(sub(p, o), v)]);
+  for (const f of polys) {
+    const pts = f.pts;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const da = dot(n, a) - d, db = dot(n, b) - d;
+      if (Math.abs(da) < 1e-9) push(a);
+      if ((da > 1e-9 && db < -1e-9) || (da < -1e-9 && db > 1e-9)) {
+        const t = da / (da - db);
+        push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+      }
+    }
+  }
+  if (flat.length < 3) return [];
+  const h = hull2D(flat);
+  if (h.length < 3) return [];
+  return h.map(([x, y]) => [o[0] + u[0] * x + v[0] * y, o[1] + u[1] * x + v[1] * y, o[2] + u[2] * x + v[2] * y]);
+}
+
+// 用半空间 n·x ≥ d 切掉底部，并补上被切出来的截面（补面必须精确贴着切口）
+// 不能只用凸包：双晶并集是凹的（肘形），凸包会盖过头，留下没缝合的边 → 网格破洞。
+// 正确做法：切完之后，落在切平面上的"只用过一次的边"就是洞口的边界，把它们串成环再扇形补面。
+function cutWithCap(polys, n, d) {
+  const kept = [];
+  for (const f of polys) {
+    const pts = clipPoly(f.pts, [-n[0], -n[1], -n[2]], -d);
+    if (pts.length >= 3 && polyArea(pts) > 1e-7) kept.push({ ...f, pts: orient(pts, f.n) });
+  }
+  const onCut = (p) => Math.abs(dot(n, p) - d) < 1e-6;
+  const key = (p) => `${(p[0] * 1e6).toFixed(0)},${(p[1] * 1e6).toFixed(0)},${(p[2] * 1e6).toFixed(0)}`;
+  // 统计无向边的使用次数，只留下恰好用一次、且两端都在切平面上的边
+  const use = new Map();
+  for (const f of kept) {
+    const pts = f.pts;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const ka = key(a), kb = key(b);
+      if (ka === kb) continue;
+      const k = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      const rec = use.get(k);
+      if (rec) rec.c++; else use.set(k, { a, b, c: 1 });
+    }
+  }
+  const adj = new Map();
+  const ptOf = new Map();
+  for (const rec of use.values()) {
+    if (rec.c !== 1 || !onCut(rec.a) || !onCut(rec.b)) continue;
+    const ka = key(rec.a), kb = key(rec.b);
+    ptOf.set(ka, rec.a); ptOf.set(kb, rec.b);
+    if (!adj.has(ka)) adj.set(ka, []);
+    if (!adj.has(kb)) adj.set(kb, []);
+    adj.get(ka).push(kb); adj.get(kb).push(ka);
+  }
+  const seen = new Set();
+  let added = 0;
+  const nn = [-n[0], -n[1], -n[2]];
+  for (const start of adj.keys()) {
+    if (seen.has(start)) continue;
+    const loop = [];
+    let cur = start, prev = null;
+    while (cur && !seen.has(cur)) {
+      seen.add(cur); loop.push(ptOf.get(cur));
+      const nb = (adj.get(cur) || []).filter(x => x !== prev && !seen.has(x));
+      prev = cur; cur = nb[0];
+    }
+    if (loop.length < 3) continue;
+    let cx = 0, cy = 0, cz = 0;
+    for (const p of loop) { cx += p[0]; cy += p[1]; cz += p[2]; }
+    const c = [cx / loop.length, cy / loop.length, cz / loop.length];
+    // 必须发成三角形而不是一块扇形多边形：扇形多边形的两条"辐条边"(c→p0、pk→c)
+    // 在别处没有配对，会各留一条只用一次的边 → 网格不闭合。三角形之间辐条边成对共享。
+    for (let i = 0; i < loop.length; i++) {
+      const tri = [c, loop[i], loop[(i + 1) % loop.length]];
+      if (polyArea(tri) < 1e-9) continue;
+      kept.push({ pts: orient(tri, nn), n: nn, form: -2, indiv: 0, clip: 1, cut: 1 });
+      added++;
+    }
+  }
+  // 兜底：一个洞口都没缝上时（理论上不该发生）退回凸包
+  if (!added) {
+    const cap = sectionFromPolys(polys, n, d);
+    if (cap.length >= 3) kept.push({ pts: orient(cap, nn), n: nn, form: -2, indiv: 0, clip: 1, cut: 1 });
+  }
+  return kept;
+}
+
 // 一个外形在给定"可见单形掩码"下的几何
 function buildGeometry(mineral, habit, mask) {
   const idxMap = [];
@@ -90,6 +202,8 @@ function buildGeometry(mineral, habit, mask) {
 
   const res = combination(mineral.cell, mineral.pointGroup, sub_forms);
   const P = res.poly.verts;
+  let domainPts = null;         // 转变双晶的域界截面（只画不参与几何）
+  let wholeFaces = null;        // 贯穿双晶的"完整个体"（只在拆解/只看一个体时画）
 
   // 个体 A 的面（多边形点列 + 归属）
   let polys = res.poly.faces.map(f => ({
@@ -161,6 +275,29 @@ function buildGeometry(mineral, habit, mask) {
       }
       polys = out;
     }
+    // 日本律在自然界多半长在基质上，下方的晶头（−c 端的锥面）根本不发育。
+    // 正确形态是「两支晶臂 + 底部被基质截掉的平底」，不是两个完整体晶头朝下叉开。
+    // 截断面取双晶整体的"下方"（两体 c 轴的平分线反向），只削掉很低的一段：
+    // 个体 A 的 c 轴与该面约成 56°，切得太深会把它沿长轴削成薄片。
+    if (habit.twin.cutBottom) {
+      const ax0 = [0, 0, 1], ax1 = nR(ax0);
+      const s = [ax0[0] + ax1[0], ax0[1] + ax1[1], ax0[2] + ax1[2]];
+      const nc = norm([-s[0], -s[1], -s[2]]);
+      const ts = polys.flatMap(f => f.pts.map(p => dot(nc, p)));
+      const lo = Math.min(...ts), hi = Math.max(...ts);
+      polys = cutWithCap(polys, nc, lo + (hi - lo) * habit.twin.cutBottom);
+    }
+  } else if (habit.twin && habit.twin.mode === "domain") {
+    // ── 转变双晶 / 反射双晶：外部形态与单晶完全一致 ──
+    // 石英的道芬律（绕 c [0001] 180°）与巴西律（{11-20} 反射）都不改变外部晶形：
+    // 双晶域界整片包在晶体内部，肉眼与普通放大镜都看不出，只能靠刻蚀或正交偏光。
+    // 所以这里不复制个体、不做并集，只记下"域界截面"让渲染层画一条虚线。
+    const hkl2 = habit.twin.plane;
+    const h32 = hkl2.length === 4 ? [hkl2[0], hkl2[1], hkl2[3]] : hkl2;
+    const nd = faceNormal(h32, res.L).n;
+    const allP2 = polys.flatMap(f => f.pts);
+    const dmax2 = Math.max(...allP2.map(p => dot(nd, p)));
+    domainPts = sectionFromPolys(polys, nd, dmax2 * (habit.twin.domainAt ?? 0));
   } else if (habit.twin) {
     // ── 贯穿双晶：两个完整个体互相穿插，边界取并集 ──
     const T = habit.twin.mode === "mirror"
@@ -184,6 +321,10 @@ function buildGeometry(mineral, habit, mask) {
     });
 
     // 并集边界 = (∂A 去掉 B 内部) ∪ (∂B 去掉 A 内部)
+    // 但"拆开 / 只看一个个体"要的是**完整个体**：并集把对方内部的那几片面删掉了，
+    // 单独看就是一个开壳（萤石尖晶石律会露出满天碎三角）。所以把完整个体也带上，
+    // 打 hid 标记——合在一起时不画，拆解时才画。
+    const whole = [...polys.map(f => ({ ...f, indiv: 0 })), ...polysB];
     const out = [];
     for (const f of polys) {
       for (const pts of subtractConvex(f.pts, planesB)) {
@@ -196,6 +337,7 @@ function buildGeometry(mineral, habit, mask) {
       }
     }
     polys = out;
+    wholeFaces = whole;
   }
 
   // 顶点去重 + 归一化：包围盒居中，最长边缩到 2
@@ -221,9 +363,19 @@ function buildGeometry(mineral, habit, mask) {
     verts.push([+q[0].toFixed(5), +q[1].toFixed(5), +q[2].toFixed(5)]);
     return verts.length - 1;
   };
-  const faces = polys.map(f => ({ loop: f.pts.map(idxOf), form: f.form, indiv: f.indiv, clip: f.clip }));
+  const faces = polys.map(f => ({ loop: f.pts.map(idxOf), form: f.form, indiv: f.indiv, clip: f.clip, hid: 0 }));
+  // 完整个体（只有贯穿双晶有）：合在一起时不画，拆开/只看个体时才画
+  if (wholeFaces) {
+    for (const f of wholeFaces) {
+      faces.push({ loop: f.pts.map(idxOf), form: f.form, indiv: f.indiv, clip: f.clip, hid: 1 });
+    }
+  }
+  const shownFaces = faces.filter(f => !f.hid);
+  const domain = domainPts && domainPts.length >= 3
+    ? domainPts.map(v => [+((v[0] - cx) * s).toFixed(5), +((v[1] - cy) * s).toFixed(5), +((v[2] - cz) * s).toFixed(5)])
+    : null;
   const edges = new Set();
-  for (const f of faces) {
+  for (const f of shownFaces) {
     for (let i = 0; i < f.loop.length; i++) {
       const a = f.loop[i], b = f.loop[(i + 1) % f.loop.length];
       edges.add(a < b ? `${a}-${b}` : `${b}-${a}`);
@@ -236,9 +388,11 @@ function buildGeometry(mineral, habit, mask) {
     form: faces.map(f => f.form),
     indiv: faces.map(f => f.indiv),
     clip: faces.map(f => (f.clip ? 1 : 0)),
+    hid: faces.map(f => f.hid),
     closed: !res.clipped,
+    domain,
     angles: anglesOf(verts, faces),
-    counts: { v: verts.length, e: edges.size, f: faces.length },
+    counts: { v: verts.length, e: edges.size, f: shownFaces.length },
   };
 }
 
@@ -299,6 +453,7 @@ for (const m of MINERALS) {
       const h3 = pl ? (pl.length === 4 ? [pl[0], pl[1], pl[3]] : pl) : null;
       const T0 = h.twin.mode === "mirror" ? twinMatrix(h3, L0)
         : h.twin.mode === "contact" ? twinMatrix(h3, L0)
+        : h.twin.mode === "domain" ? twinMatrix(h3, L0)
         : twinAxisMatrix(h.twin.axis, L0);
       const cB0 = applyM(T0, [0, 0, 1]);
       view = { yaw: +(Math.atan2(cB0[1], cB0[0]) * 180 / Math.PI).toFixed(2) };
@@ -316,6 +471,9 @@ for (const m of MINERALS) {
         plane: h.twin.plane ?? null,   // 接触双晶：结合面（石英日本律 {11-22}）
         delta: h.twin.delta ?? null,
         splitDir,   // 拆解方向（晶体坐标）：接触型沿结合面法向，贯穿型沿双晶轴
+        // 转变双晶（道芬/巴西律）：两个体同名、只是内部域反向，外部形态与单晶一致，
+        // 所以不可拆解、也不能靠外形看出——渲染层用域界截面画一条虚线。
+        noSplit: h.twin.mode === "domain",
       } : null,
       forms: h.forms.map((f, i) => ({
         idx: f.idx, zh: f.zh, en: f.en,

@@ -267,7 +267,7 @@
         <div class="row wrap" id="lusters"></div>
         <div class="swarning" id="lusterHint"></div>
         <div class="srow"><span>通透度</span><select id="transp"></select></div>
-        <div class="srow"><span>透明度 <b id="alphaVal" class="val"></b></span><input type="range" id="alphaR" min="12" max="100" step="1"></div>
+        <div class="srow"><span>透明度 <b id="alphaVal" class="val"></b></span><input type="range" id="alphaR" min="0" max="100" step="1"></div>
         <div class="swarning" id="transpHint"></div>
       </div>
     </div>
@@ -276,7 +276,8 @@
       <h3><button class="fold" type="button" aria-expanded="true">内含物 <span style="text-transform:none;letter-spacing:0">Inclusion</span></button></h3>
       <div class="secbody">
         <div class="srow"><span>类型</span><select id="incSel"></select></div>
-        <div class="srow"><span>密度 <b id="incDensVal" class="val"></b></span><input type="range" id="incDens" min="0" max="100" step="5"></div>
+        <div class="srow"><span>数量 <b id="incDensVal" class="val"></b></span><input type="range" id="incDens" min="0" max="100" step="5"></div>
+        <div class="srow"><span>大小 <b id="incSizeVal" class="val"></b></span><input type="range" id="incSize" min="25" max="250" step="5"></div>
         <div class="swarning" id="incHint"></div>
       </div>
     </div>
@@ -290,16 +291,6 @@
       </div>
     </div>
 
-    <div class="sec" data-sec="display">
-      <h3><button class="fold" type="button" aria-expanded="true">显示 <span style="text-transform:none;letter-spacing:0">Display</span></button></h3>
-      <div class="secbody">
-      <div class="opt">
-        <label class="ck"><input type="checkbox" id="optEdges" checked> 棱线 Arrises</label>
-          <label class="ck"><input type="checkbox" id="optStri" checked> 晶纹 Striations</label>
-        <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
-        <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
-        <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
-      </div>
     <div class="sec" data-sec="display">
       <h3><button class="fold" type="button" aria-expanded="true">显示 <span style="text-transform:none;letter-spacing:0">Display</span></button></h3>
       <div class="secbody">
@@ -319,6 +310,11 @@
             <button class="btn" id="spB">只看 B</button>
           </div>
           <div class="swarning">接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开（萤石 [111]）。</div>
+        </div>
+        <!-- 转变双晶（道芬/巴西律）：域界包在内部，只能"切开"才看得见 -->
+        <div id="domBox" style="display:none">
+          <label class="ck"><input type="checkbox" id="optDom" checked> 显示双晶域界 Twin domain</label>
+          <div class="swarning">道芬律与巴西律是「转变双晶 / 反射双晶」：两个体外部晶形完全相同，c 轴互相平行，从外面一点看不出来。关掉这条虚线，看到的就是肉眼所见的样子——真实研究要靠刻蚀或正交偏光。</div>
         </div>
       </div>
     </div>
@@ -495,12 +491,18 @@ function bodyColor() {
   return pick ? hexToRgb(pick.hex) : [0.55, 0.68, 0.82];
 }
 
-/* 本体染色层：把晶体的屏幕轮廓填一层本体色，alpha 固定、不随通透度淡掉。
-   少了这一层，"透明度拉高"就只剩背景色，晶体直接掉色（用户反馈：颜色消失了）。 */
+/* 本体染色层：把晶体的屏幕轮廓填一层本体色，alpha 不随通透度淡到 0。
+   少了这一层，"透明度拉高"就只剩背景色，晶体直接掉色（用户反馈：颜色消失了）。
+   但固定 0.40 又把背景压掉一半，于是"透明了还是看不透"——两个毛病必须一起治：
+     ① 这一层随通透度变薄（越透明越薄，但永不为零，所以颜色还在）；
+     ② 中间薄、边缘厚（径向渐变）——真实玻璃也是中心薄（看得穿）、边缘厚（吃色深）。 */
 function paintTint(g, project, M) {
   if (!GEO || M.alpha > 0.995) return;
-  const k = 0.40;
+  const a = M.alpha == null ? 1 : M.alpha;
+  const k = 0.10 + 0.22 * (1 - a);          // 0.32（全透明）… 0.12（近不透明）
   if (k <= 0.02) return;
+  const box = projectedBox(project);
+  const cx = (box.xmin + box.xmax) / 2, cy = (box.ymin + box.ymax) / 2;
   g.save();
   g.beginPath();
   for (const f of GEO.faces) {
@@ -510,8 +512,14 @@ function paintTint(g, project, M) {
     for (let i = 1; i < f.pts.length; i++) { const p = project(f.pts[i]); g.lineTo(p[0], p[1]); }
     g.closePath();
   }
-  g.fillStyle = rgbStr(bodyColor(), k);
-  g.fill("nonzero");           // 闭合体所有面绕序一致，nonzero 即得并集轮廓
+  g.clip();                                  // 只在晶体轮廓内上色
+  const rr = Math.max(8, Math.hypot(box.xmax - box.xmin, box.ymax - box.ymin) * 0.55);
+  const grd = g.createRadialGradient(cx, cy, 0, cx, cy, rr);
+  grd.addColorStop(0, rgbStr(bodyColor(), k * 0.55));   // 芯：清
+  grd.addColorStop(0.72, rgbStr(bodyColor(), k));
+  grd.addColorStop(1, rgbStr(bodyColor(), k * 1.45));   // 边：厚
+  g.fillStyle = grd;
+  g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
   g.restore();
 }
 
@@ -716,12 +724,14 @@ const state = {
   alpha: null,         // 实际通透度 0–1
   bg: "dark",
   onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
-  inclusion: null,     // null = 跟随矿物默认
-  incDensity: 0.6,
+  inclusion: "none",   // 默认无：内含物由用户主动开启
+  incDensity: 0.6,     // 只控制「出现多少个」
+  incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
   lightAz: -25, lightEl: 38,
   twinTint: false,
   twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
   twinShow: "both",    // both / A / B：只显示其中一个个体
+  showDomain: true,    // 转变双晶（道芬/巴西律）的域界虚线：纯示意，可关掉
   uniform: null,       // {hex}
   exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
   striations: true,
@@ -766,7 +776,13 @@ function rebuildGeometry() {
   const sp = state.twinSplit || 0;
   const off = (sd && sp > 0.001) ? norm3(sd).map(x => x * sp * 1.5) : null;
   const keepIndiv = state.twinShow === "both" ? null : (state.twinShow === "A" ? 0 : 1);
-  const faces = v.f.map((loop, fi) => {
+  // 贯穿双晶：并集把"被对方包住"的那几片面删掉了，单独看一个个体就是开壳
+  // （萤石尖晶石律会露出满屏碎三角）。所以拆开或只看一个体时，切换成"完整个体"几何。
+  const hasWhole = !!(v.hid && v.hid.some(x => x));
+  const useWhole = hasWhole && (!!off || keepIndiv !== null);
+  const faces = [];
+  v.f.forEach((loop, fi) => {
+    if (hasWhole && !!v.hid[fi] !== useWhole) return;
     const shift = (off && v.indiv[fi] === 1) ? off : null;
     const pts = loop.map(i => {
       const p = P[i];
@@ -774,7 +790,7 @@ function rebuildGeometry() {
     });
     const n = unit(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
     const c = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length, a[2] + p[2] / pts.length], [0, 0, 0]);
-    return { pts, n, c, loop, form: v.form[fi], indiv: v.indiv[fi], clip: v.clip[fi] };
+    faces.push({ pts, n, c, loop, form: v.form[fi], indiv: v.indiv[fi], clip: v.clip[fi] });
   });
   // 只看 A / 只看 B：从几何层就滤掉另一个体，闭合性/欧拉数等检查才不会混入两块
   if (keepIndiv !== null) {
@@ -804,6 +820,7 @@ function rebuildGeometry() {
     if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
   }
   GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))),
+          domain: v.domain || null,          // 转变双晶的域界截面（只画，不参与几何）
           stamp: (GEO ? GEO.stamp + 1 : 1) };   // WebGL 层靠这个戳判断要不要重传顶点缓冲
   buildInclusions();
 }
@@ -928,55 +945,59 @@ function plateSolid(c, u, s, col, mat, alpha) {
   return solidFaces(loops, col, mat, alpha, c);
 }
 
+/* 内含物。尺寸单位统一是「占晶体半径 R0 的比例」：真实包体都是毫米级微晶，
+   相对晶体本体通常只有百分之几，所以这里的数都很小（0.02–0.09）。
+   早期版本写成 0.16–0.30（＋针长 0.6–1.3 R0），画出来像晶体里塞了几块砖，
+   而且密度滑杆改的是数量、视觉上却被误读成"改了大小"——现在数量与大小彻底分开。 */
 const INCLUSIONS = {
-  none: { zh: "无", note: "当前无内含物。" },
+  none: { zh: "无", note: "当前无内含物。选一种即可看到晶体内部的包体。" },
   rutile: {
     zh: "金红石针", en: "Rutile needle",
     note: "石英中最常见的包体：金黄针状金红石，多沿 c 轴排列，转动时如丝如发。",
-    parts: [{ shape: "needle", n: 10, col: [0.90, 0.72, 0.26], mat: "solid", alpha: 0.98, orient: "c", len: [0.60, 1.30], thk: 0.030 }],
+    parts: [{ shape: "needle", n: 14, col: [0.92, 0.74, 0.28], mat: "solid", alpha: 0.98,
+              orient: "c", len: [0.30, 0.95], thk: 0.009 }],
   },
   tourm: {
     zh: "电气石微晶", en: "Tourmaline",
     note: "黑色电气石小晶体，石英与萤石中都常见。",
-    parts: [{ shape: "octa", n: 4, col: [0.13, 0.16, 0.21], mat: "solid", alpha: 0.98, size: [0.16, 0.30] }],
+    parts: [{ shape: "octa", n: 6, col: [0.13, 0.16, 0.21], mat: "solid", alpha: 0.98, size: [0.030, 0.062] }],
   },
   pyrite: {
     zh: "黄铁矿微晶", en: "Pyrite",
     note: "立方体黄铁矿小晶，萤石里的经典包体。",
-    parts: [{ shape: "cube", n: 5, col: [0.84, 0.73, 0.32], mat: "metal", alpha: 0.98, size: [0.14, 0.26] }],
+    parts: [{ shape: "cube", n: 7, col: [0.84, 0.73, 0.32], mat: "metal", alpha: 0.98, size: [0.026, 0.055] }],
   },
   bubble: {
     zh: "气泡", en: "Gas bubble",
     note: "球形气包体：亮斑小而集中，是「亮珠」而不是面。",
-    parts: [{ shape: "ico", n: 12, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.075, 0.150] }],
+    parts: [{ shape: "ico", n: 16, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.014, 0.030] }],
   },
   fluid: {
     zh: "多相包体", en: "Multiphase",
     note: "气 + 液 + 微晶同处一个愈合空腔：方解石、绿柱石里常见。",
     parts: [
-      { shape: "ico",  n: 5, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.085, 0.135] },
-      { shape: "octa", n: 2, col: [0.18, 0.25, 0.32], mat: "solid",  alpha: 0.97, size: [0.07, 0.12] },
-      { shape: "needle", n: 3, col: [0.88, 0.72, 0.30], mat: "solid", alpha: 0.96, len: [0.18, 0.38], thk: 0.016 },
+      { shape: "ico",  n: 8, col: [0.94, 0.98, 1.00], mat: "bubble", alpha: 0.94, size: [0.016, 0.030] },
+      { shape: "octa", n: 3, col: [0.18, 0.25, 0.32], mat: "solid",  alpha: 0.97, size: [0.018, 0.032] },
+      { shape: "needle", n: 4, col: [0.88, 0.72, 0.30], mat: "solid", alpha: 0.96, len: [0.10, 0.26], thk: 0.006 },
     ],
   },
   fracture: {
     zh: "愈合裂隙", en: "Healed fracture",
     note: "薄片状愈合裂隙：银白色、反光强，是「面」而不是点。",
-    parts: [{ shape: "plate", n: 3, col: [0.86, 0.91, 0.96], mat: "solid", alpha: 0.72, size: [0.24, 0.44] }],
+    parts: [{ shape: "plate", n: 4, col: [0.86, 0.91, 0.96], mat: "solid", alpha: 0.66, size: [0.10, 0.26] }],
   },
 };
 
 let INC = [];
-function buildPart(part, rnd, R0, c, u) {
+function buildPart(part, rnd, R0, c, u, sz) {
+  const one = (a, b) => R0 * (a + rnd() * (b - a)) * sz;
   if (part.shape === "needle") {
-    const L = R0 * (part.len[0] + rnd() * (part.len[1] - part.len[0]));
-    return needleSolid(c, u, L, R0 * part.thk, part.col, part.mat, part.alpha);
+    return needleSolid(c, u, one(part.len[0], part.len[1]), R0 * part.thk * sz, part.col, part.mat, part.alpha);
   }
   if (part.shape === "plate") {
-    const s = R0 * (part.size[0] + rnd() * (part.size[1] - part.size[0]));
-    return plateSolid(c, u, s, part.col, part.mat, part.alpha);
+    return plateSolid(c, u, one(part.size[0], part.size[1]), part.col, part.mat, part.alpha);
   }
-  const s = R0 * (part.size[0] + rnd() * (part.size[1] - part.size[0]));
+  const s = one(part.size[0], part.size[1]);
   if (part.shape === "octa") return polySolid(OCTA, FACES_OCTA, c, s, part.col, part.mat, part.alpha);
   if (part.shape === "cube") return polySolid(CUBE, FACES_CUBE, c, s, part.col, part.mat, part.alpha);
   return polySolid(ICO, FACES_ICO, c, s * 0.72, part.col, part.mat, part.alpha);
@@ -984,18 +1005,20 @@ function buildPart(part, rnd, R0, c, u) {
 function buildInclusions() {
   INC = [];
   if (!GEO) return;
-  // state.inclusion 为 null 表示"跟随矿物默认"（换矿物时要跟着变）
-  const inc = state.inclusion == null ? (mineral().inclusion || "none") : state.inclusion;
-  if (!inc || inc === "none") return;
+  // 默认"无"：内含物是用户主动打开的选项，不再跟着矿物自动出现
+  const inc = state.inclusion || "none";
+  if (inc === "none") return;
   const spec = INCLUSIONS[inc];
   if (!spec) return;
-  const rnd = mulberry32(strHash(`${state.mineralId}|${state.habitId}|${state.inclusion}`));
+  const rnd = mulberry32(strHash(`${state.mineralId}|${state.habitId}|${inc}`));
   const R0 = GEO.extent * 0.5;
   const dens = state.incDensity == null ? 0.6 : state.incDensity;
+  const scl = state.incSize == null ? 1 : state.incSize;
   const cAx = axesVectors().find(a => a.label === "c");
   const cAxis = cAx ? unit(cAx.v) : [0, 0, 1];
   for (const part of spec.parts) {
-    const n = Math.max(0, Math.round(part.n * dens));
+    // 数量只由"数量"滑杆决定，大小只由"大小"滑杆决定，互不影响
+    const n = dens <= 0 ? 0 : Math.max(1, Math.round(part.n * dens));
     for (let k = 0; k < n; k++) {
       let made = null;
       for (let tries = 0; tries < 24 && !made; tries++) {
@@ -1005,7 +1028,7 @@ function buildInclusions() {
           : unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]);
         // 缩到能完全放进晶体为止（针状包体最容易探出晶面）
         for (const s of [1, 0.82, 0.66, 0.52, 0.4, 0.3]) {
-          const f = buildPart(part, rnd, R0 * s, c, u);
+          const f = buildPart(part, rnd, R0, c, u, scl * s);
           if (f.every(fc => fc.pts.every(p => inside(p)))) { made = f; break; }
         }
       }
@@ -1240,7 +1263,7 @@ uniform vec3 uEnvCol[3];
 uniform vec3 uEnvPar[3];      // x=sharp  y=inten
 uniform float uDist, uAmb, uDiff, uSpec, uShin, uFres, uIor, uEnvI, uMetal, uAmbK;
 uniform vec3 uAmbT;
-uniform float uTintSpec, uTwoSided;
+uniform float uTintSpec, uTwoSided, uAlpha;
 out vec4 frag;
 
 vec3 envSample(vec3 r) {
@@ -1279,7 +1302,12 @@ void main() {
          + tint * sp
          + (uMetal > 0.5 ? base : vec3(1.0)) * refl * env
          + fres * (0.55 + 0.45 * base);
-  frag = vec4(clamp(c, 0.0, 1.0), alpha);
+  // 逐像素透明度：透射由 uAlpha 决定，而**镜面高光与掠射反射是表面反射，不该跟着透射淡掉**。
+  // 真玻璃就是这样：身体透明，高光依旧刺眼。整层统一乘 alpha 会把高光一起洗成灰雾，
+  // 于是"拉高透明度"看起来只是整体褪色，而不是"能看穿"。
+  float surf = clamp(sp + refl * 0.90 + fres * 1.6, 0.0, 1.0);
+  float pa = clamp(uAlpha + (1.0 - uAlpha) * surf, 0.0, 1.0);
+  frag = vec4(clamp(c, 0.0, 1.0), pa * alpha);
 }`;
 
 function glCompile(type, src) {
@@ -1341,7 +1369,7 @@ function glInit() {
   for (const n of ["uRot", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
                    "uLight", "uEnvDir", "uEnvCol", "uEnvPar",
                    "uAmb", "uDiff", "uSpec", "uShin", "uFres", "uIor", "uEnvI",
-                   "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided"]) glUni[n] = gl.getUniformLocation(glProg, n);
+                   "uMetal", "uAmbK", "uAmbT", "uTintSpec", "uTwoSided", "uAlpha"]) glUni[n] = gl.getUniformLocation(glProg, n);
   for (const n of ["aPos", "aNrm", "aCol"]) glAttr[n] = gl.getAttribLocation(glProg, n);
   glVBO = gl.createBuffer();
   gl.enable(gl.DEPTH_TEST);
@@ -1436,6 +1464,7 @@ function glRender(project, M, opts) {
   gl.uniform1f(glUni.uMetal, M.metal ? 1 : 0);
   gl.uniform1f(glUni.uTintSpec, M.tintSpec ? 1 : 0);
   gl.uniform1f(glUni.uTwoSided, (GEO.faces.some(f => f.clip === 1) || !variant().closed) ? 1 : 0);
+  gl.uniform1f(glUni.uAlpha, M.alpha == null ? 1 : M.alpha);
   gl.uniform1f(glUni.uAmbK, M.ambK == null ? 1 : M.ambK);
   gl.uniform3fv(glUni.uAmbT, M.ambT || [1, 1, 1]);
   gl.uniform3fv(glUni.uLight, LIGHT_V);
@@ -1481,11 +1510,14 @@ window.cwDiag = cwDiag;
 
 /* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成。
    内含物先画（在晶体下面），于是会被半透明的晶面整体盖住：通透度越低越看得清 */
+/* 画晶体本体（不含坐标轴）。
+   GL 路径：通透度在片元着色器里**逐像素**给出（高光/掠射不随透射淡掉），
+   所以整层合成时不再乘 alpha——再乘一次就等于把刚做对的逐像素 alpha 又洗一遍。
+   2D 兜底路径是整面不透明画的，仍然整层乘 alpha。 */
 function paintFaces(g, opts, project, M) {
   const { vw, vh } = opts;
   if (!GEO) return;
   const dpr = opts.dpr || 1;
-  // GL 画填充，2D 只画叠在上面的棱线/晶纹/补缝描边——两条路出的是同一张图
   let layer = null;
   if (glRender(project, M, opts)) {
     layer = document.createElement("canvas");
@@ -1496,16 +1528,18 @@ function paintFaces(g, opts, project, M) {
       lg.setTransform(dpr, 0, 0, dpr, 0, 0);
       lg.clearRect(0, 0, vw, vh);
       try { lg.drawImage(glc, 0, 0, vw, vh); } catch (err) { /* 桩环境 */ }
+      paintOverlay(lg, opts, project, M);       // 棱线/晶纹叠在 GL 填充之上
     } else layer = null;
   }
-  if (layer) paintOverlay(layer.getContext("2d"), opts, project, M);
-  else paintFaces2D(g, opts, project, M);          // 无 webgl2：整条走 2D（含填充）
+  g.save();
   if (layer) {
-    g.save();
-    g.globalAlpha = M.alpha == null ? 1 : M.alpha;
+    g.globalAlpha = 1;                          // 逐像素 alpha 已在着色器里算好
     try { g.drawImage(layer, 0, 0, vw, vh); } catch (err) { /* 桩环境 */ }
-    g.restore();
+  } else {
+    g.globalAlpha = M.alpha == null ? 1 : M.alpha;
+    paintFaces2D(g, opts, project, M);           // 无 webgl2：整条走 2D（含填充）
   }
+  g.restore();
 }
 
 /* 只画叠在晶面上的部分：同色补缝描边、晶纹、真棱。填充归 GL。
@@ -1658,11 +1692,58 @@ function fitToTable(opts, tbl) {
 
 /* 主绘制：背景 → 接触阴影 → 本体色层 → 晶体（GL 填充 + 2D 棱线，整体按通透度
    一次合成，避免每片半透明叠加出接缝）→ 内含物 → 坐标轴 */
+/* 透射参考物：确定落在晶体正后方、且对比度够高的东西。
+   这是"透明度"能不能被看见的前提——晶体背后如果只是一片纯色或极淡的网格，
+   再透明也只是"换了个背景色"，用户看到的仍然是"没有透明度"。
+   原来各个场景的标尺/试管/草丛全都摆在晶体**旁边**（x = 中心 ±0.16…0.42），
+   晶体正后方空无一物，所以怎么拉滑杆都透不出东西。
+   现在每个场景都在晶体后方补三件高对比实物：横标尺（带刻度）、竖杆、几枚色块。 */
+const SCENE_PROPS = {
+  dark:    { ink: "rgba(178,208,248,.50)", hi: "rgba(238,248,255,.92)" },
+  lab:     { ink: "rgba(50,62,78,.62)",    hi: "rgba(246,250,255,.95)" },
+  nature:  { ink: "rgba(44,60,36,.58)",    hi: "rgba(206,226,158,.55)" },
+  cabinet: { ink: "rgba(230,208,168,.48)", hi: "rgba(126,96,62,.78)" },
+  paper:   { ink: "rgba(58,52,42,.48)",    hi: "rgba(255,255,255,.92)" },
+};
+function drawSceneProps(g, id, w, h) {
+  const P = SCENE_PROPS[id] || SCENE_PROPS.dark;
+  const u = Math.min(w, h);
+  const cx = w * 0.5, cy = h * 0.40, R = u * 0.34;   // 晶体大致占这一块
+  const th = Math.max(2, u * 0.0055);
+  g.save();
+  // 横标尺：尺身 + 刻度
+  const ry = cy + R * 0.05;
+  g.fillStyle = P.ink;
+  g.fillRect(cx - R * 1.55, ry, R * 3.1, th);
+  for (let i = 0; i <= 24; i++) {
+    const x = cx - R * 1.5 + R * 3.0 * i / 24;
+    const hh = (i % 8 === 0) ? u * 0.042 : (i % 2 ? u * 0.013 : u * 0.023);
+    g.fillRect(x, ry - hh, Math.max(1.5, th * 0.8), hh);
+  }
+  // 竖杆 + 刻度，从晶体左后方穿过去
+  const vx = cx - R * 0.50;
+  g.fillRect(vx, cy - R * 1.0, th, R * 2.0);
+  for (let i = 0; i <= 10; i++) {
+    const y = cy - R * 0.96 + R * 1.92 * i / 10;
+    const ww = (i % 5 === 0) ? u * 0.042 : u * 0.020;
+    g.fillRect(vx, y, ww, Math.max(1.5, th * 0.8));
+  }
+  // 几枚高对比色块：像石子 / 气泡 / 星点，同样是"身后的东西"
+  g.fillStyle = P.hi;
+  for (const [dx, dy, dr] of [[0.36, -0.30, 0.050], [0.12, 0.42, 0.036], [-0.22, -0.46, 0.044], [0.48, 0.20, 0.030]]) {
+    g.beginPath(); g.arc(cx + R * dx, cy + R * dy, u * dr, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
+
 function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
-  if (!opts.noBg) BG.draw(g, opts.vw, opts.vh);          // 程序化背景：渐变/展台/远山/纸面（导出时由调用方先画，故可跳过）
+  if (!opts.noBg) {                                     // 程序化背景：渐变/展台/远山/纸面
+    BG.draw(g, opts.vw, opts.vh);
+    drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh);   // 晶体后方的透射参考物
+  }
   // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
   const tbl = (state.onTable && !opts.noTable) ? BG.table : null;
   let project;
@@ -1677,7 +1758,29 @@ function paint(g, opts) {
   if (M.alpha < 0.995) paintTint(g, project, M);   // 先罩一层本体色，颜色不随 alpha 淡掉
   paintFaces(g, opts, project, M);
   paintInclusions(g, opts, project, M);   // 在晶体之上：半透明才看得见，越透明越清晰
+  drawTwinDomain(g, project);             // 转变双晶（道芬/巴西律）的域界：纯示意
   if (state.axes) drawAxes(g, project.R, project, opts.scale);
+}
+
+/* 转变双晶（道芬律/巴西律）的域界截面。
+   这两个律的双晶域完全包在晶体内部，外部晶形与单晶一模一样——所以不能画成两个晶体，
+   只能在内部画一层非常淡的域界面 + 虚线边界，并明确标注"这是切开来才看得见的"。
+   可以整体关掉（state.showDomain），关掉后就是肉眼所见的样子。 */
+function drawTwinDomain(g, project) {
+  if (!state.showDomain || !GEO || !GEO.domain || GEO.domain.length < 3) return;
+  const pts = GEO.domain.map(project);
+  g.save();
+  g.beginPath();
+  pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+  g.closePath();
+  g.fillStyle = "rgba(255,246,214,0.085)";       // 极淡：它在晶体内部，不该抢晶面的戏
+  g.fill();
+  g.setLineDash([5, 5]);
+  g.lineWidth = 1.15;
+  g.strokeStyle = "rgba(255,238,190,0.52)";
+  g.stroke();
+  g.setLineDash([]);
+  g.restore();
 }
 
 function drawAxes(g, R, project, scale) {
@@ -1960,20 +2063,22 @@ function renderTransp() {
   sel.disabled = metal;
   const ar = document.getElementById("alphaR");
   ar.disabled = metal;
-  ar.value = Math.round((state.alpha == null ? 1 : state.alpha) * 100);
+  // 滑杆显示的是「透明度」：0% = 完全不透明，100% = 全透明。
+  // state.alpha 存的是「不透明度」（合成用），两者互为补数——
+  // 早先滑杆直接绑 alpha，"透明度拉高"其实是在变不透明，方向是反的。
+  const transparency = Math.round((1 - (state.alpha == null ? 1 : state.alpha)) * 100);
+  ar.value = transparency;
   const al = document.getElementById("alphaVal");
-  if (al) al.textContent = Math.round((state.alpha == null ? 1 : state.alpha) * 100) + "%";
+  if (al) al.textContent = transparency + "%";
   document.getElementById("transpHint").innerHTML = metal
     ? "金属光泽天然不透明（金属不透光），因此这里不可调。"
-    : `当前：<b>${state.transp === "custom" ? "自定义" : (transpById(state.transp) || {}).zh}</b>，通透度 ${Math.round(state.alpha * 100)}%。通透度越低，内含物越清楚。`;
+    : `当前：<b>${state.transp === "custom" ? "自定义" : (transpById(state.transp) || {}).zh}</b>，透明度 ${transparency}%（不透明度 ${Math.round((state.alpha == null ? 1 : state.alpha) * 100)}%）。透明度越高，晶体后方的标尺越清楚。`;
 }
 
 function renderInclusions() {
   const sel = document.getElementById("incSel");
   if (!sel) return;
-  // state.inclusion === null 表示"跟随矿物默认"：换矿物时自动跟着换，
-  // 因此这里绝不把默认值写回 state（写回就再也跟不动了）
-  const cur = state.inclusion == null ? (mineral().inclusion || "none") : state.inclusion;
+  const cur = state.inclusion || "none";
   sel.innerHTML = "";
   for (const [id, spec] of Object.entries(INCLUSIONS)) {
     const o = document.createElement("option");
@@ -1982,12 +2087,24 @@ function renderInclusions() {
     sel.appendChild(o);
   }
   const den = document.getElementById("incDens");
-  den.value = Math.round((state.incDensity == null ? 0.6 : state.incDensity) * 100);
-  const dlab = document.getElementById("incDensVal");
-  if (dlab) dlab.textContent = Math.round((state.incDensity == null ? 0.6 : state.incDensity) * 100) + "%";
+  if (den) {
+    const dv = Math.round((state.incDensity == null ? 0.6 : state.incDensity) * 100);
+    den.value = dv;
+    const dlab = document.getElementById("incDensVal");
+    if (dlab) dlab.textContent = dv + "%";
+  }
+  const siz = document.getElementById("incSize");
+  if (siz) {
+    const sv = Math.round((state.incSize == null ? 1 : state.incSize) * 100);
+    siz.value = sv;
+    const slab = document.getElementById("incSizeVal");
+    if (slab) slab.textContent = sv + "%";
+  }
   const spec = INCLUSIONS[cur] || INCLUSIONS.none;
+  const typ = mineral().inclusion && mineral().inclusion !== "none" && INCLUSIONS[mineral().inclusion]
+    ? `　本矿物常见：<b>${INCLUSIONS[mineral().inclusion].zh}</b>。` : "";
   document.getElementById("incHint").innerHTML =
-    `${spec.note}<br>包体画在晶体内部、被晶面整体盖住，因此<b>只在半透明/全透明时可见</b>；且随晶体一起转动。`;
+    `${spec.note}${typ}<br>包体画在晶体内部，<b>只在半透明/全透明时看得清</b>；数量与大小是两个独立参数。`;
 }
 
 function renderLight() {
@@ -2007,7 +2124,8 @@ document.getElementById("transp").onchange = (e) => {
   renderTransp(); draw();
 };
 document.getElementById("alphaR").oninput = (e) => {
-  state.alpha = Number(e.target.value) / 100;
+  // 滑杆读数是「透明度」，alpha 存「不透明度」，故取补数
+  state.alpha = 1 - Number(e.target.value) / 100;
   state.transp = "custom";
   renderTransp(); draw();
 };
@@ -2017,6 +2135,10 @@ document.getElementById("incSel").onchange = (e) => {
 };
 document.getElementById("incDens").oninput = (e) => {
   state.incDensity = Number(e.target.value) / 100;
+  buildInclusions(); renderInclusions(); draw();
+};
+document.getElementById("incSize").oninput = (e) => {
+  state.incSize = Number(e.target.value) / 100;
   buildInclusions(); renderInclusions(); draw();
 };
 document.getElementById("lightAz").oninput = (e) => {
@@ -2064,12 +2186,19 @@ function syncPanels() {
     twinRow.style.display = habit().twin ? "" : "none";
     document.getElementById("optTwin").checked = state.twinTint;
   }
-  // 双晶拆解控件只在双晶习惯出现；切到非双晶时复位，免得下次打开残留拆解状态
+  // 双晶拆解控件只在"能拆"的双晶习惯出现（转变双晶的两个体同名，拆了毫无意义）；
+  // 切到非双晶时复位，免得下次打开残留拆解状态
+  const tw = habit().twin;
+  const canSplit = !!tw && !tw.noSplit;
   const splitBox = document.getElementById("splitBox");
-  if (splitBox) splitBox.style.display = habit().twin ? "" : "none";
-  if (!habit().twin && (state.twinSplit || state.twinShow !== "both")) {
+  if (splitBox) splitBox.style.display = canSplit ? "" : "none";
+  if (!canSplit && (state.twinSplit || state.twinShow !== "both")) {
     state.twinSplit = 0; state.twinShow = "both";
   }
+  const domBox = document.getElementById("domBox");
+  if (domBox) domBox.style.display = (tw && tw.mode === "domain") ? "" : "none";
+  const optDom = document.getElementById("optDom");
+  if (optDom) optDom.checked = state.showDomain;
   document.getElementById("splitVal").textContent = Math.round((state.twinSplit || 0) * 100) + "%";
   document.getElementById("splitR").value = Math.round((state.twinSplit || 0) * 100);
   document.getElementById("spBoth").classList.toggle("on", state.twinShow === "both");
@@ -2079,6 +2208,7 @@ function syncPanels() {
   renderBackgrounds();
   renderTransp();
   renderInclusions();
+  renderForms();      // 曾经漏掉这一行：初始化与换矿物后单形列表都是空的，点了也没反应
   renderLight();
   renderSwatches();
 
@@ -2094,7 +2224,8 @@ function syncPanels() {
   const hud = document.getElementById("hud");
   hud.innerHTML = `
     <div class="t1">${m.zh} · ${h.zh}<span>${m.en} / ${h.en}</span></div>
-    <div class="t2">${systemName(m.system)} · 点群 ${m.pointGroup} · ${h.forms.length} 种单形${h.twin ? ` · 双晶 ${h.twin.angle}` : ""}</div>
+    <div class="t2">${systemName(m.system)} · 点群 ${m.pointGroup} · ${h.forms.length} 种单形${
+      h.twin ? (h.twin.mode === "domain" ? ` · 双晶 ${h.twin.angle}（c 轴平行）` : ` · 双晶 ${h.twin.angle}`) : ""}</div>
     <div class="t3">${variant().counts.v} 顶点 · ${variant().counts.e} 棱 · ${variant().counts.f} 面</div>
   `;
 
@@ -2125,6 +2256,7 @@ document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.c
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
+document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 
 /* ── 面板折叠：点标题栏收起/展开，记忆在 localStorage ── */
 const FOLD_KEY = "crystalworld.folds";
@@ -2232,7 +2364,7 @@ function buildExportCanvas() {
   const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
   const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
 
-  if (BG) BG.draw(g, w, h);
+  if (BG) { BG.draw(g, w, h); drawSceneProps(g, bg, w, h); }
 
   // 晶体区域
   const m = mineral(), hb = habit(), v = variant();

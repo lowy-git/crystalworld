@@ -193,7 +193,12 @@ function makeEl(tag = "div") {
     querySelector() { return makeEl("input"); },
     closest() { return null; },
   };
-  Object.defineProperty(el, "innerHTML", { get() { return this._html; }, set(v) { this._html = v; } });
+  Object.defineProperty(el, "innerHTML", {
+    get() { return this._html; },
+    // 真实 DOM 里 innerHTML="" 会清空子节点；桩也必须这样，
+    // 否则 renderForms() 每调一次就多攒一批按钮，"列表有 N 个按钮"的断言会失真。
+    set(v) { this._html = v; if (!v) this.children.length = 0; },
+  });
   if (tag === "canvas") {
     // 关键分流：webgl2 给 GL 桩，2d 给 Canvas 桩。混用会让 glInit() 拿到 2D 桩后整条 GL 路径假死。
     el.getContext = (type) => { const c = (type === "webgl2" || type === "webgl") ? glStub() : gStub(); if (type === "webgl2") glLastCanvas = el; return c; };
@@ -396,12 +401,21 @@ check("金属光泽天然不透明（滑杆禁用）",
 run(`state.luster = "glass"; renderTransp();`);
 check("玻璃光泽可全透明（与光泽解耦）", run(`mat().alpha`) === 0.3, `alpha=${run(`mat().alpha`)}`);
 run(`state.alpha = null; state.transp = null; renderTransp(); draw();`);
-// 内含物：默认矿物带包体；密度可调；必须在晶体内部；不透明时不绘制
+// 内含物：默认「无」（用户要求：不主动塞包体）；选中后数量与大小是两个独立参数
 run(`selectMineral("quartz");`);
-check("石英默认含金红石针", run(`INC.length`) > 0
-  && run(`(state.inclusion == null ? mineral().inclusion : state.inclusion)`) === "rutile",
-  `INC=${run(`INC.length`)}`);
-check("包体密度可调（0 = 清空）", (() => {
+check("内含物默认「无」", run(`state.inclusion`) === "none" && run(`INC.length`) === 0,
+  `inc=${run(`state.inclusion`)} INC=${run(`INC.length`)}`);
+check("选中某一类后出现包体（数量滑杆与大小滑杆互不影响）", (() => {
+  run(`state.inclusion = "rutile"; state.incDensity = 1; state.incSize = 1; buildInclusions();`);
+  const n1 = run(`INC.length`);
+  run(`state.incSize = 2.0; buildInclusions();`);
+  const n2 = run(`INC.length`);          // 只改大小：数量不变
+  const big = run(`(function(){let s=0;for(const f of INC)for(const p of f.pts)s+=Math.abs(p[0])+Math.abs(p[1])+Math.abs(p[2]);return s;})()`);
+  run(`state.incSize = 1; buildInclusions();`);
+  const small = run(`(function(){let s=0;for(const f of INC)for(const p of f.pts)s+=Math.abs(p[0])+Math.abs(p[1])+Math.abs(p[2]);return s;})()`);
+  return n1 > 0 && n2 === n1 && big > small * 1.2;
+})(), `数量 ${run(`INC.length`)}`);
+check("数量滑杆为 0 时清空", (() => {
   run(`state.incDensity = 0; buildInclusions();`);
   const a = run(`INC.length`);
   run(`state.incDensity = 1; buildInclusions();`);
@@ -420,22 +434,51 @@ check("包体全部落在晶体内部", run(`INC.every(f => f.pts.every(p => ins
   const see = painted > 0;
   check("不透明时内含物不绘制、半透明时可见", opaque && see, `fill=${painted}`);
 }
-run(`state.alpha = null; state.transp = null; state.luster = null; state.incDensity = 0.6; buildInclusions(); renderTransp(); draw();`);
+run(`state.alpha = null; state.transp = null; state.luster = null; state.incDensity = 0.6; state.incSize = 1; state.inclusion = "none"; buildInclusions(); renderTransp(); draw();`);
 
-// ── 第八轮：石英道芬律 / 巴西律 ──
+// ── 第八轮：石英道芬律 / 巴西律（第九轮改成"转变双晶"的正确表现）──
 run(`selectMineral("quartz"); state.habitId = "dauphine-twin"; rebuildGeometry(); syncPanels();`);
-check("石英道芬律存在：绕 c 轴 180°（mode=axis, axis=[001]）", (() => {
+check("石英道芬律：转变双晶（mode=domain, 域界 ⟂c = 基面 [001]）", (() => {
   const t = run(`JSON.stringify(habit().twin)`);
-  return /"mode":"axis"/.test(t) && /"axis":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 180;
+  return /"mode":"domain"/.test(t) && /"plane":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 0;
 })(), run(`JSON.stringify(habit().twin)`));
-check("道芬律面数合理（两块同心，24 面）", run(`variant().counts.f`) === 24, `f=${run(`variant().counts.f`)}`);
+check("道芬律外形与单晶一致（不做两体复制，18 面）", run(`variant().counts.f`) === 18, `f=${run(`variant().counts.f`)}`);
+check("道芬律有域界截面（内部虚线，不参与面数）", (() => {
+  const d = run(`GEO.domain ? GEO.domain.length : 0`);
+  return d >= 3 && run(`variant().counts.f`) === 18;
+})(), `domain 点数=${run(`GEO.domain ? GEO.domain.length : 0`)}`);
+check("道芬律不可拆解（noSplit，拆解控件隐藏）", (() => {
+  run(`syncPanels(); syncPanels();`);
+  return run(`habit().twin.noSplit`) === true && run(`document.getElementById("splitBox").style.display`) === "none"
+    && run(`document.getElementById("domBox").style.display`) === "";
+})());
 run(`state.habitId = "brazil-twin"; rebuildGeometry(); syncPanels();;`);
-check("石英巴西律存在：{11-20} 镜面（mode=mirror, plane=[11-20]）", (() => {
+check("石英巴西律：{11-20} 镜面（mode=domain, plane=[11-20]）", (() => {
   const t = run(`JSON.stringify(habit().twin)`);
-  return /"mode":"mirror"/.test(t) && /"plane":\[1,1,-2,0\]/.test(t);
+  return /"mode":"domain"/.test(t) && /"plane":\[1,1,-2,0\]/.test(t);
 })(), run(`JSON.stringify(habit().twin)`));
-check("巴西律 c 轴平行（夹角 0°，手性相反）", run(`habit().twin.angle`) === 0);
+check("巴西律 c 轴平行（夹角 0°，左右形互生）", run(`habit().twin.angle`) === 0);
+check("巴西律外形与单晶一致（18 面）", run(`variant().counts.f`) === 18, `f=${run(`variant().counts.f`)}`);
 run(`state.habitId = "japan-twin"; rebuildGeometry(); syncPanels();;`);
+check("日本律底部被截平（有截断面 form=-2）", (() => {
+  return run(`GEO.faces.some(f => f.form === -2)`) === true;
+})());
+check("日本律整体仍闭合（欧拉数 2、无只用一次的棱）", (() => {
+  const r = run(`(() => {
+    const vs = new Set(); const em = new Map();
+    for (const f of GEO.faces) {
+      for (let j = 0; j < f.loop.length; j++) {
+        vs.add(f.loop[j]);
+        const a = f.loop[j], b = f.loop[(j + 1) % f.loop.length];
+        const k = a < b ? a + "-" + b : b + "-" + a;
+        em.set(k, (em.get(k) || 0) + 1);
+      }
+    }
+    let once = 0; for (const c of em.values()) if (c === 1) once++;
+    return [vs.size - em.size + GEO.faces.length, once];
+  })()`);
+  return r[0] === 2 && r[1] === 0;
+})(), `面数=${run(`GEO.faces.length`)}`);
 
 // ── 第八轮：双晶拆解 ──
 check("拆解控件只在双晶习惯出现", (() => {
@@ -463,6 +506,33 @@ check("拆解后两个体各自仍是闭合体（欧拉数 1 + 1）", (() => {
   run(`state.twinSplit = 0; rebuildGeometry();`);
   return chi === 2;
 })(), `χ=${run(`(() => { const vs = new Set(); let E = 0; for (const f of GEO.faces) { for (const i of f.loop) vs.add(i); E += f.loop.length; } return vs.size - E/2 + GEO.faces.length; })()`)}`);
+check("贯穿双晶拆开后每个个体都是完整体（萤石：两个闭合立方体）", (() => {
+  run(`selectMineral("fluorite"); state.habitId = "spinel-twin"; state.twinSplit = 0; state.twinShow = "both"; rebuildGeometry();`);
+  const togetherF = run(`GEO.faces.length`);
+  run(`state.twinSplit = 1; rebuildGeometry();`);
+  const chiEach = run(`(() => {
+    const res = {};
+    for (const k of [0, 1]) {
+      const fs = GEO.faces.filter(f => f.indiv === k);
+      const vs = new Set(); let E = 0;
+      for (const f of fs) { for (const i of f.loop) vs.add(i); E += f.loop.length; }
+      res[k] = [vs.size - E / 2 + fs.length, fs.length];
+    }
+    return res;
+  })()`);
+  const splitF = run(`GEO.faces.length`);
+  const apart = run(`(() => {
+    const cen = k => { const fs = GEO.faces.filter(f => f.indiv === k); const s = [0,0,0];
+      for (const f of fs) for (const p of f.pts) { s[0]+=p[0]; s[1]+=p[1]; s[2]+=p[2]; }
+      const n = fs.reduce((a,f)=>a+f.pts.length,0); return s.map(x=>x/n); };
+    const a = cen(0), b = cen(1);
+    return Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]);
+  })()`);
+  run(`state.twinSplit = 0; rebuildGeometry();`);
+  run(`selectMineral("quartz"); state.habitId = "japan-twin"; rebuildGeometry(); syncPanels();`);
+  // 每个个体各是一个闭合体（χ=2）；拆开后两块在 x 方向不再重叠；面数回到"完整个体"的数量
+  return chiEach[0][0] === 2 && chiEach[1][0] === 2 && apart > 1.0 && splitF < togetherF;
+})(), `并集=${run(`selectMineral("fluorite"); state.habitId="spinel-twin"; state.twinSplit=0; rebuildGeometry(); const n=GEO.faces.length; selectMineral("quartz"); state.habitId="japan-twin"; rebuildGeometry(); syncPanels(); n`)}`);
 check("只看 A / 只看 B 会过滤个体", (() => {
   run(`state.twinShow = "A"; rebuildGeometry();`);
   const nA = run(`GEO.faces.filter(f => f.indiv === 0).length`);
@@ -489,21 +559,38 @@ check("点击标题栏可折叠/展开面板", (() => {
 })());
 
 // ── 第八轮：本体染色层（透明度高时颜色不消失） ──
-check("半透明时先罩一层本体色（颜色不随 alpha 淡掉）", (() => {
-  let tinted = 0;
+/* 本体色层：中间薄（看得穿）、边缘厚（吃色）、越透明越薄但永不为零。
+   这条断言同时钉住三件事：不透明时跳过、半透明时画、透明度越高中心 alpha 越低。 */
+function tintProbe(alpha) {
+  const stops = [];
+  let box = 0;
   const cg = new Proxy({}, {
-    get: (t, k) => (k === "fill" ? (rule) => { if (rule === "nonzero") tinted++; } : () => {}),
+    get: (t, k) => {
+      if (k === "createRadialGradient") return () => ({ addColorStop: (p, c) => stops.push([p, c]) });
+      if (k === "fillRect") return () => box++;
+      return () => {};
+    },
     set: () => true,
   });
   sandbox.__cg = cg;
   const P = `makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 })`;
-  run(`state.alpha = 0.3; paintTint(__cg, ${P}, mat());`);
-  const n1 = tinted;
-  run(`state.alpha = 1; paintTint(__cg, ${P}, mat());`);
-  const n2 = tinted;
-  run(`state.alpha = null; state.transp = null; renderTransp();`);
-  return n1 > 0 && n2 === n1;   // 半透明时画了；不透明时跳过（画了也被完全盖住，无意义）
-})(), `tint=${(() => { let t = 0; const cg = new Proxy({}, { get: (tt, k) => (k === "fill" ? (r) => { if (r === "nonzero") t++; } : () => {}), set: () => true }); return t; })()}`);
+  run(`state.alpha = ${alpha}; paintTint(__cg, ${P}, mat());`);
+  return { box, stops };
+}
+const tClear = tintProbe(0.1);      // 90% 透明
+const tTransl = tintProbe(0.55);    // 45% 透明
+const tOpaque = tintProbe(1);       // 不透明
+const alphaOf = (c) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(String(c)); return m ? Number(m[1]) : -1; };
+const aClearCenter = tClear.stops.length ? alphaOf(tClear.stops[0][1]) : -1;
+const aTranslCenter = tTransl.stops.length ? alphaOf(tTransl.stops[0][1]) : -1;
+check("半透明时画本体色层，不透明时跳过", tClear.box > 0 && tTransl.box > 0 && tOpaque.box === 0,
+  `clear=${tClear.box} transl=${tTransl.box} opaque=${tOpaque.box}`);
+check("本体色层中心比边缘薄（玻璃的芯看得穿、边吃色深）",
+  tClear.stops.length === 3 && alphaOf(tClear.stops[0][1]) < alphaOf(tClear.stops[2][1]),
+  tClear.stops.map(s => s[0] + ":" + alphaOf(s[1])).join(" "));
+check("透明度越高本体色越靠这层撑住（但中心 alpha < 0.20，不挡住背后的东西）",
+  aClearCenter > aTranslCenter && aClearCenter > 0 && aClearCenter < 0.20,
+  `90%透明芯=${aClearCenter} 45%透明芯=${aTranslCenter}`);
 check("本体色跟随矿物（石英取有色项）", (() => {
   const c = run(`JSON.stringify(bodyColor())`);
   return /0\.\d/.test(c);
@@ -705,15 +792,87 @@ const glLastOptsOk = (glw, vw, vh) => {
   const upC = glStat.uploads;
   run(`state.colorMode = "mineral"; state.uniform = "#ff8800"; draw();`);
   check("切换单色会重传顶点缓冲", glStat.uploads === upC + 1, `uploads ${upC}→${glStat.uploads}`);
-  check("单色进了顶点缓冲（#ff8800 = 1, 0.533, 0）", (() => {
+  check("单色进了顶点缓冲（#ff8800 = 1, 0.533, 0；截断面保持 CLIP 色）", (() => {
     if (!glLastBuf) return false;
     const d = Array.from(glLastBuf.data);
+    const isUniform = (i) => Math.abs(d[i] - 1) <= 1e-6 && Math.abs(d[i + 1] - 136 / 255) <= 1e-6 && Math.abs(d[i + 2]) <= 1e-6;
+    // 截断面（form<0）走 CLIP_TINT，是刻意的"断面"标记色，不算单色失效
+    const isClip = (i) => Math.abs(d[i] - 0.58) <= 1e-6 && Math.abs(d[i + 1] - 0.62) <= 1e-6 && Math.abs(d[i + 2] - 0.68) <= 1e-6;
+    let uni = 0, clip = 0;
     for (let i = 6; i + 2 < d.length; i += 9) {
-      if (Math.abs(d[i] - 1) > 1e-6 || Math.abs(d[i + 1] - 136 / 255) > 1e-6 || Math.abs(d[i + 2]) > 1e-6) return false;
+      if (isUniform(i)) uni++;
+      else if (isClip(i)) clip++;
+      else return false;
     }
-    return d.length >= 9;
+    return d.length >= 9 && uni > 0;
   })(), "");
   run(`state.colorMode = "mineral"; state.uniform = null; draw();`);
+}
+
+/* ── 第九轮：单形列表 / 内含物双参数 / 透明度 / 透射参考物 ────────────────── */
+{
+  // 1) 单形选择列表必须真的有按钮。曾经的 bug：renderForms() 从未被调用，
+  //    #forms 一直是空的——用户点"没有反应"其实是"根本没有可点的东西"。
+  for (const [mn, hb] of [["fluorite", "cuboctahedron"], ["quartz", "prismatic"], ["calcite", "scalenohedron"]]) {
+    run(`selectMineral("${mn}"); state.habitId = "${hb}"; rebuildGeometry(); syncPanels();`);
+    const n = run(`document.getElementById("forms").children.length`);
+    const k = run(`habit().forms.length`);
+    check(`单形选择有 ${k} 个可点按钮（${mn}/${hb}）`, n === k, `forms=${n} want=${k}`);
+  }
+  // 2) 点按钮必须真的改掩码与几何
+  run(`selectMineral("quartz"); state.habitId = "prismatic"; rebuildGeometry(); syncPanels();`);
+  const f0 = run(`variant().counts.f`);
+  run(`(function(){ const b = document.getElementById("forms").children[0]; if (b && b.onclick) b.onclick(); })()`);
+  check("点单形按钮会改掩码（掩码变了）", run(`state.mask`) !== 0, `mask=${run(`state.mask`)}`);
+  run(`state.mask = 0; rebuildGeometry(); draw();`);
+  void f0;
+
+  // 3) 透明度滑杆：读数是透明度，state.alpha 是不透明度（互为补数）
+  run(`state.luster = "glass"; state.transp = null; state.alpha = null; renderTransp();`);
+  const pos0 = run(`+document.getElementById("alphaR").value`);
+  check("透明度滑杆读数 = 100 − 不透明度（方向不能反）",
+    Math.abs(pos0 - Math.round((1 - run(`mat().alpha`)) * 100)) <= 1,
+    `slider=${pos0} alpha=${run(`mat().alpha`)}`);
+  run(`document.getElementById("alphaR").oninput({ target: { value: "90" } });`);
+  check("把透明度拉到 90% → 不透明度 0.10", Math.abs(run(`state.alpha`) - 0.10) < 1e-9, `alpha=${run(`state.alpha`)}`);
+  run(`document.getElementById("alphaR").oninput({ target: { value: "0" } });`);
+  check("把透明度拉到 0% → 不透明度 1（完全不透明）", run(`state.alpha`) === 1, `alpha=${run(`state.alpha`)}`);
+  run(`state.alpha = null; state.transp = null; state.luster = null; renderTransp(); draw();`);
+
+  // 4) 透射参考物：晶体后方必须有高对比的东西，否则透明度不可见
+  {
+    const calls = [];
+    const cg = new Proxy({}, {
+      get: (t, k) => (k === "fillRect" ? (x, y, w, h) => calls.push([x, y, w, h]) : () => {}),
+      set: () => true,
+    });
+    sandbox.__cg = cg;
+    run(`drawSceneProps(__cg, "lab", 800, 600);`);
+    // 晶体在画面中心（800×600 → cx=400），标尺必须横穿 x=400 且落在 y≈240 附近
+    const crosses = calls.some(c => c[0] < 400 && c[0] + c[2] > 400);
+    check("透射参考物横穿晶体正后方（不是摆在旁边）", crosses && calls.length > 10,
+      `rects=${calls.length}`);
+    check("五个场景都有透射参考物", ["dark", "lab", "nature", "cabinet", "paper"].every(id => {
+      calls.length = 0;
+      run(`drawSceneProps(__cg, "${id}", 800, 600);`);
+      return calls.length > 10;
+    }));
+  }
+
+  // 5) GL 逐像素透明度：alpha 由 uAlpha 与高光共同决定（高光不随透射淡掉）
+  check("GL 片元着色器有 uAlpha 且按高光抬升像素 alpha", (() => {
+    const src = run(`GL_FS`);
+    return /uniform\s+float\s+[^;]*uAlpha/.test(src) && /pa\s*=\s*clamp\(uAlpha\s*\+/.test(src);
+  })());
+  const uniA = glStat.uni.filter(u => u[0] === "uAlpha");
+  check("uAlpha 每次绘制都上传", uniA.length > 0, `n=${uniA.length}`);
+  check("全透明时 uAlpha ≈ 0.26（clear 档），不是 0", (() => {
+    run(`state.luster = "glass"; state.transp = "clear"; state.alpha = (transpById("clear") || {}).alpha; renderTransp(); draw();`);
+    const last = glStat.uni.filter(u => u[0] === "uAlpha").pop();
+    const v = last ? last[1] : -1;
+    run(`state.luster = null; state.transp = null; state.alpha = null; renderTransp(); draw();`);
+    return v > 0.15 && v < 0.40;
+  })(), `v=${(glStat.uni.filter(u => u[0] === "uAlpha").pop() || [])[1]}`);
 }
 
 console.log(out.join("\n"));

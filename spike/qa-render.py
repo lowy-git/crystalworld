@@ -508,8 +508,12 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         off = sd * split * 1.5
     else:
         off = None
+    hid = v.get("hid") or [0] * len(v["f"])
+    use_whole = bool(any(hid)) and (off is not None or indiv is not None)
     faces = []
     for fi, loop in enumerate(v["f"]):
+        if bool(hid[fi]) != use_whole:
+            continue
         if indiv is not None and v["indiv"][fi] != indiv:
             continue
         pts = P[loop]
@@ -519,8 +523,6 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
         n = n / (np.linalg.norm(n) + 1e-12)
         faces.append(dict(pts=pts, n=n, c=pts.mean(0), form=v["form"][fi],
                           indiv=v["indiv"][fi], clip=v["clip"][fi], loop=loop))
-
-    # 真棱：两面共用且不共面（>5°）
     emap = {}
     for fi, f in enumerate(faces):
         L = f["loop"]
@@ -717,6 +719,22 @@ def render(mineral_id, habit_id, mask_key, w, h, luster=None, bg="dark", striati
             pts = [proj(p) for p in f["pts"]]
             fill = tuple(int(c * 255) for c in col) + (int(min(1.0, f["alpha"] * k) * 255),)
             do.polygon(pts, fill=fill, outline=fill, width=1)
+        bgim.paste(ov, (0, 0), ov)
+    # 转变双晶（道芬/巴西律）的域界：只画在内部，淡色 + 虚线
+    dom = v.get("domain")
+    if dom and len(dom) >= 3:
+        ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        do = ImageDraw.Draw(ov, "RGBA")
+        pts = [proj(np.array(p, dtype=float)) for p in dom]
+        do.polygon(pts, fill=(255, 246, 214, 22))
+        for i in range(len(pts)):
+            a, b2 = pts[i], pts[(i + 1) % len(pts)]
+            n_seg = 9
+            for s in range(0, n_seg, 2):
+                t0, t1 = s / n_seg, (s + 1) / n_seg
+                do.line([(a[0] + (b2[0] - a[0]) * t0, a[1] + (b2[1] - a[1]) * t0),
+                         (a[0] + (b2[0] - a[0]) * t1, a[1] + (b2[1] - a[1]) * t1)],
+                        fill=(255, 238, 190, 150), width=2 * SS)
         bgim.paste(ov, (0, 0), ov)
     return bgim.resize((w, h), Image.LANCZOS)
 
@@ -1145,6 +1163,34 @@ if __name__ == "__main__":
             out.paste(im, ((i % 3) * 420, (i // 3) * 420))
         out.save("render/qa-sheet.png")
         print("saved render/qa-sheet.png")
+    elif mode == "domain":
+        # 转变双晶：道芬律（域界 ⟂c）与巴西律（域界 ∥{11-20}）。
+        # 外部晶形与单晶完全一样——这正是重点：两个律都看不出双晶，
+        # 域界是"切开才看得见"的示意，所以图里只有晶体内部一条虚线。
+        T = 480
+        out = Image.new("RGB", (4 * T, 2 * T), (7, 9, 13))
+        dr = ImageDraw.Draw(out)
+        fnt = _font(17)
+        tiles = [
+            ("quartz", "dauphine-twin", "111", 0, "道芬律 yaw=0（域界 ⟂c）"),
+            ("quartz", "dauphine-twin", "111", 55, "道芬律 yaw=55"),
+            ("quartz", "brazil-twin", "111", 0, "巴西律 yaw=0（域界 ∥{11-20}）"),
+            ("quartz", "brazil-twin", "111", 55, "巴西律 yaw=55"),
+        ]
+        for i, (mi, hi, mk, yw, lab) in enumerate(tiles):
+            im = render(mi, hi, mk, T, T, luster="glass", yaw=yw)
+            out.paste(im, (i * T, 0))
+            dr.text((i * T + 12, 8), lab, fill=(140, 200, 255), font=fnt)
+        # 下排：同一习惯但不画域界（肉眼所见），用 quartz 单晶习惯对照
+        for i, (mi, hi, mk, yw, lab) in enumerate([
+            ("quartz", "prismatic", "111", 0, "对照：石英单晶（无域界）"),
+            ("quartz", "prismatic", "111", 55, "对照：石英单晶 yaw=55"),
+        ]):
+            im = render(mi, hi, mk, T, T, luster="glass", yaw=yw)
+            out.paste(im, (i * T, T))
+            dr.text((i * T + 12, T + 8), lab, fill=(205, 214, 228), font=fnt)
+        out.save("render/qa-domain.png")
+        print("saved render/qa-domain.png")
     elif mode == "split":
         # 双晶拆解：滑杆 0 / 0.5 / 1.0 + 只看 A / 只看 B
         T = 400
