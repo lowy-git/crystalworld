@@ -1294,9 +1294,29 @@ function glCompile(type, src) {
   return s;
 }
 
+let glFailMsg = null;                    // GL 起不来的原因；null = 正常
+/* GL 失败绝不能"静默回落到 2D"：用户看到画面没坏，会以为 GL 生效了，
+   于是任何"棱线飘到晶体外"都会被误判成正常观感。所以失败要：① 挂横幅 ② 可一键切 2D 对照。
+   URL 加 ?gl2d=1 可强制走 Canvas 2D 路径，用来 A/B 定位问题。 */
+const GL_OFF = /[?&]gl2d=1\b/.test(location.search || "");
+
+function glBanner(text) {
+  glFailMsg = text;
+  console.error("[CrystalWorld] GL 不可用：" + text);
+  if (document.body) {
+    const d = document.createElement("div");
+    d.id = "glfail";
+    d.textContent = "WebGL 渲染不可用（" + text + "），已回落到 Canvas 2D 渲染。可在地址栏加 ?gl2d=1 强制对照。";
+    d.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99;max-width:70%;" +
+      "padding:6px 10px;border-radius:6px;background:rgba(120,20,20,.92);color:#fff;font:12px/1.5 sans-serif";
+    document.body.appendChild(d);
+  }
+}
+
 function glInit() {
   if (glReady) return !!gl;
   glReady = true;                                  // 只试一次，失败就走 2D 兜底
+  if (GL_OFF) { glBanner("已用 ?gl2d=1 手动关闭"); return false; }
   try {
     glc = document.createElement("canvas");
     gl = glc.getContext("webgl2", {
@@ -1306,15 +1326,15 @@ function glInit() {
       powerPreference: "low-power",
     });
   } catch (err) { gl = null; }
-  if (!gl) { console.warn("webgl2 不可用，回落到 Canvas 2D 渲染"); return false; }
+  if (!gl) { glBanner("浏览器不支持 webgl2 或上下文被拒"); return false; }
   const vs = glCompile(gl.VERTEX_SHADER, GL_VS);
   const fs = glCompile(gl.FRAGMENT_SHADER, GL_FS);
-  if (!vs || !fs) { gl = null; return false; }
+  if (!vs || !fs) { glBanner("着色器编译失败，详见控制台 shader: 输出"); gl = null; return false; }
   glProg = gl.createProgram();
   gl.attachShader(glProg, vs); gl.attachShader(glProg, fs);
   gl.linkProgram(glProg);
   if (!gl.getProgramParameter(glProg, gl.LINK_STATUS)) {
-    console.warn("link:", gl.getProgramInfoLog(glProg));
+    glBanner("程序链接失败：" + gl.getProgramInfoLog(glProg));
     gl = null; return false;
   }
   gl.deleteShader(vs); gl.deleteShader(fs);
@@ -1332,10 +1352,14 @@ function glInit() {
 }
 
 /* 面片 → 三角形顶点流。**不按正反面过滤**（那件事在顶点着色器里做），
-   所以缓冲内容只取决于几何与颜色，旋转时一个字节都不用重传。 */
+   所以缓冲内容只取决于几何与颜色，旋转时一个字节都不用重传。
+   但 twinShow（只看 A / 只看 B）是**个体过滤**，必须在这里做：
+   overlay 与 2D 兜底都按 state.twinShow 过滤，GL 不过滤就会两个体都画。 */
 function glBuild() {
   const a = [];
+  const show = state.twinShow === "both" ? -1 : (state.twinShow === "A" ? 0 : 1);
   for (const f of GEO.faces) {
+    if (show >= 0 && f.indiv !== show) continue;
     const col = faceColor(f);
     const L = f.pts;
     for (let i = 1; i + 1 < L.length; i++) {                 // 扇形三角化（面都是凸的）
@@ -1392,7 +1416,10 @@ function glRender(project, M, opts) {
     [R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]));
   gl.uniform1f(glUni.uFoc, 3.05 * opts.scale * Math.min(vw, vh) * 0.5);
   gl.uniform1f(glUni.uDist, GL_DIST);
-  gl.uniform1f(glUni.uCx, opts.cx); gl.uniform1f(glUni.uCy, opts.cy);
+  // 必须用 project.cx/cy（= opts.cx + pan），不能用 opts.cx/cy：
+  // 2D 的 project() 是 cx + w*k + pan，GL 少加一个 pan 就会整体错开，
+  // 表现为「右键/Shift 平移后，GL 填充不动、2D 棱线动」——棱线整片飘到晶体外面。
+  gl.uniform1f(glUni.uCx, project.cx); gl.uniform1f(glUni.uCy, project.cy);
   gl.uniform1f(glUni.uVw, vw);   gl.uniform1f(glUni.uVh, vh);
   const [zn, zf] = glDepthRange(project);
   gl.uniform1f(glUni.uZn, zn); gl.uniform1f(glUni.uZf, zf);

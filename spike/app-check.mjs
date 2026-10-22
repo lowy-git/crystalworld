@@ -243,6 +243,8 @@ const sandbox = {
   setTimeout, clearTimeout, navigator: {}, URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
   ClipboardItem: class {}, Image: class {},
   localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+  // URL 加 ?gl2d=1 可强制走 Canvas 2D 路径（A/B 定位用）；沙箱里没有 location，得补一个
+  location: { search: "", href: "" },
 };
 sandbox.window.document = document;
 sandbox.globalThis = sandbox;
@@ -642,6 +644,48 @@ const glLastOptsOk = (glw, vw, vh) => {
   })()`);
   const [rx, ry] = JSON.parse(redo);
   check("GL 顶点着色器的 clip 公式 = 2D 投影公式（同源）", Math.abs(nx - rx) < 1e-9 && Math.abs(ny - ry) < 1e-9, `2d=[${nx.toFixed(6)},${ny.toFixed(6)}] gl=[${rx.toFixed(6)},${ry.toFixed(6)}]`);
+
+  // 5b) 【决定性断言】拿「桩里真实录到的 uRot + 全部 uniform」在 Node 侧重放一遍顶点着色器，
+  //     再和 makeProject 的屏幕坐标反推的 NDC **逐顶点**比对。
+  //     为什么必须逐顶点：只查 P[0] 会漏掉「矩阵转置写反」「平移 pan 漏传给 GL」这类
+  //     整体性错误——它们不会让画面报错，只会让 GL 填充整体偏移/翻转，
+  //     于是 2D 棱线整片飘到晶体外面（用户看到的就是"晶体不显示棱线、棱飘在晶体外"）。
+  const glNdcNow = () => {
+    const Rot = lastU("uRot");                        // 列主序展平的 9 个数
+    const uCx = lastU("uCx"), uCy = lastU("uCy"), uVw = lastU("uVw"), uVh = lastU("uVh");
+    const uFoc = lastU("uFoc"), uDist = lastU("uDist");
+    if (!Rot || Rot.length !== 9) return null;
+    const P = JSON.parse(run(`JSON.stringify(GEO.P)`));
+    return P.map(v => {
+      // 上传数组是列主：m[c][r] = F[c*3+r] = R[r][c]，故 (m*v)[r] = F[r]*v0 + F[3+r]*v1 + F[6+r]*v2
+      const w = [0, 1, 2].map(r => Rot[r] * v[0] + Rot[3 + r] * v[1] + Rot[6 + r] * v[2]);
+      const z = Math.max(uDist - w[2], 0.4);
+      return [((uCx + w[0] * uFoc / z) / uVw) * 2 - 1, 1 - ((uCy - w[1] * uFoc / z) / uVh) * 2];
+    });
+  };
+  const twoNdcNow = () => JSON.parse(run(`(() => {
+    const p = makeProject(glLastOpts);
+    return JSON.stringify(GEO.P.map(v => { const s = p(v); return [(s[0] / p.vw) * 2 - 1, 1 - (s[1] / p.vh) * 2]; }));
+  })()`));
+  const cmpNdc = (tag) => {
+    const a = twoNdcNow(), b = glNdcNow();
+    if (!b) { check(tag, false, "uRot 未上传"); return; }
+    let worst = 0, wi = -1;
+    for (let i = 0; i < a.length; i++) {
+      const d = Math.max(Math.abs(a[i][0] - b[i][0]), Math.abs(a[i][1] - b[i][1]));
+      if (d > worst) { worst = d; wi = i; }
+    }
+    // 容差 1e-6 而不是 1e-9：GL 的 uRot 是 Float32Array（上传必然降精度），
+    // 2D 侧是 float64。实测最大偏差 5.6e-9 NDC ≈ 4e-6 像素，肉眼不可见，
+    // 但它会让"容差写 1e-9"的断言变成永假 FAIL，反而盖住真问题（pan bug 是 5.8e-2）。
+    check(tag, worst < 1e-6, `${a.length} 顶点最大偏差 ${worst.toExponential(2)}` + (wi >= 0 && worst > 1e-6 ? ` @顶点${wi}` : "") + (worst > 1e-6 ? `（≈ ${(worst * 700).toFixed(1)} px 偏移）` : ""));
+  };
+  cmpNdc("GL 全部顶点的 NDC = 2D 投影（同源，逐顶点）");
+  // 平移（右键/Shift 拖动）也必须同源：GL 用的是 opts.cx/cy，2D 用的是 cx+pan，
+  // 两边差一个 pan 就会整体错位——这正是"棱线飘到晶体外"的直接成因
+  run(`state.pan = [37, -21]; draw();`);
+  cmpNdc("平移后 GL 与 2D 仍逐顶点同源（pan 不能漏传给 GL）");
+  run(`state.pan = [0, 0]; draw();`);
 
   // 6) 旋转只改 uniform、不重传缓冲：连画两帧，uploads 不增加
   const up0 = glStat.uploads;
