@@ -325,13 +325,13 @@ check("萤石尖晶石律 <100> 夹角 109°28′（arccos(−1/3)）", Math.abs
   const fitted = boxOf(`fitToTable(${base}, BACKGROUNDS.lab.table)`);
   check("放在桌面上：晶体底边贴在实验台桌面线上", Math.abs(fitted.ymax - tblY) < 2, `ymax=${fitted.ymax.toFixed(1)} table=${tblY.toFixed(1)}`);
   check("放在桌面上：不高出画面上沿 5%", fitted.ymin > 860 * 0.04, `ymin=${fitted.ymin.toFixed(1)}`);
-  check("深空背景没有桌面（table = undefined）", run(`BACKGROUNDS.dark.table`) === undefined);
+  check("空白背景没有桌面（table = undefined）", run(`BACKGROUNDS.void.table`) === undefined);
   const cabY = run(`BACKGROUNDS.cabinet.table.y`) * 860;
   const cab = boxOf(`fitToTable(${base}, BACKGROUNDS.cabinet.table)`);
   check("藏品柜展台也能贴合", Math.abs(cab.ymax - cabY) < 2, `ymax=${cab.ymax.toFixed(1)} table=${cabY.toFixed(1)}`);
   // 勾选状态由 UI 开关驱动：面板同步 + 场景禁用判断
-  run(`state.bg = "dark"; renderBackgrounds();`);
-  check("深空场景下勾选框被禁用", run(`document.getElementById("onTable").disabled`) === true);
+  run(`state.bg = "void"; renderBackgrounds();`);
+  check("空白场景下勾选框被禁用", run(`document.getElementById("onTable").disabled`) === true);
   run(`state.bg = "lab"; renderBackgrounds();`);
   check("实验台场景下勾选框可用", run(`document.getElementById("onTable").disabled`) === false);
   run(`state.onTable = true; state.bg = "lab"; draw();`);
@@ -623,14 +623,14 @@ check("背景内容物可绘制（四种带桌面的场景都不报错）", (() 
 })());
 
 // ---- 第十八轮：场景照片背景（AI 生图内联 + 焦点对位 + 程序化兜底） ----
-check("五套场景都内联了照片（data URL JPEG，且不是空占位）", (() => {
+check("四张场景照片都内联了（data URL JPEG，且不是空占位；空白场景无照片）", (() => {
   const n = Number(run(`BG_IMGS ? Object.keys(BG_IMGS).length : 0`));
-  if (n !== 5) return false;
-  const ok = run(`["dark","lab","nature","cabinet","paper"].every(id => typeof BG_IMGS[id] === "string" && BG_IMGS[id].startsWith("data:image/jpeg;base64,") && BG_IMGS[id].length > 20000)`);
+  if (n !== 4) return false;
+  const ok = run(`["lab","nature","cabinet","paper"].every(id => typeof BG_IMGS[id] === "string" && BG_IMGS[id].startsWith("data:image/jpeg;base64,") && BG_IMGS[id].length > 20000)`);
   return ok === true || ok === "true";
 })(), `keys=${run(`BG_IMGS ? Object.keys(BG_IMGS).join(",") : "null"`)}`);
-check("每个场景声明 img/focus/vig，且带桌面的场景焦点行 = table.y（贴桌不悬空）", (() => {
-  const ok = run(`["dark","lab","nature","cabinet","paper"].every(id => { const B = BACKGROUNDS[id]; return B.img === id && Array.isArray(B.focus) && B.focus.length === 2 && typeof B.vig === "number" && (!B.table || Math.abs(B.focus[1] - B.table.y) < 1e-9); })`);
+check("每张照片的场景声明 img/focus/vig，且带桌面的场景焦点行 = table.y（贴桌不悬空）", (() => {
+  const ok = run(`["lab","nature","cabinet","paper"].every(id => { const B = BACKGROUNDS[id]; return B.img === id && Array.isArray(B.focus) && B.focus.length === 2 && typeof B.vig === "number" && (!B.table || Math.abs(B.focus[1] - B.table.y) < 1e-9); })`);
   return ok === true || ok === "true";
 })());
 check("照片 cover 对位：焦点行精确落在画布同一比例处（桌面线不随窗口比例漂移）", (() => {
@@ -941,13 +941,18 @@ const glLastOptsOk = (glw, vw, vh) => {
       run(`drawSceneProps(__cg, "${id}", 800, 600);`);
       return calls.filter(([x, y, w, h]) => x < 400 && x + w > 400 && y < 240 && y + h > 240).length;
     };
-    for (const id of ["dark", "lab", "nature", "cabinet", "paper"]) {
+    for (const id of ["lab", "nature", "cabinet", "paper"]) {
       check(`场景「${id}」在晶体正后方有内容物`, behind(id) > 0 && calls.length > 4, `rects=${calls.length}`);
     }
-    check("五个场景的内容物互不相同（不是同一套图案）", (() => {
+    check("空白场景没有程序化内容物（它就是「什么都没有」）", (() => {
+      calls.length = 0;
+      run(`drawSceneProps(__cg, "void", 800, 600);`);
+      return calls.length === 0;
+    })());
+    check("四个场景的内容物互不相同（不是同一套图案）", (() => {
       const sig = (id) => { calls.length = 0; run(`drawSceneProps(__cg, "${id}", 800, 600);`); return calls.map(c => c.map(v => v.toFixed(2)).join(",")).join("|"); };
-      const s = ["dark", "lab", "nature", "cabinet", "paper"].map(sig);
-      return new Set(s).size === 5;
+      const s = ["lab", "nature", "cabinet", "paper"].map(sig);
+      return new Set(s).size === 4;
     })());
   }
 
@@ -1059,10 +1064,12 @@ check("gl_Position.w 是常量 1.0（GPU 会除掉它，给了 z 画面会被吸
 })(), () => { const m = /gl_Position\s*=\s*vec4\(/.exec(run(`GL_VS`)); return m ? run(`GL_VS`).slice(m.index, m.index + 120).replace(/\s+/g, " ") : "未找到"; });
 check("HUD 文字颜色跟着场景明暗走（浅场景深字、深场景浅字）", (() => {
   const cls = (bg) => { run(`state.bg = "${bg}"; draw();`); return [...document.body.classList._s].join(","); };
-  const paper = cls("paper"), dark = cls("dark");
-  run(`state.bg = "lab"; draw();`);
-  return paper.includes("lightbg") && !paper.includes("darkbg") && dark.includes("darkbg") && !dark.includes("lightbg");
-})(), `paper=${(() => { run(`state.bg = "paper"; draw();`); return [...document.body.classList._s].join(","); })()}`);
+  const paper = cls("paper"), nature = cls("nature"), voidBg = cls("void");
+  run(`state.bg = "paper"; draw();`);
+  return paper.includes("lightbg") && !paper.includes("darkbg")
+    && nature.includes("darkbg") && !nature.includes("lightbg")   // 雾林照片偏暗：浅字
+    && voidBg.includes("lightbg") && !voidBg.includes("darkbg");  // 空白是浅灰影棚：深字
+})(), `void=${(() => { run(`state.bg = "void"; draw();`); return [...document.body.classList._s].join(","); })()}`);
 check("顶栏图标按钮是 4 个（视角/操作/导出/数据）", (() => {
   const m = html.match(/<nav class="tb-tools" id="tbTools">([\s\S]*?)<\/nav>/);
   return !!m && (m[1].match(/class="tbtn"/g) || []).length === 4;
@@ -1177,11 +1184,11 @@ check("六光源：主光/轮廓光/补光/顶光/底反光/后侧光，且按�
 })(), "n=" + run(`LIGHTS.length`) + " sum=" + run(`LIGHT_SUM`));
 check("GL_FS 里 uniform 是六灯数组 uLigDir/uLigCol/uLigInt（与 shadeFace 同源）", /uniform\s+vec3\s+uLigDir\[6\]/.test(html) && /uniform\s+vec3\s+uLigCol\[6\]/.test(html) && /uniform\s+vec3\s+uLigInt\[6\]/.test(html) && /float\s+inten\s*=\s*uLigInt\[i\]\.x/.test(html));
 check("环境采样有地平线亮带（影棚围灯在晶体边缘的亮环）", /band\s*=\s*0\.17\s*\*\s*exp\(/.test(html) && /exp\(-abs\(t\)\s*\*\s*5\.0\)/.test(html));
-check("五个场景的背景内容物互不相同（不再共用坐标系+白圈+横线）", (() => {
+check("四个照片场景的回落内容物互不相同（空白场景本来就没有内容物）", (() => {
   const sig = run(`(() => {
     const out = [];
     const REC = ["fillRect","strokeRect","arc","ellipse","moveTo","lineTo","quadraticCurveTo","bezierCurveTo","rect","roundRect","arcTo"];
-    for (const id of Object.keys(BACKGROUNDS)) {
+    for (const id of ["lab", "nature", "cabinet", "paper"]) {
       const seen = [];
       const mkGrad = () => ({ addColorStop() {} });
       const g = new Proxy({}, {
@@ -1198,7 +1205,7 @@ check("五个场景的背景内容物互不相同（不再共用坐标系+白圈
     }
     return out;
   })()`);
-  return new Set(sig).size === 5 && sig.every(s => s.length > 10);
+  return new Set(sig).size === 4 && sig.every(s => s.length > 10);
 })());
 
 /* ── 第十七轮：多晶体的锁定 / 晶簇 / 基岩底座 ── */

@@ -549,7 +549,7 @@
         </div>
         <h4 style="margin-top:16px">背景 Background</h4>
         <div class="row" id="expBg">
-          <button class="btn on" data-bg="dark">深空</button>
+          <button class="btn on" data-bg="void">空白</button>
           <button class="btn" data-bg="lab">实验室</button>
           <button class="btn" data-bg="nature">自然界</button>
           <button class="btn" data-bg="cabinet">藏品柜</button>
@@ -802,13 +802,12 @@ function drawPhoto(g, B, w, h) {
 }
 
 const BACKGROUNDS = {
-  dark: {
-    zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
-    img: "dark", focus: [0.5, 0.5], vig: 0.30,
+  void: {
+    /* 空白：影棚灰渐变，什么都没有——看几何、出素材专用（用户：星空效果不好，干掉） */
+    zh: "空白", dark: false, amb: 1.05, ambT: [1.00, 1.00, 1.00],
     draw(g, w, h) {
-      if (drawPhoto(g, this, w, h)) return;
-      const grd = g.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.38, w * 0.78);
-      grd.addColorStop(0, "#16283f"); grd.addColorStop(0.55, "#0c1522"); grd.addColorStop(1, "#070c14");
+      const grd = g.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.42, Math.max(w, h) * 0.75);
+      grd.addColorStop(0, "#f3f4f6"); grd.addColorStop(0.6, "#e5e8ec"); grd.addColorStop(1, "#cfd4da");
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     },
   },
@@ -909,16 +908,16 @@ const BACKGROUNDS = {
 };
 
 /* 每个场景一套自己的灯 —— 换场景不只换底图，光的性格也换：
-   深空=冷、单一强主光、几乎无补光；实验室=顶光为主、平、冷白；
+   空白=影棚中性三灯、低反差（看几何专用）；实验室=顶光为主、平、冷白；
    自然界=雾林里穿过树冠的暖阳（中等强度）+ 天光蓝补光 + 苔藓绿反弹；藏品柜=顶前暖射灯、暗环境；
    纸面=柔和满光（白天窗边），对比最低。dir 为 null 表示"由主光滑杆控制"。 */
 const SCENE_RIGS = {
-  dark:    [ {dir:null, col:[0.78,0.86,1.00], inten:1.70, spec:1.2},
-             {dir:[0.60,0.44,-0.68], col:[0.50,0.64,1.00], inten:0.50, spec:1.0},
-             {dir:[-0.80,-0.30,0.52], col:[0.55,0.62,0.85], inten:0.12, spec:0.3},
-             {dir:[0.05,1.00,0.10],  col:[0.62,0.70,0.95], inten:0.18, spec:0.5},
-             {dir:[-0.20,-0.95,0.20], col:[0.40,0.46,0.70], inten:0.06, spec:0.2},
-             {dir:[-0.55,0.26,-0.79], col:[0.48,0.60,1.00], inten:0.34, spec:1.0} ],
+  void:    [ {dir:null, col:[1.00,1.00,1.00], inten:1.20, spec:0.9},
+             {dir:[0.60,0.46,-0.64], col:[0.96,0.97,1.00], inten:0.45, spec:0.7},
+             {dir:[-0.78,-0.30,0.54], col:[1.00,0.99,0.96], inten:0.45, spec:0.4},
+             {dir:[0.04,1.00,0.06],  col:[1.00,1.00,1.00], inten:0.70, spec:0.5},
+             {dir:[-0.20,-0.95,0.20], col:[0.95,0.95,0.96], inten:0.25, spec:0.2},
+             {dir:[-0.58,0.30,-0.76], col:[0.94,0.96,1.00], inten:0.25, spec:0.5} ],
   lab:     [ {dir:null, col:[1.00,1.00,1.00], inten:1.30, spec:0.8},
              {dir:[0.62,0.46,-0.64], col:[0.86,0.92,1.00], inten:0.55, spec:0.9},
              {dir:[-0.78,-0.32,0.54], col:[1.00,0.98,0.94], inten:0.40, spec:0.5},
@@ -946,7 +945,7 @@ const SCENE_RIGS = {
 };
 /* 换场景时把灯换成该场景的一套；主光方向仍然归滑杆管 */
 function applySceneLights(id) {
-  const rig = SCENE_RIGS[id] || SCENE_RIGS.dark;
+  const rig = SCENE_RIGS[id] || SCENE_RIGS.void;
   for (let i = 0; i < LIGHTS.length; i++) {
     const r = rig[i] || rig[rig.length - 1];
     LIGHTS[i].col = r.col.slice();
@@ -993,7 +992,7 @@ const state = {
   groupYaw: 0,         // 整组绕 y 的转角：所有晶体（含主晶体）作为刚体一起转
   showDomain: true,    // 转变双晶（道芬/巴西律）的域界虚线：纯示意，可关掉
   uniform: null,       // {hex}
-  exp: { w: 1400, bg: "dark", scale: 1, fields: {}, aspect: "4:3" },
+  exp: { w: 1400, bg: "void", scale: 1, fields: {}, aspect: "4:3" },
   striations: true,
 };
 
@@ -1127,7 +1126,7 @@ function geoForExtra(e) {
 function extraMat(e, bgId) {
   const m = extraMineral(e);
   const L = LUSTERS[m.luster] || LUSTERS.glass;
-  const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.dark;
+  const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.void;
   const alpha = L.opaqueOnly ? 1 : defaultAlpha(m);
   return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
 }
@@ -1399,7 +1398,7 @@ function paintInclusions(g, opts, project, M) {
 const mat = (bgId) => {
   const id = state.luster || mineral().luster || DEFAULT_LUSTER;
   const L = LUSTERS[id] || LUSTERS.glass;
-  const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.dark;
+  const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.void;
   // 金属光泽天然不透明；其余按通透度档位/滑杆取值
   const alpha = L.opaqueOnly ? 1 : (state.alpha == null ? defaultAlpha(mineral()) : state.alpha);
   return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
@@ -2225,7 +2224,7 @@ function fitToTable(opts, tbl) {
    两轮教训：
    ① 第一版把标尺/试管/草丛摆在晶体**旁边**（中心 ±0.16…0.42），正后方空无一物；
    ② 第二版五场景共用同一套"坐标系 + 白圈 + 横线"，用户反馈"很奇怪的图案"。
-   所以现在是每场景各自的内容：深空=星空银河、实验室=仪器、自然界=河流远山、
+   所以现在是每场景各自的内容：实验室=仪器、自然界=河流远山、
    藏品柜=木柜、纸面=从上往下看的一张纸。 */
 /* ── 基岩 / 底座 ─────────────────────────────────────────────
    放在场景最底层（在背景之后、晶体之前）。除了好看，它还提供一个"台面高度"：
@@ -2302,31 +2301,13 @@ function drawBase(g, id, w, h) {
   return y;
 }
 function drawSceneProps(g, id, w, h) {
+  /* 程序化内容物（只在照片没加载的回落路径里画）：实验室=仪器、自然界=河流远山、
+     藏品柜=木柜、纸面=字行草图；空白场景没有内容物（它就是"什么都没有"）。 */
+  if (id === "void") return;
   const u = Math.min(w, h);
   const cx = w * 0.5, cy = h * 0.40, R = u * 0.34;      // 晶体大致占这一块
   g.save();
-  if (id === "dark") {
-    const rnd = backdropRnd(9137);
-    for (let i = 0; i < 110; i++) {                       // 星空
-      const x = cx + (rnd() - 0.5) * R * 3.4, y = cy + (rnd() - 0.5) * R * 2.3;
-      const r = 0.5 + rnd() * 1.6, a = 0.22 + rnd() * 0.62;
-      g.fillStyle = `rgba(${215 + rnd() * 40 | 0},${228 + rnd() * 27 | 0},255,${a})`;
-      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-    }
-    g.globalCompositeOperation = "lighter";               // 银河带
-    const mw = g.createLinearGradient(cx - R * 1.7, cy + R * 0.95, cx + R * 1.7, cy - R * 0.95);
-    mw.addColorStop(0, "rgba(140,170,230,0)"); mw.addColorStop(.5, "rgba(168,196,244,.18)"); mw.addColorStop(1, "rgba(140,170,230,0)");
-    g.fillStyle = mw; g.fillRect(cx - R * 1.75, cy - R * 1.15, R * 3.5, R * 2.3);
-    const neb = g.createRadialGradient(cx + R * 0.9, cy - R * 0.45, 0, cx + R * 0.9, cy - R * 0.45, R * 0.62);
-    neb.addColorStop(0, "rgba(120,110,190,.20)"); neb.addColorStop(1, "rgba(120,110,190,0)");
-    g.fillStyle = neb; g.fillRect(cx + R * 0.3, cy - R * 1.1, R * 1.3, R * 1.3);
-    g.globalCompositeOperation = "source-over";
-    g.fillStyle = "rgba(232,240,255,.75)";                 // 一颗亮星 + 十字星芒
-    g.beginPath(); g.arc(cx - R * 0.72, cy - R * 0.30, 2.1, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = "rgba(232,240,255,.30)"; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(cx - R * 0.72 - 7, cy - R * 0.30); g.lineTo(cx - R * 0.72 + 7, cy - R * 0.30);
-    g.moveTo(cx - R * 0.72, cy - R * 0.30 - 7); g.lineTo(cx - R * 0.72, cy - R * 0.30 + 7); g.stroke();
-  } else if (id === "lab") {
+  if (id === "lab") {
     const th = Math.max(2, u * 0.0055);
     g.fillStyle = "rgba(60,80,105,.5)";                    // 结晶皿（正后方，圆盘子）
     g.beginPath(); g.ellipse(cx + R * 0.05, cy + R * 0.42, R * 0.46, R * 0.17, 0, 0, Math.PI * 2); g.fill();
@@ -2424,7 +2405,7 @@ function drawSceneProps(g, id, w, h) {
 function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
-  const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
+  const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.void;
   if (!opts.noBg) {                                     // 照片背景；失败回落程序化渐变/展台/远山/纸面
     BG.draw(g, opts.vw, opts.vh);
     if (!bgImgReady(opts.bg || state.bg))                        // 照片自己有真实内容物可"透过去看"，
@@ -2779,11 +2760,11 @@ function renderLusters() {
 }
 
 /* 背景：程序化场景。除画面外还带环境光修正（藏品柜更暗、自然光更亮） */
-/* 默认场景按当地时间挑：白天纸面（亮、像在桌上摆一张纸），夜里深空（暗、晶体自己发光）。
-   只在用户还没手动选过场景时生效——选过就记住，不再跟着时间跳。 */
+/* 默认场景按当地时间挑：白天纸面（亮、像在桌上摆一张纸），夜里空白（净、晶体自己当主角）。
+   只在用户没手动选过场景时生效（state.bgPicked），一旦点过就钉住。 */
 function daytimeBg() {
   const h = new Date().getHours();
-  return (h >= 7 && h < 19) ? "paper" : "dark";
+  return (h >= 7 && h < 19) ? "paper" : "void";
 }
 function renderBackgrounds() {
   const box = document.getElementById("bgs");
@@ -2796,22 +2777,22 @@ function renderBackgrounds() {
     b.onclick = () => { state.bg = id; state.bgPicked = true; applySceneLights(id); renderBackgrounds(); draw(); };
     box.appendChild(b);
   }
-  const B = BACKGROUNDS[state.bg] || BACKGROUNDS.dark;
+  const B = BACKGROUNDS[state.bg] || BACKGROUNDS.void;
   const cb = document.getElementById("onTable");
   if (cb) {
     cb.checked = state.onTable;
     cb.disabled = !B.table;
     cb.onchange = () => { state.onTable = cb.checked; draw(); };
   }
-  // 浅背景下"放在桌面上"才有意义（深空没有桌面），给一句说明
+  // "放在桌面上"只在有桌面的场景有意义（空白没有桌面），给一句说明
   const tblHint = document.getElementById("tableHint");
   if (tblHint) tblHint.style.display = (B.table && state.onTable) ? "" : "none";
   const hints = {
-    dark: "纯色渐变：最干净，适合看几何（无桌面）。",
-    lab: "浅灰实验台 + 记录纸网格，环境光略强。勾选「放在桌面上」会贴合台面并加接触阴影。",
-    nature: "天空远山草地，环境光偏暖。勾选后晶体坐在地面上。",
-    cabinet: "深色木展柜 + 顶部射灯：最暗，反差最大。",
-    paper: "近白纸面：出图最好看，像标本照片。",
+    void: "影棚灰渐变，什么都没有：看几何、出素材专用（无桌面）。",
+    lab: "实拍感实验台照片。勾选「放在桌面上」会贴合台面并加接触阴影。",
+    nature: "雾林巨石，环境光偏绿偏暗。勾选后晶体坐在岩石上。",
+    cabinet: "暖光木展台照片：最暗，反差最大。",
+    paper: "近白纸面照片：出图最好看，像标本照片。",
   };
   document.getElementById("bgHint").textContent = hints[state.bg] || "";
   const th = document.getElementById("tableHint");
@@ -3337,7 +3318,7 @@ function buildExportCanvas() {
   off.width = w; off.height = h;
   const g = off.getContext("2d");
   const BG = BACKGROUNDS[bg] || null;                 // 导出背景＝场景背景（共用同一套绘制）
-  const dark = BG ? BG.dark : bg === "dark";
+  const dark = BG ? BG.dark : bg === "void";
   const ink = bg === "none" ? "#12161c" : (dark ? "#eaf2fb" : "#10151c");
   const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
   const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
@@ -3554,7 +3535,7 @@ window.addEventListener("keydown", (e) => {
 
 /* ============ 主题：亮 / 暗 / 跟随系统 ============
    默认「亮」——原来的深色配色在白天像一块黑屏。三态循环，存 localStorage。
-   注意：这里只换 UI 配色；舞台里的场景背景（深空/实验室/…）是另一回事，
+   注意：这里只换 UI 配色；舞台里的场景背景（空白/实验室/…）是另一回事，
    由左侧「场景」自己选，两者不要混。 */
 const THEME_KEY = "crystalworld.theme";
 const THEMES = ["light", "dark", "auto"];
@@ -3614,7 +3595,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePop(); });
 closePop();
 
-/* 启动时按当地时间定默认场景（白天纸面、夜里深空）。
+/* 启动时按当地时间定默认场景（白天纸面、夜里空白）。
    放在最后：上面所有 UI 都已就绪，改完再统一重画一次。 */
 if (!state.bgPicked) {
   state.bg = daytimeBg();

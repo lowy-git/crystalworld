@@ -6,10 +6,7 @@ BG_DIR = os.path.join("demo", "bg")
 W, H = 1280, 800
 
 SCENES = {
-    # id: (prompt, seed)
-    "dark": ("deep space starfield with faint blue and purple nebula, very dark black sky, "
-             "scattered small stars, long exposure astrophotography, clean minimal composition, "
-             "no ground, no text, no watermark", 42),
+    # id: (prompt, seed)。空白场景没有照片（纯程序化渐变），不在此列。
     "lab": ("bright modern laboratory workbench, clean white bench top occupying the lower third, "
             "blurred glass beakers and flasks on the far side of the bench, soft cool daylight, "
             "shallow depth of field, photorealistic, no text, no watermark", 7),
