@@ -675,7 +675,8 @@ const TRANSP = [
 ];
 const transpById = (id) => TRANSP.find(t => t.id === id) || null;
 /* 每种矿物的默认光泽与通透度都存在数据里（m.luster / m.transp），
-   换矿物就跟着换——金属矿物默认金属+不透明，萤石/方解石默认玻璃+半透明。
+   换矿物就跟着换——默认值按矿物实际光学性质校准（2026-10-24，来源 Mindat /
+   Handbook of Mineralogy；透明度取最高品级，金属矿物唯一例外天然不透明）。
    没有显式 m.transp 时才按光泽推。 */
 const defaultTransp = (m) => {
   if (m.transp && transpById(m.transp)) return m.transp;
@@ -686,10 +687,11 @@ const defaultTransp = (m) => {
 };
 const defaultAlpha = (m) => (transpById(defaultTransp(m)) || { alpha: 1 }).alpha;
 
-/* 场景背景。除画背景外还带一组环境光修正（amb 倍率 + ambT 色调）：
-   同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似。
-   table.y ＝ 桌面/地面在画面高度上的位置（0–1）。带 table 的背景会把晶体放上去，
-   并按接触阴影画一团软阴影；不需要物理、不需要 WebGL（见 README「放在桌上」一节）。 */
+/* 场景背景：照片优先（drawPhoto），程序化画法兜底。除画背景外还带一组环境光修正
+   （amb 倍率 + ambT 色调）：同一个晶体放进藏品柜会变暗、放进自然光下会变亮——IBL 的穷人版近似。
+   table.y ＝ 桌面/地面在画面高度上的位置（0–1）＝照片里"可站立表面"所在的焦点行，
+   两者共用一个数：换照片时 focus[1] 必须跟着 table.y 一起改，贴桌才不会悬空。
+   带 table 的背景会把晶体放上去，并按接触阴影画一团软阴影；不需要物理、不需要 WebGL。 */
 /* 本体色（body colour）：通透度越低，晶体越靠这层"染色"而不是晶面的明暗来说颜色。
    取矿物第一个颜色（无色则取第二个），矿物单色模式下取用户选的颜色 */
 function bodyColor() {
@@ -755,19 +757,67 @@ function paintTint(g, project, M, geo, twinShow, bcIn) {
    rnd 是确定性伪随机，同一场景每次渲染位置一致。 */
 function backdropRnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
+/* ── 场景照片 ─────────────────────────────────────────────────────────────
+   五套场景各配一张实拍感背景图（AI 生图，源文件 demo/bg/*.jpg，由 make-app.mjs 以
+   data URL 内联进成品——仍然单文件、离线、双击即开；换图 = 替换 jpg 再跑 make-app）。
+   照片加载成功：cover 铺满 + 焦点对位 + 四周轻压（vig）；加载失败（断言桩环境等）
+   自动回落到下面各场景自己的程序化画法，功能一点不缺。
+   focus = [fx, fy]：图片里的相对位置对到画布同一相对位置——把 fy 设成"桌面所在行"，
+   桌面线就永远钉在 fy×画布高，任何窗口比例下贴桌都不会漂。 */
+const BG_IMGS = /*__BGIMGS__*/ null;
+const BG_IMG_ELS = {};
+function bgImgEl(id) {
+  if (!BG_IMGS || !BG_IMGS[id] || typeof Image !== "function") return null;
+  let rec = BG_IMG_ELS[id];
+  if (!rec) {
+    rec = BG_IMG_ELS[id] = { el: new Image(), ok: false };
+    rec.el.onload = () => { rec.ok = true; draw(); };   // 加载完重画一次（首帧时可能还没就绪）
+    rec.el.src = BG_IMGS[id];
+  }
+  return rec.ok ? rec.el : null;
+}
+const bgImgReady = (id) => !!(BG_IMG_ELS[id] && BG_IMG_ELS[id].ok);
+/* cover 对位：铺满画布，焦点行/列精确落在画布同一比例处。
+   cover 保证 dw ≥ w、dh ≥ h，所以 dx、dy 天然落在 [w−dw,0]/[h−dh,0] 内，不会露边。 */
+function drawCover(g, im, w, h, fx, fy) {
+  const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
+  const s = Math.max(w / iw, h / ih);
+  const dw = iw * s, dh = ih * s;
+  g.drawImage(im, fx * (w - dw), fy * (h - dh), dw, dh);
+}
+/* 照片 + 压暗一层。返回 false = 没照片，调用方走程序化画法。 */
+function drawPhoto(g, B, w, h) {
+  const im = bgImgEl(B.img);
+  if (!im) return false;
+  const fx = (B.focus || [0.5, 0.5])[0], fy = (B.focus || [0.5, 0.5])[1];
+  drawCover(g, im, w, h, fx, fy);
+  const v = B.vig == null ? 0.22 : B.vig;
+  if (v > 0) {   // 四周轻压：照片的"曝光"与晶体统一，也给 HUD 文字留出对比度
+    const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.34, w * 0.5, h * 0.5, Math.max(w, h) * 0.78);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, `rgba(0,0,0,${v})`);
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  }
+  return true;
+}
+
 const BACKGROUNDS = {
   dark: {
     zh: "深空", dark: true, amb: 0.88, ambT: [0.80, 0.88, 1.00],
+    img: "dark", focus: [0.5, 0.5], vig: 0.30,
     draw(g, w, h) {
+      if (drawPhoto(g, this, w, h)) return;
       const grd = g.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.38, w * 0.78);
       grd.addColorStop(0, "#16283f"); grd.addColorStop(0.55, "#0c1522"); grd.addColorStop(1, "#070c14");
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     },
   },
   lab: {
-    zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04], table: { y: 0.74 },
+    zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04], table: { y: 0.60 },
+    img: "lab", focus: [0.5, 0.60], vig: 0.16,
     draw(g, w, h) {
-      const ty = h * 0.74;
+      if (drawPhoto(g, this, w, h)) return;
+      const ty = h * this.table.y;    // 回落画法的台面线与照片共用同一个 table.y
       const sky = g.createLinearGradient(0, 0, 0, ty);
       sky.addColorStop(0, "#eef3f8"); sky.addColorStop(0.62, "#dbe4ee"); sky.addColorStop(1, "#c3cedb");
       g.fillStyle = sky; g.fillRect(0, 0, w, ty);
@@ -788,9 +838,12 @@ const BACKGROUNDS = {
     },
   },
   nature: {
-    zh: "自然界", dark: false, amb: 1.18, ambT: [1.02, 1.00, 0.93], table: { y: 0.66 },
+    // 照片是雾林（整体偏暗），HUD 文字要用浅色——dark 标记管的是画布浮层文字与导出墨色
+    zh: "自然界", dark: true, amb: 1.00, ambT: [0.97, 1.00, 0.94], table: { y: 0.68 },
+    img: "nature", focus: [0.5, 0.68], vig: 0.24,
     draw(g, w, h) {
-      const gy = h * 0.66;
+      if (drawPhoto(g, this, w, h)) return;
+      const gy = h * this.table.y;
       const sky = g.createLinearGradient(0, 0, 0, gy);
       sky.addColorStop(0, "#5ea6dd"); sky.addColorStop(0.7, "#a9cfe8"); sky.addColorStop(1, "#e3ecdf");
       g.fillStyle = sky; g.fillRect(0, 0, w, gy);
@@ -812,9 +865,11 @@ const BACKGROUNDS = {
     },
   },
   cabinet: {
-    zh: "藏品柜", dark: true, amb: 0.82, ambT: [1.00, 0.93, 0.80], table: { y: 0.80 },
+    zh: "藏品柜", dark: true, amb: 0.82, ambT: [1.02, 0.92, 0.78], table: { y: 0.70 },
+    img: "cabinet", focus: [0.5, 0.70], vig: 0.30,
     draw(g, w, h) {
-      const sy = h * 0.80;
+      if (drawPhoto(g, this, w, h)) return;
+      const sy = h * this.table.y;
       g.fillStyle = "#0b0906"; g.fillRect(0, 0, w, h);
       const sp = g.createRadialGradient(w * 0.5, -h * 0.12, 0, w * 0.5, -h * 0.12, h * 0.95);
       sp.addColorStop(0, "rgba(255,236,196,.34)"); sp.addColorStop(0.45, "rgba(255,226,170,.10)");
@@ -838,8 +893,10 @@ const BACKGROUNDS = {
     },
   },
   paper: {
-    zh: "纸面", dark: false, amb: 1.28, ambT: [1.03, 1.01, 0.97], table: { y: 0.84 },
+    zh: "纸面", dark: false, amb: 1.24, ambT: [1.02, 1.00, 0.96], table: { y: 0.82 },
+    img: "paper", focus: [0.5, 0.82], vig: 0.14,
     draw(g, w, h) {
+      if (drawPhoto(g, this, w, h)) return;
       const grd = g.createRadialGradient(w * 0.5, h * 0.34, 0, w * 0.5, h * 0.34, w * 0.72);
       grd.addColorStop(0, "#fdfbf6"); grd.addColorStop(1, "#efe9dd");
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
@@ -853,7 +910,7 @@ const BACKGROUNDS = {
 
 /* 每个场景一套自己的灯 —— 换场景不只换底图，光的性格也换：
    深空=冷、单一强主光、几乎无补光；实验室=顶光为主、平、冷白；
-   自然界=高角度暖太阳 + 天光蓝补光 + 地面绿反弹；藏品柜=顶前暖射灯、暗环境；
+   自然界=雾林里穿过树冠的暖阳（中等强度）+ 天光蓝补光 + 苔藓绿反弹；藏品柜=顶前暖射灯、暗环境；
    纸面=柔和满光（白天窗边），对比最低。dir 为 null 表示"由主光滑杆控制"。 */
 const SCENE_RIGS = {
   dark:    [ {dir:null, col:[0.78,0.86,1.00], inten:1.70, spec:1.2},
@@ -868,10 +925,10 @@ const SCENE_RIGS = {
              {dir:[0.04,1.00,0.06],  col:[1.00,1.00,1.00], inten:0.85, spec:0.7},
              {dir:[-0.18,-0.96,0.20], col:[0.92,0.94,0.98], inten:0.22, spec:0.2},
              {dir:[-0.60,0.30,-0.74], col:[0.88,0.94,1.00], inten:0.25, spec:0.6} ],
-  nature:  [ {dir:null, col:[1.00,0.94,0.80], inten:1.75, spec:1.1},
-             {dir:[0.58,0.52,-0.62], col:[0.72,0.84,1.00], inten:0.75, spec:0.8},
-             {dir:[-0.76,-0.34,0.55], col:[0.78,0.92,0.62], inten:0.34, spec:0.4},
-             {dir:[0.02,1.00,0.04],  col:[0.86,0.92,1.00], inten:0.70, spec:0.5},
+  nature:  [ {dir:null, col:[1.00,0.93,0.78], inten:1.45, spec:1.0},
+             {dir:[0.58,0.52,-0.62], col:[0.66,0.80,0.98], inten:0.55, spec:0.8},
+             {dir:[-0.76,-0.34,0.55], col:[0.72,0.88,0.58], inten:0.30, spec:0.4},
+             {dir:[0.02,1.00,0.04],  col:[0.82,0.90,0.96], inten:0.60, spec:0.5},
              {dir:[-0.22,-0.94,0.24], col:[0.72,0.82,0.52], inten:0.26, spec:0.2},
              {dir:[-0.52,0.34,-0.78], col:[0.80,0.90,0.78], inten:0.18, spec:0.5} ],
   cabinet: [ {dir:null, col:[1.00,0.92,0.76], inten:1.90, spec:1.3},
@@ -2368,9 +2425,10 @@ function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.dark;
-  if (!opts.noBg) {                                     // 程序化背景：渐变/展台/远山/纸面
+  if (!opts.noBg) {                                     // 照片背景；失败回落程序化渐变/展台/远山/纸面
     BG.draw(g, opts.vw, opts.vh);
-    drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh);   // 晶体后方的透射参考物
+    if (!bgImgReady(opts.bg || state.bg))                        // 照片自己有真实内容物可"透过去看"，
+      drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh);  // 程序化道具只在回落路径里画
     drawBase(g, state.base, opts.vw, opts.vh);                 // 基岩/底座（也在晶体身后）
   }
   // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
@@ -2629,6 +2687,10 @@ function selectMineral(id) {
   state.mask = (1 << m.habits[0].forms.length) - 1;
   applyHabitView(m.habits[0]);
   state.uniform = m.colors && m.colors.length ? m.colors[0].hex : null;
+  // 换矿物 = 换回这块矿物自己的默认光泽/通透度（数据里的 luster/transp）。
+  // 旧版只在首次加载生效：用户一旦动过滑杆，之后换矿物一直沿用上一块的设置——
+  // "萤石调到全透明，切到黄铁矿还显示透明度 100%"就是这条漏掉的后果。
+  state.luster = null; state.transp = null; state.alpha = null;
   state.zoom = 1; state.pan = [0, 0];
   renderMinerals(); renderHabits(); rebuildGeometry(); draw(); syncPanels();
 }
@@ -3280,7 +3342,7 @@ function buildExportCanvas() {
   const ink2 = bg === "none" ? "#3d4753" : (dark ? "#9fb3c9" : "#4a5663");
   const line = bg === "none" ? "rgba(18,22,28,.18)" : (dark ? "rgba(160,190,220,.22)" : "rgba(16,21,28,.16)");
 
-  if (BG) { BG.draw(g, w, h); drawSceneProps(g, bg, w, h); drawBase(g, state.base, w, h); }
+  if (BG) { BG.draw(g, w, h); if (!bgImgReady(bg)) drawSceneProps(g, bg, w, h); drawBase(g, state.base, w, h); }
 
   // 晶体区域
   const m = mineral(), hb = habit(), v = variant();

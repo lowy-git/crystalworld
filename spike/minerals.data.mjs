@@ -5,6 +5,8 @@
 //   twin             双晶：mode 'mirror'（双晶面反射）或 'axis'（二次轴旋转 180°）
 //   confidence       晶胞参数置信度：high / medium / low（M4b 要逐条对来源复核）
 //   source           参数出处；标"待核"的进 pending 清单，不进正式版
+//   luster / transp  默认光泽与通透度（2026-10-24 按 Mindat / Handbook of Mineralogy 的
+//                    标准光泽描述校准；透明度按"最高品级"取——宝石级晶体能达到的透明档）
 
 export const SYSTEMS = [
   { id: "cubic",      zh: "等轴", en: "Isometric",   note: "a = b = c，α = β = γ = 90°" },
@@ -19,7 +21,7 @@ export const SYSTEMS = [
 export const MINERALS = [
   {
     id: "fluorite",
-  luster: "glass", transp: "transl", inclusion: "pyrite",
+  luster: "glass", transp: "clear", inclusion: "pyrite",   // 玻璃光泽（Mindat: Vitreous）；宝石级完全透明
     zh: "萤石", en: "Fluorite", formula: "CaF₂",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 5.4626 Å（Webmineral / Dana）",
@@ -64,7 +66,7 @@ export const MINERALS = [
   },
   {
     id: "pyrite",
-  luster: "metallic", transp: "opaque", inclusion: "none",
+  luster: "metallic", transp: "opaque", inclusion: "none",   // 金属光泽、天然不透明（唯一例外，不用改）
     zh: "黄铁矿", en: "Pyrite", formula: "FeS₂",
     system: "cubic", pointGroup: "m-3",
     confidence: "high", source: "a = 5.417 Å（Dana）",
@@ -110,7 +112,7 @@ export const MINERALS = [
   },
   {
     id: "diamond",
-  luster: "adamantine", transp: "transl", inclusion: "none",
+  luster: "adamantine", transp: "clear", inclusion: "none",  // 金刚光泽（adamantine 的命名来源）；宝石级透明
     zh: "钻石（金刚石）", en: "Diamond", formula: "C",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 3.5670 Å（Dana）",
@@ -151,7 +153,7 @@ export const MINERALS = [
   },
   {
     id: "garnet",
-  luster: "adamantine", transp: "clear", inclusion: "rutile",
+  luster: "glass", transp: "clear", inclusion: "rutile",     // 铁铝榴石：玻璃光泽（Mindat: Vitreous，有的文献记树脂光泽），不是金刚
     zh: "石榴石", en: "Garnet", formula: "Fe₃Al₂(SiO₄)₃",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "铁铝榴石 a = 11.526 Å（Dana）",
@@ -185,7 +187,7 @@ export const MINERALS = [
   },
   {
     id: "scheelite",
-  luster: "adamantine", transp: "transl", inclusion: "fracture",
+  luster: "adamantine", transp: "clear", inclusion: "fracture",  // 金刚光泽-玻璃光泽（Mindat: Sub-adamantine, Vitreous）
     zh: "白钨矿", en: "Scheelite", formula: "CaWO₄",
     system: "tetragonal", pointGroup: "4/m",
     confidence: "high", source: "a = 5.2429、c = 11.3736 Å（Dana）",
@@ -211,7 +213,7 @@ export const MINERALS = [
   },
   {
     id: "beryl",
-  luster: "glass", transp: "transl", inclusion: "fluid",
+  luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽；宝石级（海蓝宝/祖母绿）透明
     zh: "绿柱石", en: "Beryl", formula: "Be₃Al₂Si₆O₁₈",
     system: "hexagonal", pointGroup: "6/mmm",
     confidence: "high", source: "a = 9.215、c = 9.192 Å（Dana）",
@@ -244,7 +246,7 @@ export const MINERALS = [
   },
   {
     id: "quartz",
-  luster: "glass", transp: "transl", inclusion: "rutile",
+  luster: "glass", transp: "clear", inclusion: "rutile",     // 玻璃光泽；水晶（rock crystal）无色透明
     zh: "石英", en: "Quartz", formula: "SiO₂",
     system: "trigonal", pointGroup: "32",
     confidence: "high", source: "a = 4.9134、c = 5.4052 Å（Dana）",
@@ -326,7 +328,7 @@ export const MINERALS = [
   },
   {
     id: "calcite",
-  luster: "adamantine", transp: "clear", inclusion: "fluid",
+  luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽（Mindat: Vitreous，解理面珍珠光泽），冰洲石无色透明——之前误标金刚
     zh: "方解石", en: "Calcite", formula: "CaCO₃",
     system: "trigonal", pointGroup: "-3m",
     confidence: "high", source: "a = 4.990、c = 17.061 Å（Dana）；{10-14} 面角 74°55′",
@@ -418,7 +420,7 @@ export const MINERALS = [
   },
   {
     id: "aragonite",
-  luster: "glass", transp: "transl", inclusion: "fluid",
+  luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽；透明档按最高品级（宝石级文石透明，常见半透明）
     zh: "文石", en: "Aragonite", formula: "CaCO₃",
     system: "orthorhombic", pointGroup: "mmm",
     confidence: "high", source: "a = 4.9614、b = 7.9671、c = 5.7404 Å（Dana）",
@@ -453,7 +455,7 @@ export const MINERALS = [
   },
   {
     id: "gypsum",
-  luster: "waxy", transp: "transl", inclusion: "none",
+  luster: "glass", transp: "clear", inclusion: "none",       // 玻璃光泽、解理面珍珠光泽（透石膏 selenite 完全透明）——蜡状是雪花石膏那种块状的，不是晶体
     zh: "石膏", en: "Gypsum", formula: "CaSO₄·2H₂O",
     system: "monoclinic", pointGroup: "2/m",
     confidence: "medium", source: "a = 5.6794、b = 15.1774、c = 6.2867 Å，β = 118.43°（待复核）",
@@ -471,7 +473,7 @@ export const MINERALS = [
       zh: "透明的那种叫「透石膏」，能剥成薄片写字。沙漠里长的「沙漠玫瑰」是它——一群板状晶体围着一粒沙子抱成花的样子。单斜晶系的代表矿物。",
       where: "墨西哥 Naica（水晶洞里的巨晶）、美国新墨西哥（沙漠玫瑰）；国内湖北、山西的石膏矿。",
       hard: "2（指甲就能划动）",
-      spot: "一组极完全解理（能撕成薄片）、蜡状光泽、软到没朋友。",
+      spot: "一组极完全解理（能撕成薄片）、玻璃光泽（解理面上泛珍珠光）、软到没朋友。",
     },
     habits: [
       {
@@ -486,7 +488,7 @@ export const MINERALS = [
   },
   {
     id: "albite",
-  luster: "glass", transp: "transl", inclusion: "tourm",
+  luster: "glass", transp: "clear", inclusion: "tourm",      // 玻璃光泽；清透板状晶体可达透明（常见半透明，按最高取）
     zh: "斜长石（钠长石）", en: "Albite", formula: "NaAlSi₃O₈",
     system: "triclinic", pointGroup: "-1",
     confidence: "medium", source: "a = 8.137、b = 12.785、c = 7.174 Å，α = 94.26°、β = 116.60°、γ = 87.67°（待复核）",

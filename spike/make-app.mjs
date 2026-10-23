@@ -508,7 +508,20 @@ for (const m of MINERALS) {
 const raw = JSON.stringify(out);
 const tpl = fs.readFileSync("demo/crystal_template.html", "utf8");
 if (!tpl.includes("/*__DATA__*/ null")) throw new Error("template placeholder missing");
-const html = tpl.replace("/*__DATA__*/ null", () => raw);
+if (!tpl.includes("/*__BGIMGS__*/ null")) throw new Error("template bg placeholder missing");
+// 五套场景照片：demo/bg/*.jpg → data URL 内联（仍然单文件、离线、双击即开）。
+// 换图 = 替换 demo/bg/ 下同名 jpg 再跑本脚本（spike/fetch-bg.py 可重新生图）。
+let bgImgs = null;
+try {
+  const dir = fs.readdirSync("demo/bg").filter(f => /\.jpe?g$/i.test(f)).sort();
+  if (dir.length) {
+    bgImgs = {};
+    for (const f of dir) bgImgs[f.replace(/\.jpe?g$/i, "")] = "data:image/jpeg;base64," + fs.readFileSync(`demo/bg/${f}`).toString("base64");
+  }
+} catch { bgImgs = null; }
+const html = tpl
+  .replace("/*__DATA__*/ null", () => raw)
+  .replace("/*__BGIMGS__*/ null", () => JSON.stringify(bgImgs));
 fs.writeFileSync("demo/crystal.html", html);
 
 const kb = (html.length / 1024).toFixed(1);

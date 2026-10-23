@@ -622,6 +622,41 @@ check("背景内容物可绘制（四种带桌面的场景都不报错）", (() 
   return true;
 })());
 
+// ---- 第十八轮：场景照片背景（AI 生图内联 + 焦点对位 + 程序化兜底） ----
+check("五套场景都内联了照片（data URL JPEG，且不是空占位）", (() => {
+  const n = Number(run(`BG_IMGS ? Object.keys(BG_IMGS).length : 0`));
+  if (n !== 5) return false;
+  const ok = run(`["dark","lab","nature","cabinet","paper"].every(id => typeof BG_IMGS[id] === "string" && BG_IMGS[id].startsWith("data:image/jpeg;base64,") && BG_IMGS[id].length > 20000)`);
+  return ok === true || ok === "true";
+})(), `keys=${run(`BG_IMGS ? Object.keys(BG_IMGS).join(",") : "null"`)}`);
+check("每个场景声明 img/focus/vig，且带桌面的场景焦点行 = table.y（贴桌不悬空）", (() => {
+  const ok = run(`["dark","lab","nature","cabinet","paper"].every(id => { const B = BACKGROUNDS[id]; return B.img === id && Array.isArray(B.focus) && B.focus.length === 2 && typeof B.vig === "number" && (!B.table || Math.abs(B.focus[1] - B.table.y) < 1e-9); })`);
+  return ok === true || ok === "true";
+})());
+check("照片 cover 对位：焦点行精确落在画布同一比例处（桌面线不随窗口比例漂移）", (() => {
+  // 画布比 16:9 更宽（1600×800）：s = 1.25，dw = 1600、dh = 900，
+  // dy = fy·(h−dh) = 0.6·(−100) = −60 —— 焦点行 0.6×900 + (−60) = 480 = 0.6×800 ✓
+  const calls = [];
+  const grad = { addColorStop() {} };
+  const pg = new Proxy({}, {
+    get: (t, k) => (k === "drawImage" ? (im, dx, dy, dw, dh) => calls.push([dx, dy, dw, dh])
+      : (k === "createRadialGradient" || k === "createLinearGradient") ? () => grad : () => {}),
+    set: () => true,
+  });
+  sandbox.__pg = pg;
+  sandbox.__pim = { naturalWidth: 1280, naturalHeight: 720 };
+  run(`drawCover(__pg, __pim, 1600, 800, 0.5, 0.6)`);
+  const c = calls[0] || [];
+  return calls.length === 1
+    && Math.abs(c[0] - 0.5 * (1600 - 1280 * 1.25)) < 1e-9
+    && Math.abs(c[1] - 0.6 * (800 - 720 * 1.25)) < 1e-9
+    && Math.abs(c[2] - 1600) < 1e-9 && Math.abs(c[3] - 900) < 1e-9;
+})(), `drawImage=${JSON.stringify(globalThis.__lastCover || "")}`);
+check("照片未就绪时 drawPhoto 返回 false（回落程序化背景），不抛异常", (() => {
+  const ok = run(`(() => { const saved = BG_IMG_ELS["lab"]; BG_IMG_ELS["lab"] = undefined; let threw = false, r = null; try { r = drawPhoto(__bg, BACKGROUNDS.lab, 800, 600); } catch (e) { threw = true; } BG_IMG_ELS["lab"] = saved; return r === false && !threw; })()`);
+  return ok === true || ok === "true";
+})());
+
 for (const a of ["4:3", "9:16", "16:9"]) {
   const r = run(`state.exp.aspect = "${a}"; (() => { const q = buildExportCanvas(); return q.width + "x" + q.height; })();`);
   const inside = (() => {
@@ -1070,6 +1105,23 @@ check("光泽只留四种（蜡状/玻璃/金刚/金属），不透明与透明�
   const vis = run(`Object.entries(LUSTERS).filter(([k, v]) => !v.hidden).map(([k]) => k)`);
   return vis.length === 4 && vis.includes("waxy") && vis.includes("glass") && vis.includes("adamantine") && vis.includes("metallic");
 })(), `可见=${run(`Object.entries(LUSTERS).filter(([k,v])=>!v.hidden).map(([k])=>k).join(",")`)}`);
+check("矿物默认光泽/通透度按实际性质校准（2026-10-24，来源 Mindat / Handbook of Mineralogy）", (() => {
+  // 石榴石与方解石曾误标金刚（真实是玻璃光泽）；石膏的蜡状只属于块状雪花石膏（晶体是玻璃+珍珠）。
+  // 透明度一律按"最高品级"取全透明，唯一例外是金属（天然不透明）。
+  const want = {
+    fluorite: ["glass", "clear"], pyrite: ["metallic", "opaque"], diamond: ["adamantine", "clear"],
+    garnet: ["glass", "clear"], scheelite: ["adamantine", "clear"], beryl: ["glass", "clear"],
+    quartz: ["glass", "clear"], calcite: ["glass", "clear"], topaz: ["glass", "clear"],
+    aragonite: ["glass", "clear"], gypsum: ["glass", "clear"], albite: ["glass", "clear"],
+  };
+  const got = run(`Object.fromEntries(DATA.minerals.map(m => [m.id, [m.luster, m.transp]]))`);
+  return Object.entries(want).every(([id, [l, t]]) => got[id] && got[id][0] === l && got[id][1] === t);
+})(), `garnet=${run(`(DATA.minerals.find(m=>m.id==="garnet")||{}).luster`)} calcite=${run(`(DATA.minerals.find(m=>m.id==="calcite")||{}).luster`)} gypsum=${run(`(DATA.minerals.find(m=>m.id==="gypsum")||{}).luster`)}`);
+check("换矿物时光泽/通透度回到该矿物自己的默认值（数据里的 luster/transp 真正生效）", (() => {
+  // 旧版只在首次加载生效：萤石调到全透明后切到黄铁矿，滑杆还显示"透明度 100%"
+  const r = run(`(() => { state.luster = "waxy"; state.transp = "opaque"; state.alpha = 1; selectMineral("diamond"); const out = [state.luster, state.transp, state.alpha, mat().alpha]; selectMineral("pyrite"); out.push(state.transp, mat().alpha); return out; })()`);
+  return Array.isArray(r) && r[0] === null && r[1] === "clear" && r[2] === 0 && r[3] === 0 && r[4] === "opaque" && r[5] === 1;
+})(), `选中钻石后=${JSON.stringify(globalThis.__lastSwitch || "")}`);
 
 /* ── 第十三轮：光泽按反射率排序 / 换光泽立刻联动通透度 / 金刚色散 / 有色透射 ── */
 const pfsrc = html.slice(html.indexOf("function paintFaces("), html.indexOf("function paintOverlay("));
