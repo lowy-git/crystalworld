@@ -119,17 +119,20 @@ export const MINERALS = [
         style: "penetration", styleZh: "穿插连晶",
         habitId: "cube",
         setup: {
-          base: "none", bg: "paper",
+          base: "matrix", bg: "paper", zoom: 0.5,     // matrix：灰绿色泥灰岩基岩，晶体底埋入丘中
           extras: [
-            { mineralId: "pyrite", habitId: "cube", pos: [1.12, 0, 0.18], scale: 0.66, yaw: 63 },
-            { mineralId: "pyrite", habitId: "cube", pos: [-1.08, 0, -0.3], scale: 0.52, yaw: -38 },
+            // 构图对照实拍标本（fineartminerals 视频）：主晶体旁一左一右两颗
+            // 中立方体、前下方一小簇——各晶面朝向不同，底部埋进泥灰岩里
+            { mineralId: "pyrite", habitId: "cube", pos: [1.02, 0, 0.40], scale: 0.70, yaw: 26 },
+            { mineralId: "pyrite", habitId: "cube", pos: [-1.00, 0, 0.22], scale: 0.58, yaw: -44 },
+            { mineralId: "pyrite", habitId: "cube", pos: [0.12, 0, -0.82], scale: 0.40, yaw: 9 },
           ],
         },
         text: {
-          zh: "下白垩统泥灰岩里的世界级黄铁矿产地：立方体棱线锋利、晶面如镜，边长 3–5 cm 常见，Mindat 记录最大超过 15 cm。晶体常两三颗互相穿插连生，从白垩质基质里剥出后几乎不用清洗。矿山（Ampliación a Victoria）至今仍专为采集标本而季节性开采。",
-          en: "A world-class pyrite source in Lower Cretaceous marls: mirror-faced, razor-edged cubes, commonly 3-5 cm on a side and up to 15+ cm. Two or three cubes often interpenetrate; specimens separate from the chalky matrix almost clean. The Ampliación a Victoria mine is still worked seasonally solely for specimens.",
+          zh: "下白垩统泥灰岩里的世界级黄铁矿产地：立方体棱线锋利、晶面如镜，边长 3–5 cm 常见，Mindat 记录最大超过 15 cm。晶体以各种朝向从灰绿色泥灰岩基岩里长出，底部约三分之一嵌在基质里，常两三颗互相穿插连生——镜面里映出的天空近中性白，暗面却是深青铜色。矿山（Ampliación a Victoria）至今仍专为采集标本而季节性开采。",
+          en: "A world-class pyrite source in Lower Cretaceous marls: mirror-faced, razor-edged cubes, commonly 3-5 cm on a side and up to 15+ cm. Cubes grow out of the gray-green marl matrix at all orientations, their lower third embedded; two or three often interpenetrate. Mirror faces reflect the sky near-white while shaded faces read deep bronze. The Ampliación a Victoria mine is still worked seasonally solely for specimens.",
         },
-        features: ["镜面立方体", "穿插连晶", "白垩质泥灰岩"],
+        features: ["镜面立方体", "穿插连晶", "灰绿泥灰岩基岩"],
         source: "Mindat loc-7116 / locentry-656314；McDougall Minerals（Navajún 专文）",
         confidence: "high", checked: "2026-10",
       },

@@ -721,7 +721,11 @@ const LUSTERS = {
   opaque:      { zh: "不透明", amb: .50, diff: .60, spec: .05, shin: 4,  fres: .06, ior: 1.60, envI: .10, disp: 0, hidden: 1 },
   glass:       { zh: "玻璃",   amb: .40, diff: .55, spec: .75, shin: 14, fres: .34, ior: 1.54, envI: .52, disp: .07 },
   adamantine:  { zh: "金刚",   amb: .13, diff: .22, spec: 1.25, shin: 30, fres: .52, ior: 2.42, envI: 1.15, disp: .55 },
-  metallic:    { zh: "金属",   amb: .06, diff: .12, spec: .85, shin: 10, fres: .34, ior: 1.00, envI: .95, disp: .10, metal: 1, opaqueOnly: 1 },
+  /* 金属按"镜面"调（Navajún 黄铁矿参考）：漫反射几乎为零，亮部全靠
+     高光与环境反射；shin 80 让高光收成锐斑，envI 1.55 让反射成为主项。
+     GL_FS/shadeFace 里金属的环境反射再做对比增益（pow 1.45）——
+     亮斑更亮、暗部更深，才是"晶面如镜"而不是"哑光黄铜"。 */
+  metallic:    { zh: "金属",   amb: .05, diff: .06, spec: 1.35, shin: 80, fres: .55, ior: 1.00, envI: 1.55, disp: .04, metal: 1, opaqueOnly: 1 },
   waxy:        { zh: "蜡状",   amb: .58, diff: .50, spec: .22, shin: 6,  fres: .14, ior: 1.50, envI: .22, disp: 0 },
   transparent: { zh: "透明",   amb: .34, diff: .42, spec: .55, shin: 16, fres: .52, ior: 1.54, envI: .45, disp: .07, hidden: 1 },
 };
@@ -1590,7 +1594,14 @@ function shadeFace(base, n, cw, eye, M) {
   // 反射向量：视线被这个面弹向哪里，就取环境那个方向的颜色
   const d = dot(n, v);
   const rd = [2 * d * n[0] - v[0], 2 * d * n[1] - v[1], 2 * d * n[2] - v[2]];
-  const env = envSample(rd);
+  let env = envSample(rd);
+  // 镜面金属：与 GL_FS 同式——天空镜像 + 热斑 + 背光面压暗（见 GL_FS 注释）
+  if (M.metal) {
+    const st = Math.min(1, Math.max(0, rd[1] / 0.75));
+    const sky = st * st * (3 - 2 * st);
+    env = env.map((x, i) => x + [0.56, 0.55, 0.48][i] * sky);
+    env = env.map(x => x * 1.35 + Math.pow(clamp(x, 0, 1), 3) * 1.2);
+  }
   // 色散（火彩）：与 GL_FS 同一个式子。用反射方向的相位生成循环谱色，
   // 只乘在高光与环境反射上（漫反射不带色散）。disp 由光泽给：金刚 .62 / 金属 .10 / 玻璃 .07 / 蜡 0
   const disp = M.disp || 0;
@@ -1608,7 +1619,7 @@ function shadeFace(base, n, cw, eye, M) {
   const ambK = M.ambK == null ? 1 : M.ambK, ambT = M.ambT || [1, 1, 1];
   return [0, 1, 2].map(i => clamp((base[i] * (M.amb * ambK * ambT[i] + M.diff * lam)  // 漫反射 + 环境光
       + (tint ? tint[i] : 1) * sp * specCol[i]                                   // 锐利高光（带色散）
-      + (M.metal ? base[i] : 1) * refl * env[i] * specCol[i]                     // 环境反射（金属带本体色）
+      + (M.metal ? base[i] * 0.6 + 0.4 : 1) * refl * env[i] * specCol[i]         // 环境反射（金属带半去饱和本体色）
       + fres * (0.55 + 0.45 * base[i])) * EXPO, 0, 1));                          // 统一曝光补偿
 }
 const rgbStr = (c, a = 1) => `rgba(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)},${a})`;
@@ -1848,6 +1859,14 @@ void main() {
   float d = dot(n, v);
   vec3 rdir = 2.0 * d * n - v;
   vec3 env = envSample(rdir);
+  /* 镜面金属（Navajún 黄铁矿实拍参考）：
+     ① 天空镜像：反射向量朝上的晶面映出大片亮天（实拍里最显著的特征）；
+     ② 热斑：pow3 把柔光斑收成炸亮的高光；
+     ③ 背光面（反射朝下）几乎不被抬起——深青铜。亮暗两极，而非均匀发亮。 */
+  if (uMetal > 0.5) {
+    env += vec3(0.56, 0.55, 0.48) * smoothstep(0.0, 0.75, rdir.y);   // 暖象牙：镜面里的天空
+    env = env * 1.35 + pow(clamp(env, 0.0, 1.0), vec3(3.0)) * 1.2;
+  }
   /* 色散（火彩）：真实金刚石的 n 在 2.407(红)…2.465(紫) 之间变，一束白光进去被拆成彩虹。
      关键是——**火彩发生在晶体内部**（光折射进去、在背面全反射、再折射出来），
      而表面那层反射不管什么宝石都只是"更强的白光反光"，不该是彩虹的。
@@ -1872,7 +1891,7 @@ void main() {
   vec3 internal = fireIn * fireAmt * (1.0 - F) * 0.85;
   vec3 c = base * (uAmb * uAmbK * uAmbT + uDiff * lam)
          + tint * sp                      // 表面高光：白，不掺彩虹
-         + (uMetal > 0.5 ? base : vec3(1.0)) * refl * env
+         + (uMetal > 0.5 ? mix(base, vec3(1.0), 0.4) : vec3(1.0)) * refl * env
          + fres * (0.55 + 0.45 * base)
          + internal;                      // 内部火彩：只有这里带色散
   c *= uExpo;
@@ -2341,8 +2360,71 @@ function scSceneMeshes() {
   return { table: new Float32Array(table), paper: new Float32Array(paper) };
 }
 
+/* 泥灰岩基岩（产地组合 setup.base = "matrix"）：贴在台面上的低多边形圆丘，
+   晶体底部埋进丘里——对应 Navajún 标本"立方体从灰绿色泥灰岩里长出来"的形态。
+   高度中心 ~0.30（晶体半尺寸 1，即埋入约三分之一）、边缘收到台面；
+   轮廓与高度用固定种子的伪随机扰动，同一块标本每次渲染一致。
+   法线逐面平直（flat）：低多边形的碎面感正是粗糙基质该有的样子。 */
+function scMatrixMesh() {
+  const rnd = mulberry32(20261025);
+  const R = 2.20, SEG = 48, RINGS = 4, H = 0.38;
+  const arr = [];
+  const push = (p, n) => arr.push(p[0], p[1], p[2], n[0], n[1], n[2], 0, 0);
+  const nrm = (a, b, c) => {
+    const n = unit(cross(sub(b, a), sub(c, a)));
+    return n[2] < 0 ? [-n[0], -n[1], -n[2]] : n;      // 朝上
+  };
+  // 环形顶点：ri = 0..RINGS（0 为中心），半径线性、高度中心高边缘收到台面下 0.012
+  const hAt = (r) => H * Math.pow(Math.max(0, 1 - r / R), 1.25);
+  const pt = (ri, si) => {
+    const r = (ri / RINGS) * R;
+    const a = (si / SEG) * Math.PI * 2 + (ri % 2) * (Math.PI / SEG);   // 隔环错半格
+    const rr = r * (1 + (rnd() - 0.5) * 0.20);                          // 轮廓不规则
+    const z = ri === 0
+      ? H * (0.9 + rnd() * 0.2)
+      : Math.max(hAt(r) * (0.8 + rnd() * 0.45) - 0.012, -0.012);
+    return [Math.cos(a) * rr, Math.sin(a) * rr, z];
+  };
+  const ring = (ri) => Array.from({ length: SEG }, (_, si) => pt(ri, si));
+  const center = pt(0, 0);
+  const rings = [];
+  for (let ri = 1; ri <= RINGS; ri++) rings.push(ring(ri));
+  // 中心扇面
+  for (let si = 0; si < SEG; si++) {
+    const a = center, b = rings[0][si], c = rings[0][(si + 1) % SEG];
+    const n = nrm(a, b, c);
+    push(a, n); push(b, n); push(c, n);
+  }
+  // 环间四边形
+  for (let ri = 0; ri + 1 < rings.length; ri++) {
+    const A = rings[ri], B = rings[ri + 1];
+    for (let si = 0; si < SEG; si++) {
+      const sj = (si + 1) % SEG;
+      const n = nrm(A[si], A[sj], B[sj]);
+      scQuadPush(arr, [A[si], A[sj], B[sj], B[si]], n);
+    }
+  }
+  // 外缘一圈"垂边"包住底部（侧看有厚度，不露纸面穿帮）
+  const rim = rings[rings.length - 1];
+  for (let si = 0; si < SEG; si++) {
+    const sj = (si + 1) % SEG;
+    const a = rim[si], b = rim[sj];
+    const a2 = [a[0], a[1], -0.02], b2 = [b[0], b[1], -0.02];
+    const n = nrm(a2, b2, a);
+    push(a, n); push(b2, n); push(b, n);
+    push(a, n); push(a2, n); push(b2, n);
+  }
+  return new Float32Array(arr);
+}
+function scQuadPush(arr, quad, n) {
+  const [a, b, c, d] = quad;
+  const push = (p) => arr.push(p[0], p[1], p[2], n[0], n[1], n[2], 0, 0);
+  push(a); push(b); push(c);
+  push(a); push(c); push(d);
+}
+
 let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShadowBuf = null;
-let scTableN = 0, scPaperN = 0, scTex = null, scTexImg = null;
+let scTableN = 0, scPaperN = 0, scMatrixN = 0, scTex = null, scTexImg = null;
 const scUni = {}, scAttr = {};
 function glSceneInit() {
   if (scReady) return !!scProg;
@@ -2374,6 +2456,11 @@ function glSceneInit() {
   scShadowBuf = gl.createBuffer();                    // 阴影扇面：预分配，之后只 bufferSubData
   gl.bindBuffer(gl.ARRAY_BUFFER, scShadowBuf);
   gl.bufferData(gl.ARRAY_BUFFER, 4096 * 4, gl.DYNAMIC_DRAW);
+  const matrixMesh = scMatrixMesh();
+  scMatrixBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, matrixMesh, gl.STATIC_DRAW);
+  scMatrixN = matrixMesh.length / SC_STRIDE;
   return true;
 }
 /* 纸面贴图：复用背景照片的 Image。桩环境没有纹理入口（createTexture 不存在），
@@ -2500,8 +2587,18 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   gl.uniform1f(scUni.uSpec, 0.04); gl.uniform1f(scUni.uShin, 4);
   bindAttr(scPaperBuf);
   gl.drawArrays(gl.TRIANGLES, 0, scPaperN);
+  // 泥灰岩基岩：产地组合 setup.base = "matrix" 时，画在纸面上方，
+  // 晶体底部（台面平面）正好埋进丘里约 0.30——"从基质里长出来"的观感
+  if (state.base === "matrix" && scMatrixN) {
+    gl.uniform1f(scUni.uHasTex, 0);
+    gl.uniform3fv(scUni.uColor, new Float32Array([0.45, 0.50, 0.44]));   // 灰绿色泥灰岩（白纸前要读成"岩石"）
+    gl.uniform1f(scUni.uSpec, 0.03); gl.uniform1f(scUni.uShin, 4);
+    bindAttr(scMatrixBuf);
+    gl.drawArrays(gl.TRIANGLES, 0, scMatrixN);
+  }
   // 接触阴影：扇面顶点已是世界坐标 → uRot 单位阵、uShift 归零，直接画
-  const fan = scShadowFan(contact, project, insts);
+  const fan = (state.base === "matrix") ? null : scShadowFan(contact, project, insts);
+  // matrix 基岩时跳过接触阴影：扇面在台面上、被圆丘整个盖住，画了也看不见
   if (fan && fan.length <= 4096 * 4 && gl.bufferSubData) {
     gl.uniformMatrix3fv(scUni.uRot, false, colMajor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
     gl.uniform3fv(scUni.uShift, new Float32Array([0, 0, 0]));

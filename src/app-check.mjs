@@ -1109,7 +1109,7 @@ const glLastOptsOk = (glw, vw, vh) => {
       hash: location.hash,
     })`);
     const o = JSON.parse(r);
-    return o.mode === true && o.shown === true && o.n === 2 && o.settle === true
+    return o.mode === true && o.shown === true && o.n === 3 && o.settle === true
       && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
       && o.items === 2 && o.hash === "#/m/pyrite/navajun";
   })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
@@ -1192,8 +1192,31 @@ const glLastOptsOk = (glw, vw, vh) => {
       return { kept, combo, tab };
     })())`);
     const o = JSON.parse(r);
-    return o.kept === true && o.combo === 2;
+    return o.kept === true && o.combo === 3;
   })());
+  check("镜面金属：GL/2D 同式的环境反射对比增益 + 反射色去饱和（Navajún 黄铁矿观感）", (() => {
+    const gl = run(`GL_FS`);
+    const d2 = html.slice(html.indexOf("function shadeFace("), html.indexOf("const rgbStr"));
+    return /env \+= vec3\(0\.56, 0\.55, 0\.48\) \* smoothstep\(0\.0, 0\.75, rdir\.y\)/.test(gl)
+      && /env \* 1\.35 \+ pow\(clamp\(env, 0\.0, 1\.0\), vec3\(3\.0\)\) \* 1\.2/.test(gl)
+      && /mix\(base, vec3\(1\.0\), 0\.4\)/.test(gl)
+      && /const sky = st \* st \* \(3 - 2 \* st\)/.test(d2)
+      && /base\[i\] \* 0\.6 \+ 0\.4/.test(d2)
+      && /spec: 1\.35, shin: 80/.test(html);
+  })());
+  check("泥灰岩基岩：matrix 底座在 3D 场景绘制（圆丘网格 + 跳过接触阴影），照片场景回落为无", (() => {
+    const r = run(`JSON.stringify((() => {
+      state.bg = "paper"; state.onTable = true; state.base = "matrix";
+      selectMineral("pyrite"); state.habitId = "cube"; state.mask = 1;
+      rebuildGeometry(); draw();
+      const in3d = scMatrixN > 200 && scene3dActive({});
+      state.bg = "lab"; draw();
+      state.bg = "paper"; state.base = "none"; rebuildGeometry(); draw();
+      return { in3d, n: scMatrixN };
+    })())`);
+    const o = JSON.parse(r);
+    return o.in3d === true && o.n > 200;
+  })(), `scMatrixN=${run(`scMatrixN`)}`);
   run(`selectMineral("fluorite"); syncPanels(); draw();`);
   run(`location.hash = "#/studio"; applyRoute(); state.extras = []; selectMineral("fluorite"); state.habitId = "cube"; state.mask = 1; rebuildGeometry(); syncPanels(); draw();`);
   check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
