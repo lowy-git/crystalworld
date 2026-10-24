@@ -1,4 +1,4 @@
-// 生成单文件晶体库应用：node spike/make-app.mjs
+// 生成单文件晶体库应用：node src/make-app.mjs（产物 index.html = Pages/打包入口）
 import fs from "node:fs";
 import { combination, twinMatrix, twinAxisMatrix, faceNormal, formPlanes, lattice, pointGroup } from "./kernel.mjs";
 import { SYSTEMS, MINERALS } from "./minerals.data.mjs";
@@ -508,26 +508,26 @@ for (const m of MINERALS) {
 }
 
 const raw = JSON.stringify(out);
-const tpl = fs.readFileSync("demo/crystal_template.html", "utf8");
+const tpl = fs.readFileSync("src/crystal_template.html", "utf8");
 if (!tpl.includes("/*__DATA__*/ null")) throw new Error("template placeholder missing");
 if (!tpl.includes("/*__BGIMGS__*/ null")) throw new Error("template bg placeholder missing");
-// 五套场景照片：demo/bg/*.jpg → data URL 内联（仍然单文件、离线、双击即开）。
-// 换图 = 替换 demo/bg/ 下同名 jpg 再跑本脚本（spike/fetch-bg.py 可重新生图）。
+// 五套场景照片：src/bg/*.jpg → data URL 内联（仍然单文件、离线、双击即开）。
+// 换图 = 替换 src/bg/ 下同名 jpg 再跑本脚本（src/fetch-bg.py 可重新生图）。
 let bgImgs = null;
 try {
-  const dir = fs.readdirSync("demo/bg").filter(f => /\.jpe?g$/i.test(f)).sort();
+  const dir = fs.readdirSync("src/bg").filter(f => /\.jpe?g$/i.test(f)).sort();
   if (dir.length) {
     bgImgs = {};
-    for (const f of dir) bgImgs[f.replace(/\.jpe?g$/i, "")] = "data:image/jpeg;base64," + fs.readFileSync(`demo/bg/${f}`).toString("base64");
+    for (const f of dir) bgImgs[f.replace(/\.jpe?g$/i, "")] = "data:image/jpeg;base64," + fs.readFileSync(`src/bg/${f}`).toString("base64");
   }
 } catch { bgImgs = null; }
 const html = tpl
   .replace("/*__DATA__*/ null", () => raw)
   .replace("/*__BGIMGS__*/ null", () => JSON.stringify(bgImgs));
-fs.writeFileSync("demo/crystal.html", html);
+fs.writeFileSync("index.html", html);
 
 const kb = (html.length / 1024).toFixed(1);
-console.log(`wrote demo/crystal.html  ${kb} KB  (data ${(raw.length / 1024).toFixed(1)} KB)`);
+console.log(`wrote index.html  ${kb} KB  (data ${(raw.length / 1024).toFixed(1)} KB)`);
 for (const m of out.minerals) {
   const habits = m.habits.map(h => `${h.zh}:${h.counts.f}面/${Object.keys(h.variants).length}态`).join("  ");
   console.log(`  ${m.zh.padEnd(8, " ")} ${habits}`);

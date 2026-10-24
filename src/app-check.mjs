@@ -1,8 +1,8 @@
-// 用 vm + 桩 DOM 跑 demo/crystal.html 的脚本，检查初始化、切矿、单形切换、导出
+// 用 vm + 桩 DOM 跑 index.html 的脚本，检查初始化、切矿、单形切换、导出
 import fs from "node:fs";
 import vm from "node:vm";
 
-const html = fs.readFileSync("demo/crystal.html", "utf8");
+const html = fs.readFileSync("index.html", "utf8");
 const m = html.match(/<script>([\s\S]*)<\/script>/);
 if (!m) throw new Error("script not found");
 const code = m[1];

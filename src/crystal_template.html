@@ -832,7 +832,7 @@ function paintTint(g, project, M, geo, twinShow, bcIn) {
 function backdropRnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
 /* ── 场景照片 ─────────────────────────────────────────────────────────────
-   五套场景各配一张实拍感背景图（AI 生图，源文件 demo/bg/*.jpg，由 make-app.mjs 以
+   五套场景各配一张实拍感背景图（AI 生图，源文件 src/bg/*.jpg，由 make-app.mjs 以
    data URL 内联进成品——仍然单文件、离线、双击即开；换图 = 替换 jpg 再跑 make-app）。
    照片加载成功：cover 铺满 + 焦点对位 + 四周轻压（vig）；加载失败（断言桩环境等）
    自动回落到下面各场景自己的程序化画法，功能一点不缺。

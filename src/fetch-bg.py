@@ -1,8 +1,8 @@
 # 抓取五套场景背景图（pollinations.ai 生图，flux 模型），裁掉右下角水印、压成小 JPEG。
-# 用法：python spike/fetch-bg.py   （产物 demo/bg/*.jpg；种子固定，可复现）
+# 用法：python src/fetch-bg.py   （产物 src/bg/*.jpg；种子固定，可复现）
 import io, os, time, urllib.parse, urllib.request
 
-BG_DIR = os.path.join("demo", "bg")
+BG_DIR = os.path.join("src", "bg")
 W, H = 1280, 800
 
 SCENES = {

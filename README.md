@@ -1,7 +1,8 @@
 # CrystalWorld · 晶体世界
 
 > 一个从**晶胞参数**长出晶体、转着看、还能讲清"为什么长成这样"的交互式结晶学小工具。
-> 现在就能玩：[demo/crystal.html](demo/crystal.html) —— 单文件、离线、**双击即开**，不用装任何东西。
+> 在线版：**https://lowy-git.github.io/crystalworld/**（push 到 main 自动构建部署，断言不过不上线）。
+> 本地玩：双击 [index.html](index.html) —— 单文件、离线、不用装任何东西；它同时也是未来 APK/桌面包的打包入口。
 
 ## 现在能玩什么
 
@@ -47,21 +48,24 @@
 ## 想改的话
 
 ```bash
-# 改数据（矿物、外形、单形、k 值、默认光泽/通透度）
-#   spike/minerals.data.mjs
+# 改数据（矿物、外形、单形、k 值、默认光泽/通透度、产地晶习）
+#   src/minerals.data.mjs
 
 # 改界面/渲染
-#   demo/crystal_template.html
+#   src/crystal_template.html
 
-# 重新生成 demo/crystal.html（需要 Node 18+）
-node spike/make-app.mjs
+# 重新生成 index.html（需要 Node 18+；产物 = Pages 入口 = 未来打包入口）
+node src/make-app.mjs
 
-# 跑一遍自动检查（201 条断言）
-node spike/app-check.mjs
+# 跑一遍自动检查（201 条应用断言 + 24 条内核断言）
+node src/app-check.mjs && node src/check.mjs
 
-# 换场景背景图：替换 demo/bg/ 下同名 jpg（dark/lab/nature/cabinet/paper），
-# 再跑一次 make-app 即可重新内联；重画可用 python spike/fetch-bg.py（AI 生图）
+# 换场景背景图：替换 src/bg/ 下同名 jpg（lab/nature/cabinet/paper），
+# 再跑一次 make-app 即可重新内联；重画可用 python src/fetch-bg.py（AI 生图）
 ```
+
+push 到 main 时 GitHub Actions 会自动执行上面三步（生成 + 全部断言），**断言不过不上线**；
+首次部署需在仓库 Settings → Pages 把 Source 设为 "GitHub Actions"。
 
 `spike/kernel.mjs` 是几何内核：晶胞 6 参数 → 度规与面法线 → 点群生成面族 → **所有半空间求交**得到凸多面体。面角、双晶角全部由同一套几何算出来，渲染层不参与任何结晶学计算。
 
@@ -71,11 +75,12 @@ node spike/app-check.mjs
 
 | 目录 | 内容 |
 |---|---|
-| `demo/crystal.html` | **成品**，双击即开 |
-| `demo/crystal_template.html` | 界面与渲染的源码 |
-| `spike/` | 几何内核、矿物数据、生成脚本、检查脚本 |
-| `docs/` | 设计计划、内核与数据规格、验证报告 |
-| `render/` | 开发期的视觉 QA 图 |
+| `index.html` | **成品**（双击即开；Pages 入口；未来 APK/桌面包的打包入口） |
+| `src/` | 源码：几何内核 `kernel.mjs`、矿物数据、界面源码 `crystal_template.html`、生成脚本、断言脚本 |
+| `src/bg/` | 场景背景图源（AI 生图，make-app 内联进成品） |
+| `docs/` | 设计计划、内核与数据规格、验证报告、QA 图存档（`docs/qa/`） |
+| `tools/legacy/` | 早期原型与一次性探针脚本（留档） |
+| `.github/workflows/` | CI：生成 → 断言门禁 → Pages 部署 |
 
 ## 老实说几句
 
