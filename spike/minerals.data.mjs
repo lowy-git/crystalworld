@@ -6,7 +6,8 @@
 //   confidence       晶胞参数置信度：high / medium / low（M4b 要逐条对来源复核）
 //   source           参数出处；标"待核"的进 pending 清单，不进正式版
 //   luster / transp  默认光泽与通透度（2026-10-24 按 Mindat / Handbook of Mineralogy 的
-//                    标准光泽描述校准；透明度按"最高品级"取——宝石级晶体能达到的透明档）
+//                    标准光泽描述校准；透明度口径两条：无色/浅色品种按最高品级取全透明，
+//                    彩色品种（紫水晶、萤石）按常见品级取半透明——彩色的全透明太罕见）
 
 export const SYSTEMS = [
   { id: "cubic",      zh: "等轴", en: "Isometric",   note: "a = b = c，α = β = γ = 90°" },
@@ -22,7 +23,7 @@ export const MINERALS = [
   {
     id: "fluorite",
   defColor: "#4fae7a",
-  luster: "glass", transp: "clear", inclusion: "pyrite",   // 玻璃光泽（Mindat: Vitreous）；宝石级完全透明
+  luster: "glass", transp: "transl", inclusion: "pyrite",   // 玻璃光泽；彩色萤石常见半透明（全透明的是无色光学级）
     zh: "萤石", en: "Fluorite", formula: "CaF₂",
     system: "cubic", pointGroup: "m-3m",
     confidence: "high", source: "a = 5.4626 Å（Webmineral / Dana）",
@@ -253,7 +254,7 @@ export const MINERALS = [
   {
     id: "quartz",
   defColor: "#8b5cb0",
-  luster: "glass", transp: "clear", inclusion: "rutile",     // 玻璃光泽；水晶（rock crystal）无色透明
+  luster: "glass", transp: "transl", inclusion: "rutile",    // 玻璃光泽；紫水晶常见半透明（无色水晶才全透明）
     zh: "石英", en: "Quartz", formula: "SiO₂",
     system: "trigonal", pointGroup: "32",
     confidence: "high", source: "a = 4.9134、c = 5.4052 Å（Dana）",

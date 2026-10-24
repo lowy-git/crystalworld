@@ -470,6 +470,7 @@
           <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
           <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
           <label class="ck"><input type="checkbox" id="optLMove"> 光源绕行 Light orbit</label>
+          <label class="ck"><input type="checkbox" id="optRest" checked> 自然摆放（3D 桌面）Rest pose</label>
           <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
         </div>
         <!-- 双晶拆解：只在双晶习惯出现。0＝合在一起；>0＝个体 B 沿拆解方向平移 -->
@@ -976,6 +977,7 @@ const state = {
   bg: "paper",         // 启动时按当地时间定（见 daytimeBg），用户一选就钉住
   bgPicked: false,     // 用户手动选过场景没有
   onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
+  restPose: true,      // 3D 桌面上「自然摆放」：晶体躺倒在稳定支撑面上（静态求解，非物理）
   base: "none",        // 基岩/底座：none / slab / geode / wood
   inclusion: "none",   // 默认无：内含物由用户主动开启
   incDensity: 0.6,     // 只控制「出现多少个」
@@ -1056,14 +1058,8 @@ function rebuildGeometry() {
     const keep = new Set(faces.map((f, i) => f.indiv === keepIndiv ? i : -1).filter(i => i >= 0));
     faces.splice(0, faces.length, ...faces.filter((_, i) => keep.has(i)));
   }
-  // 每个个体的平面（用于轴向遮挡判断）
-  const planesByIndiv = {};
-  for (const f of faces) {
-    (planesByIndiv[f.indiv] ||= []).push({ n: f.n, d: dot(f.n, f.pts[0]) });
-  }
-  const planes = Object.values(planesByIndiv);
-  // 真棱：被两个面共用、且两面不共面（> 5°）。并集在 T 型接点处会有只用一次的边，
-  // 那些是剖分缝而不是晶棱，描出来就会像“内部结构”。
+  // 棱拓扑：真棱用；也用来判闭合性——"自然摆放"只对闭合流形有意义
+  // （接触双晶只看一个体时结合面被删了，是开壳，重心的散度积分没意义）
   const edgeMap = new Map();
   faces.forEach((f, fi) => {
     const L = f.loop;
@@ -1074,12 +1070,36 @@ function rebuildGeometry() {
       edgeMap.get(k).push(fi);
     }
   });
+  const closedManifold = faces.length > 3 && [...edgeMap.values()].every(l => l.length === 2);
+  // ── 自然摆放：3D 桌面上把"稳定支撑面"转到朝下（静态求解，判据见 restRotationOf）──
+  //    开关/场景变化都会走到 rebuildGeometry，所以烤进顶点后所有下游（棱线/晶纹/内含物/
+  //    包体位置/坐标轴）自动一致，不需要各自补转。
+  let restRot = null;
+  if (restActive() && closedManifold) {
+    restRot = restRotationOf(faces);
+    if (restRot) {
+      const done = new Set();   // 面片顶点与 P 共享引用（双晶 B 体的偏移点除外）：去重，只转一次
+      for (const f of faces) for (const p of f.pts) {
+        if (done.has(p)) continue;
+        done.add(p);
+        const q = mv(restRot, p); p[0] = q[0]; p[1] = q[1]; p[2] = q[2];
+      }
+      for (const f of faces) { f.n = unit(mv(restRot, f.n)); f.c = mv(restRot, f.c); }
+    }
+  }
+  // 每个个体的平面（用于轴向遮挡判断）
+  const planesByIndiv = {};
+  for (const f of faces) {
+    (planesByIndiv[f.indiv] ||= []).push({ n: f.n, d: dot(f.n, f.pts[0]) });
+  }
+  const planes = Object.values(planesByIndiv);
   const realEdges = new Set();
   for (const [k, list] of edgeMap) {
     if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
   }
   GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))),
-          domain: v.domain || null,          // 转变双晶的域界截面（只画，不参与几何）
+          domain: (v.domain && restRot) ? v.domain.map(p => mv(restRot, p)) : (v.domain || null),
+          restRot,                        // 自然摆放的模型旋转（坐标轴/晶纹要跟着转）
           stamp: (GEO ? GEO.stamp + 1 : 1) };   // WebGL 层靠这个戳判断要不要重传顶点缓冲
   buildInclusions();
 }
@@ -1104,7 +1124,8 @@ function extraHabit(e) { const m = extraMineral(e); return m.habits.find(h => h.
    拿到 GEO 再切回来。副作用是 buildInclusions() 也会被跑一次，所以最后要
    给主晶体重建一遍内含物，否则主晶体上会挂着附加晶体的包体。 */
 function geoForExtra(e) {
-  const key = e.mineralId + "|" + e.habitId + "|" + e.mask;
+  // 缓存键带"自然摆放"开关状态：躺倒姿态烤在顶点里，开关一变几何就不同
+  const key = e.mineralId + "|" + e.habitId + "|" + e.mask + "|r" + (restActive() ? 1 : 0);
   const hit = GEO_CACHE.get(key);
   if (hit) return hit;
   const sv = { mi: state.mineralId, hi: state.habitId, mk: state.mask, ts: state.twinShow, tp: state.twinSplit };
@@ -1547,8 +1568,10 @@ function inPlaneDir(n) {
 function drawStriations(g, it, pts, R, project) {
   const spec = STRIATION[mineral().id];
   if (!spec || it.f.form !== spec.form) return;
-  const ax = spec.axis === "c" ? mv(R, [0, 0, 1])
-    : (spec.axis === "edge" ? inPlaneDir(it.wn) : mv(R, [1, 1, 1]));
+  const rest = GEO ? GEO.restRot : null;
+  const inModel = (v) => (rest ? mv(rest, v) : v);   // 晶纹方向定义在模型空间，随躺倒旋转
+  const ax = spec.axis === "c" ? mv(R, inModel([0, 0, 1]))
+    : (spec.axis === "edge" ? inPlaneDir(it.wn) : mv(R, inModel([1, 1, 1])));
   if (!ax) return;
   const d = cross(ax, it.wn);
   const dl = Math.hypot(d[0], d[1], d[2]);
@@ -2042,6 +2065,87 @@ const SC_PRE_N = mv(SC_PRE, [0, 0, 1]);               // 台面法线（模型�
 function scene3dActive(opts) {
   return state.bg === "paper" && state.onTable && !(opts && opts.noTable) && glInit();
 }
+/* 自然摆放何时生效：3D 场景 + 用户没关掉。翻动几何要在 rebuildGeometry 里做
+   （要把旋转烤进顶点），所以开关变化必须触发一次 rebuildGeometry。 */
+const restActive = () => state.bg === "paper" && state.onTable && state.restPose;
+
+/* ── 稳定摆放求解（静态，无物理引擎）──────────────────────────────
+   刚体"自然躺倒"的判据来自静力学：以面 F 为支撑时，刚体站得住 ⟺ 重心在 F 上的
+   竖直投影落在 F 的支撑多边形内。算法：
+     ① 用散度定理算整块晶体（含双晶并集）的体积重心；
+     ② 对每个晶面假设"以它为支撑"：求把该面法线转到"竖直向下"的最小旋转；
+     ③ 旋转后检查重心投影是否落在面内、离边是否够远（太贴边一碰就翻，不算稳定）；
+     ④ 在稳定候选里选「边距 / 重心高度」最大者（抗翻倒最强），
+        同分时轻微偏好 c 轴朝上的姿态（教科书观感）。
+   没有任何稳定面（极端尖锥）就返回 null：保持原姿态，宁可站着也别乱躺。
+   一帧一次解析求解，无逐帧积分——和"放在桌上"的接触求解同一哲学。 */
+function restRotationOf(faces) {
+  if (!faces || faces.length < 4) return null;
+  let V6 = 0, Cx = 0, Cy = 0, Cz = 0;
+  for (const f of faces) {
+    const p = f.pts;
+    for (let i = 1; i + 1 < p.length; i++) {
+      const a = p[0], b = p[i], c = p[i + 1];
+      const d = dot(a, cross(b, c));
+      V6 += d;
+      Cx += (a[0] + b[0] + c[0]) * d; Cy += (a[1] + b[1] + c[1]) * d; Cz += (a[2] + b[2] + c[2]) * d;
+    }
+  }
+  if (Math.abs(V6) < 1e-9) return null;          // 开壳（如贯穿双晶只看一个体）：体积没意义
+  const C = [Cx / (4 * V6), Cy / (4 * V6), Cz / (4 * V6)];   // V=V6/6，重心系数 1/24
+  const up = SC_PRE_N;
+  const down = [-up[0], -up[1], -up[2]];
+  const ptInPoly = (pt, poly) => {
+    let inn = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+      if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) inn = !inn;
+    }
+    return inn;
+  };
+  const distToEdges = (pt, poly) => {
+    let m = 1e9;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const x1 = poly[j][0], y1 = poly[j][1], x2 = poly[i][0], y2 = poly[i][1];
+      const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+      const t = l2 ? clamp(((pt[0] - x1) * dx + (pt[1] - y1) * dy) / l2, 0, 1) : 0;
+      m = Math.min(m, Math.hypot(pt[0] - x1 - t * dx, pt[1] - y1 - t * dy));
+    }
+    return m;
+  };
+  let best = null, bestScore = -1e9;
+  for (const f of faces) {
+    const n = unit(f.n);
+    const c = cross(n, down);
+    const s = Math.hypot(c[0], c[1], c[2]);
+    const d = clamp(dot(n, down), -1, 1);
+    let M;
+    if (s < 1e-7) {
+      if (d > 0) continue;                        // 面已朝下：恒等（本就躺着）
+      const ax = perp(n);                         // 面朝正上：绕任一水平轴翻 π
+      M = qToMat(qNorm(qAxis(ax[0], ax[1], ax[2], Math.PI)));
+    } else {
+      M = qToMat(qNorm(qAxis(c[0] / s, c[1] / s, c[2] / s, Math.atan2(s, d))));
+    }
+    const Mp = f.pts.map(p => mv(M, p));
+    const hFace = avg(Mp.map(p => dot(p, up)));
+    const Cm = mv(M, C);
+    const hC = dot(Cm, up) - hFace;               // 重心离支撑面的高度
+    if (hC < 1e-4) continue;
+    const u = perp(down), v = cross(down, u);
+    const poly = Mp.map(p => [dot(p, u), dot(p, v)]);
+    const cpt = [dot(Cm, u), dot(Cm, v)];
+    if (!ptInPoly(cpt, poly)) continue;           // 重心投影在面外：站不住
+    const fc = avg(poly);
+    const faceR = Math.max(...poly.map(p => Math.hypot(p[0] - fc[0], p[1] - fc[1]))) || 1e-6;
+    const margin = distToEdges(cpt, poly);
+    if (margin < 0.10 * faceR) continue;          // 太贴边：不稳定
+    const cUp = Math.max(0, dot(mv(M, [0, 0, 1]), up));
+    const score = margin / hC + 0.05 * cUp;
+    if (score > bestScore) { bestScore = score; best = M; }
+  }
+  return best;
+}
 
 const SC_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
@@ -2354,16 +2458,16 @@ function paintFaces(g, opts, project, M) {
      Canvas 能做的近似是：在轮廓内把已有像素朝本体色做 multiply 混合，强度随透明度上升。
        不透明时 tr=0 → 完全不起作用（晶面自己就是本体色）；
        全透明时 tr=1 → 相当于一块彩色滤色片，背景还在、只是染了晶体的颜色。
-     这样"透明度拉高"不再是"颜色消失"，而是"透过去的背景变彩色"。
+     旧版会把滤色片的颜色朝"无色"淡化（越透明越接近白）——那是照着"纯净水晶"调的，
+     结果紫水晶/萤石拉到 100% 透明时颜色跟着淡没（用户反馈）。改回**始终用本体色**：
+     本体色本来就浅的矿物（无色水晶、钻石）multiply 近似恒等，不受影响；
+     颜色饱和的矿物全透明时依然是一片明确的颜色——这才是"彩色透明"该有的样子。
      （逐片设 alpha 会在接缝叠出深色描边，所以必须整层一次做完。） */
   for (const it of list) {
     const Mi = it.M;
     const tr = 1 - (Mi.alpha == null ? 1 : Mi.alpha);
     if (tr <= 0.01) continue;
-    // 越透明，透过去的颜色越接近"无色"——真水晶透光几乎不染色，
-    // 染色的只是很浓的料子。直接拿本体色 multiply 会把钻石这种浅色晶体压成橄榄色。
-    const bc0 = bcOf(it), w = 0.55 * tr;
-    const bc = [bc0[0] + (1 - bc0[0]) * w, bc0[1] + (1 - bc0[1]) * w, bc0[2] + (1 - bc0[2]) * w];
+    const bc = bcOf(it);                     // 滤色片 = 本体色，不随透明度漂白
     g.save();
     if (crystalPath(g, projOf(it), it.geo, it.main ? state.twinShow : "both")) {
       g.clip();
@@ -2790,7 +2894,8 @@ function drawTwinDomain(g, project) {
 }
 
 function drawAxes(g, R, project, scale) {
-  const ax = axesVectors();
+  const rest = GEO ? GEO.restRot : null;      // 自然摆放：坐标轴跟着晶体一起躺倒
+  const ax = axesVectors().map(a => (rest ? { ...a, v: mv(rest, a.v) } : a));
   const L = (GEO ? GEO.extent : 1) * 1.42 + 0.18;
   g.save();
   g.lineCap = "round";
@@ -3103,7 +3208,7 @@ function renderBackgrounds() {
     const b = document.createElement("button");
     b.className = "btn" + (state.bg === id ? " on" : "");
     b.textContent = B.zh;
-    b.onclick = () => { state.bg = id; state.bgPicked = true; applySceneLights(id); renderBackgrounds(); draw(); };
+    b.onclick = () => { state.bg = id; state.bgPicked = true; applySceneLights(id); rebuildGeometry(); renderBackgrounds(); draw(); };
     box.appendChild(b);
   }
   const B = BACKGROUNDS[state.bg] || BACKGROUNDS.void;
@@ -3111,7 +3216,7 @@ function renderBackgrounds() {
   if (cb) {
     cb.checked = state.onTable;
     cb.disabled = !B.table;
-    cb.onchange = () => { state.onTable = cb.checked; draw(); };
+    cb.onchange = () => { state.onTable = cb.checked; rebuildGeometry(); draw(); };
   }
   // "放在桌面上"只在有桌面的场景有意义（空白没有桌面），给一句说明
   const tblHint = document.getElementById("tableHint");
@@ -3472,6 +3577,7 @@ function syncPanels() {
   document.getElementById("optStri").checked = state.striations;
   document.getElementById("optSpin").checked = state.spin;
   document.getElementById("optLMove").checked = state.lightMove;
+  document.getElementById("optRest").checked = state.restPose;
   const twinRow = document.getElementById("twinRow");
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
@@ -3543,6 +3649,7 @@ document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.c
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
 document.getElementById("optLMove").onchange = (e) => { state.lightMove = e.target.checked; };
+document.getElementById("optRest").onchange = (e) => { state.restPose = e.target.checked; rebuildGeometry(); draw(); };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
 document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 

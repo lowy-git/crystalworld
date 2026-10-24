@@ -967,6 +967,53 @@ const glLastOptsOk = (glw, vw, vh) => {
     const last = run(`(() => { renderSwatches(); const c = document.getElementById("swatches").children; return c.length ? c[c.length - 1].className : ""; })()`);
     return /swform/.test(String(last));
   })(), `last=${run(`(() => { renderSwatches(); const c = document.getElementById("swatches").children; return c.length ? c[c.length-1].className : "none"; })()`)}`);
+  check("有色透射不再随透明度漂白（滤色片始终是本体色）", (() => {
+    const a = html.indexOf("function paintFaces(");
+    const src = html.slice(a, html.indexOf("function paintOverlay(", a));
+    return /const bc = bcOf\(it\);/.test(src) && !/1 - bc0\[/.test(src);
+  })());
+  check("彩色品种默认半透明（紫水晶/萤石常见品级，用户口径）", (() => {
+    const q = run(`selectMineral("quartz"); [state.transp, mat().alpha]`);
+    const f = run(`selectMineral("fluorite"); [state.transp, mat().alpha]`);
+    run(`selectMineral("fluorite"); syncPanels();`);
+    return q[0] === "transl" && Math.abs(q[1] - 0.62) < 1e-9 && f[0] === "transl";
+  })());
+
+  // ── 自然摆放（稳定面求解，静态无物理）──
+  run(`state.bg = "paper"; state.onTable = true; state.restPose = true; selectMineral("quartz"); state.habitId = "prismatic-long"; state.mask = 7; rebuildGeometry(); draw();`);
+  check("自然摆放：闭合晶体在 3D 桌面上解出躺倒旋转，且某个面精确朝下", (() => {
+    const r = run(`(() => {
+      if (!GEO || !GEO.restRot) return "no-rot";
+      const M = GEO.restRot;
+      const det = M[0][0]*(M[1][1]*M[2][2]-M[1][2]*M[2][1]) - M[0][1]*(M[1][0]*M[2][2]-M[1][2]*M[2][0]) + M[0][2]*(M[1][0]*M[2][1]-M[1][1]*M[2][0]);
+      // 法线已经烤过旋转：直接看哪个面朝下（不能再把 M 再乘一遍）
+      let down = 1e9;
+      for (const f of GEO.faces) down = Math.min(down, dot(f.n, SC_PRE_N));
+      return JSON.stringify({ det: +det.toFixed(6), downMost: +down.toFixed(6) });
+    })()`);
+    if (r === "no-rot") return false;
+    const o = JSON.parse(r);
+    return Math.abs(o.det - 1) < 1e-6 && o.downMost < -0.999;
+  })(), `info=${run(`(() => { if (!GEO || !GEO.restRot) return "no-rot"; let down = 1e9; for (const f of GEO.faces) down = Math.min(down, dot(f.n, SC_PRE_N)); return "downMost=" + down.toFixed(4); })()`)}`);
+  check("自然摆放：石英长柱躺倒后 c 轴接近水平（柱面贴地，不再尖朝下戳纸）", (() => {
+    const c = run(`Math.abs(dot(mv(GEO.restRot, [0,0,1]), SC_PRE_N))`);
+    return Number(c) < 0.35;
+  })(), `cUp=${run(`Math.abs(dot(mv(GEO.restRot,[0,0,1]), SC_PRE_N)).toFixed(3)`)}`);
+  check("关掉自然摆放（或非 3D 场景）不转晶体", (() => {
+    const a = run(`(state.restPose = false, rebuildGeometry(), GEO.restRot === undefined || GEO.restRot === null)`);
+    const b = run(`(state.restPose = true, state.bg = "void", rebuildGeometry(), GEO.restRot === undefined || GEO.restRot === null)`);
+    run(`state.bg = "paper"; rebuildGeometry();`);
+    return a === true && b === true;
+  })());
+  check("自然摆放确定性：同一几何重建两次结果一致", (() => {
+    const r = run(`(() => {
+      rebuildGeometry(); const a = JSON.stringify(GEO.restRot);
+      rebuildGeometry(); const b = JSON.stringify(GEO.restRot);
+      return a === b;
+    })()`);
+    return r === true || r === "true";
+  })());
+  run(`selectMineral("fluorite"); syncPanels(); draw();`);
   check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
   // 颜色必须是 0..1：GL 顶点属性不分量纲，0..255 会被 clamp 成全白
   const cols = run(`(() => { const s = new Set(); for (const f of GEO.faces) s.add(JSON.stringify(faceColor(f))); return [...s]; })()`);
@@ -1215,11 +1262,13 @@ check("光泽只留四种（蜡状/玻璃/金刚/金属），不透明与透明�
 })(), `可见=${run(`Object.entries(LUSTERS).filter(([k,v])=>!v.hidden).map(([k])=>k).join(",")`)}`);
 check("矿物默认光泽/通透度按实际性质校准（2026-10-24，来源 Mindat / Handbook of Mineralogy）", (() => {
   // 石榴石与方解石曾误标金刚（真实是玻璃光泽）；石膏的蜡状只属于块状雪花石膏（晶体是玻璃+珍珠）。
-  // 透明度一律按"最高品级"取全透明，唯一例外是金属（天然不透明）。
+  // 透明度口径（第二十一轮修订）：无色/浅色品种按最高品级取全透明；
+  // 彩色品种（紫水晶/萤石）按常见品级取半透明——彩色的全透明太罕见（用户口径）。
+  // 唯一例外是金属（天然不透明）。
   const want = {
-    fluorite: ["glass", "clear"], pyrite: ["metallic", "opaque"], diamond: ["adamantine", "clear"],
+    fluorite: ["glass", "transl"], pyrite: ["metallic", "opaque"], diamond: ["adamantine", "clear"],
     garnet: ["glass", "clear"], scheelite: ["adamantine", "clear"], beryl: ["glass", "clear"],
-    quartz: ["glass", "clear"], calcite: ["glass", "clear"], topaz: ["glass", "clear"],
+    quartz: ["glass", "transl"], calcite: ["glass", "clear"], topaz: ["glass", "clear"],
     aragonite: ["glass", "clear"], gypsum: ["glass", "clear"], albite: ["glass", "clear"],
   };
   const got = run(`Object.fromEntries(DATA.minerals.map(m => [m.id, [m.luster, m.transp]]))`);
