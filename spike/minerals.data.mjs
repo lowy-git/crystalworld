@@ -112,6 +112,48 @@ export const MINERALS = [
         ],
       },
     ],
+    localities: [
+      {
+        id: "navajun",
+        zh: "西班牙 · 拉里奥哈 Navajún", en: "Navajún, La Rioja, Spain",
+        style: "penetration", styleZh: "穿插连晶",
+        habitId: "cube",
+        setup: {
+          base: "none", bg: "paper",
+          extras: [
+            { mineralId: "pyrite", habitId: "cube", pos: [1.12, 0, 0.18], scale: 0.66, yaw: 63 },
+            { mineralId: "pyrite", habitId: "cube", pos: [-1.08, 0, -0.3], scale: 0.52, yaw: -38 },
+          ],
+        },
+        text: {
+          zh: "下白垩统泥灰岩里的世界级黄铁矿产地：立方体棱线锋利、晶面如镜，边长 3–5 cm 常见，Mindat 记录最大超过 15 cm。晶体常两三颗互相穿插连生，从白垩质基质里剥出后几乎不用清洗。矿山（Ampliación a Victoria）至今仍专为采集标本而季节性开采。",
+          en: "A world-class pyrite source in Lower Cretaceous marls: mirror-faced, razor-edged cubes, commonly 3-5 cm on a side and up to 15+ cm. Two or three cubes often interpenetrate; specimens separate from the chalky matrix almost clean. The Ampliación a Victoria mine is still worked seasonally solely for specimens.",
+        },
+        features: ["镜面立方体", "穿插连晶", "白垩质泥灰岩"],
+        source: "Mindat loc-7116 / locentry-656314；McDougall Minerals（Navajún 专文）",
+        confidence: "high", checked: "2026-10",
+      },
+      {
+        id: "huanzala",
+        zh: "秘鲁 · 安卡什 Huanzala", en: "Huanzala Mine, Huallanca, Áncash, Peru",
+        style: "cluster", styleZh: "晶簇",
+        habitId: "pyritohedron",
+        setup: {
+          base: "none", bg: "paper",
+          extras: [
+            { mineralId: "pyrite", habitId: "combo", pos: [0.82, 0, -0.25], scale: 0.75, yaw: 28 },
+            { mineralId: "pyrite", habitId: "cube", pos: [-0.72, 0, 0.28], scale: 0.5, yaw: -74 },
+          ],
+        },
+        text: {
+          zh: "高海拔多金属铅锌矿山，却是秘鲁出产精品矿物标本最多的矿山之一（Rock Currier 语）。黄铁矿晶面锋利、光泽极亮，五角十二面体发育，常见立方体 + 五角十二面体聚形；在石英脉里与萤石、白云石、黄铜矿共生。标本多为几厘米的迷你精品，与其说「大」不如说「精」。",
+          en: "A high-altitude Pb-Zn mine that is among Peru's top producers of fine specimens (Rock Currier). Pyrite is razor sharp and highly lustrous, pyritohedra well developed, often as cube + pyritohedron combinations in quartz veins with fluorite, dolomite and chalcopyrite. Miniature-sized but exquisite.",
+        },
+        features: ["五角十二面体", "锋利光亮", "多金属共生"],
+        source: "Mindat loc-5783 / locentry-31548",
+        confidence: "high", checked: "2026-10",
+      },
+    ],
   },
   {
     id: "diamond",
@@ -331,6 +373,47 @@ export const MINERALS = [
           { hkl: [1, 0, 1], k: 0.95, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
           { hkl: [0, 1, 1], k: 0.95, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
         ],
+      },
+    ],
+    localities: [
+      {
+        id: "arkansas",
+        zh: "美国 · 阿肯色水晶山区", en: "Crystal Mountains, Arkansas, USA",
+        style: "parallel", styleZh: "平行连生",
+        habitId: "prismatic-long",
+        setup: {
+          base: "none", bg: "paper",
+          extras: [
+            { mineralId: "quartz", habitId: "prismatic-long", pos: [0.78, 0, 0.2], scale: 0.8, yaw: 14 },
+            { mineralId: "quartz", habitId: "prismatic", pos: [-0.72, 0, -0.24], scale: 0.55, yaw: -22 },
+          ],
+        },
+        text: {
+          zh: "沃希托山的砂岩晶脉（当地人叫 Crystal Mountains）是美国最著名的水晶产地：晶洞里成簇的长柱状水晶棱刃平直、透明度高，常以平行连生出现，大簇可达数百公斤。十九世纪中叶起商业开采至今，也是全世界收藏者亲手挖晶的圣地（Mount Ida、Hot Springs 一带）。",
+          en: "The quartz veins in the Ouachita sandstones (the \"Crystal Mountains\") are America's most famous quartz source: pockets yield clusters of long, straight, water-clear prisms, often in parallel growth; big clusters reach hundreds of pounds. Commercially mined since the mid-1800s and a mecca for dig-it-yourself collectors.",
+        },
+        features: ["长柱平行连生", "高透明", "砂岩晶洞"],
+        source: "Mindat article 1327；USGS Bull. 973-E（Engel, 1952）",
+        confidence: "high", checked: "2026-10",
+      },
+      {
+        id: "tessin",
+        zh: "瑞士 · 提契诺阿尔卑斯裂隙", en: "Alpine fissures, Tessin, Switzerland",
+        style: "single", styleZh: "裂隙单晶",
+        habitId: "prismatic-short",
+        setup: {
+          base: "none", bg: "paper",
+          extras: [
+            { mineralId: "quartz", habitId: "prismatic-short", pos: [0.85, 0, -0.18], scale: 0.6, yaw: 100 },
+          ],
+        },
+        text: {
+          zh: "片岩里的阿尔卑斯型裂隙（几厘米宽的透镜状空腔）孕育了「提契诺习形」（Tessin habit）：柱体短粗、陡峭的菱面体 r/z 极度发育，晶体常横卧在晶洞壁上，绿泥石包裹让它带一层淡绿。Gries、Bedretto 谷是经典产地；这类裂隙也是「晶体为什么长在缝里」的教科书现场。",
+          en: "Alpine-type fissures (lens-shaped cm-scale cavities) in schist host the \"Tessin habit\": stubby prisms with strongly developed steep rhombohedra, lying across the cavity walls, often tinged pale green by chlorite inclusions. Classic sites include the Gries and Bedretto valleys.",
+        },
+        features: ["短柱 Tessin 习形", "陡菱面体发育", "阿尔卑斯型裂隙"],
+        source: "Mindat loc-342794（Corno Gries）；Mindat glossary: alpine-type fissure；quartzpage.de",
+        confidence: "high", checked: "2026-10",
       },
     ],
   },

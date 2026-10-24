@@ -413,6 +413,7 @@ for (const m of MINERALS) {
     transp: m.transp ?? null,
     inclusion: m.inclusion ?? null,
     confidence: m.confidence, source: m.source,
+    localities: (m.localities || []).map(l => ({ ...l })),   // 产地晶习（矿物志 L1）
     habits: [],
   };
   for (const h of m.habits) {

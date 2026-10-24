@@ -834,6 +834,34 @@ const glLastOptsOk = (glw, vw, vh) => {
     check(tag, worst < 1e-6, `${a.length} 顶点最大偏差 ${worst.toExponential(2)}` + (wi >= 0 && worst > 1e-6 ? ` @顶点${wi}` : "") + (worst > 1e-6 ? `（≈ ${(worst * 700).toFixed(1)} px 偏移）` : ""));
   };
   cmpNdc("GL 全部顶点的 NDC = 2D 投影（同源，逐顶点）");
+  // extras 的同源比对：uRot=R·RyG·Ry、uShift=R·RyG·(pos+drop) 必须与 instXform/projOf 一致。
+  // 只比对"最后上传的一组 uniform"（extras 在循环里最后画）。
+  {
+    run(`state.extras = []; const e0 = mkExtra("pyrite"); e0.pos = [0.9, 0, -0.2]; e0.scale = 0.7; e0.yaw = 0.6; state.extras.push(e0); draw();`);
+    const cmpExtra = (tag, withGroup) => {
+      if (withGroup) run(`state.groupYaw = 0.8; draw();`);
+      const Rot = lastU("uRot"), uShift = lastU("uShift");
+      const uScale = lastU("uScale"), uCx = lastU("uCx"), uCy = lastU("uCy");
+      const uVw = lastU("uVw"), uVh = lastU("uVh"), uFoc = lastU("uFoc"), uDist = lastU("uDist");
+      if (!Rot || Rot.length !== 9) { check(tag, false, "uRot 未上传"); return; }
+      const probe = JSON.parse(run(`(() => {
+        const pr = makeProject(glLastOpts);
+        const it = sceneList(state.bg)[1];
+        const v = it.geo.P[0];
+        const s2 = pr(instXform(it, v));
+        return JSON.stringify({ ndc: [(s2[0] / pr.vw) * 2 - 1, 1 - (s2[1] / pr.vh) * 2], p: v, scale: it.scale, pos: it.pos, drop: it.dropOff });
+      })()`));
+      // GL 侧：w = Rot·(p·scale) + shift（列主）
+      const w = [0, 1, 2].map(r => Rot[r] * probe.p[0] * uScale + Rot[3 + r] * probe.p[1] * uScale + Rot[6 + r] * probe.p[2] * uScale + uShift[r]);
+      const z = Math.max(uDist - w[2], 0.4);
+      const gNdc = [((uCx + w[0] * uFoc / z) / uVw) * 2 - 1, 1 - ((uCy - w[1] * uFoc / z) / uVh) * 2];
+      const worst = Math.max(Math.abs(gNdc[0] - probe.ndc[0]), Math.abs(gNdc[1] - probe.ndc[1]));
+      check(tag, worst < 1e-6, `偏差 ${worst.toExponential(2)} drop=${JSON.stringify(probe.drop)}`);
+    };
+    cmpExtra("extras：GL 与 2D 逐顶点同源（pos+drop+相机旋转）", false);
+    cmpExtra("extras：整组旋转下仍同源（groupYaw）", true);
+    run(`state.groupYaw = 0; state.extras = []; draw();`);
+  }
   // 平移（右键/Shift 拖动）也必须同源：GL 用的是 opts.cx/cy，2D 用的是 cx+pan，
   // 两边差一个 pan 就会整体错位——这正是"棱线飘到晶体外"的直接成因
   run(`state.pan = [37, -21]; draw();`);
@@ -1010,6 +1038,105 @@ const glLastOptsOk = (glw, vw, vh) => {
       rebuildGeometry(); const a = JSON.stringify(GEO.restRot);
       rebuildGeometry(); const b = JSON.stringify(GEO.restRot);
       return a === b;
+    })()`);
+    return r === true || r === "true";
+  })());
+  run(`selectMineral("fluorite"); syncPanels(); draw();`);
+
+  // ── 自然摆放不破坏绕序：extras 与主晶体逐面"法线朝外"（GL 靠它剔背面）──
+  check("自然摆放后 extras 几何绕序完好（每面法线朝外，带符号体积为正）", (() => {
+    const r = run(`(() => {
+      state.bg = "paper"; state.onTable = true;
+      selectMineral("pyrite"); state.habitId = "pyritohedron"; state.mask = 1;
+      state.extras = [];
+      const e0 = mkExtra("pyrite"); e0.habitId = "combo"; e0.mask = 3;
+      const e1 = mkExtra("pyrite"); e1.habitId = "cube"; e1.mask = 1;
+      state.extras.push(e0, e1); rebuildGeometry(); draw();
+      const check1 = (geo, tag) => {
+        let V6 = 0;
+        for (const f of geo.faces) for (let i = 1; i + 1 < f.pts.length; i++) {
+          V6 += dot(f.pts[0], cross(f.pts[i], f.pts[i + 1]));
+        }
+        if (V6 <= 0) return tag + ":体积负";
+        let C = [0, 0, 0], V = V6 / 6;
+        for (const f of geo.faces) for (let i = 1; i + 1 < f.pts.length; i++) {
+          const a = f.pts[0], b = f.pts[i], c = f.pts[i + 1];
+          const d = dot(a, cross(b, c));
+          C = [C[0] + (a[0]+b[0]+c[0]) * d / (4 * V6), C[1] + (a[1]+b[1]+c[1]) * d / (4 * V6), C[2] + (a[2]+b[2]+c[2]) * d / (4 * V6)];
+        }
+        for (const f of geo.faces) {
+          if (dot(f.n, sub(f.c, C)) <= 0) return tag + ":面法线朝内";
+        }
+        return null;
+      };
+      const bad = [check1(GEO, "main"), check1(geoForExtra(state.extras[0]), "combo"), check1(geoForExtra(state.extras[1]), "cube")].filter(Boolean);
+      state.extras = []; selectMineral("fluorite"); rebuildGeometry();
+      return bad.length === 0 ? "ok" : bad.join(";");
+    })()`);
+    return r === "ok";
+  })(), String(run(`"see-info"`)) + " | " + run(`(() => { return ""; })()`));
+
+  // ── L1：矿物志（产地晶习）──
+  check("黄铁矿/石英各有 ≥2 条产地数据，字段齐全且无 pending", (() => {
+    const bad = run(`["pyrite","quartz"].filter(id => {
+      const m = DATA.minerals.find(x => x.id === id);
+      return !m.localities || m.localities.length < 2 || m.localities.some(l =>
+        !l.id || !l.zh || !l.en || !l.habitId || !l.setup || !l.text || !l.text.zh ||
+        !l.features || !l.features.length || !l.source || !l.confidence || l.confidence === "pending");
+    })`);
+    return bad.length === 0;
+  })(), `bad=${run(`["pyrite","quartz"].filter(id => { const m = DATA.minerals.find(x=>x.id===id); return !m.localities ? id + ":无" : m.localities.length < 2 ? id + ":" + m.localities.length : ""; }).join(",")`)}`);
+  run(`openMuseum("pyrite", "navajun");`);
+  check("openMuseum：进入矿物志模式（body class + extras 按数据装载 + hash 回读一致）", (() => {
+    const r = run(`JSON.stringify({
+      mode: document.body.classList.contains("museum-mode"),
+      shown: document.getElementById("museum").style.display !== "none",
+      n: state.extras.length,
+      settle: state.extras.every(e => e.settle === true),
+      museum: state.museum,
+      items: document.getElementById("mList").children.length,
+    })`);
+    const o = JSON.parse(r);
+    // hash 深链在桩里验证不了（无 history/location.hash），真浏览器目检
+    return o.mode === true && o.shown === true && o.n === 2 && o.settle === true
+      && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun" && o.items === 2;
+  })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum })`));
+  check("落桌补偿：settle 实例的最低点与主晶体最低点等高（同一 pre-groupYaw 基）", (() => {
+    const r = run(`(() => {
+      const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
+      let hRef = 1e9;
+      for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));
+      const insts = sceneList(state.bg).filter(it => !it.main);
+      let worst = -1e9;
+      for (const it of insts) {
+        let h = 1e9;
+        for (const v of it.geo.P) {
+          const q = rotYv(v, it.yaw || 0);
+          const w = [q[0]*(it.scale==null?1:it.scale) + it.pos[0] + (it.dropOff ? it.dropOff[0] : 0),
+                     q[1]*(it.scale==null?1:it.scale) + it.pos[1] + (it.dropOff ? it.dropOff[1] : 0),
+                     q[2]*(it.scale==null?1:it.scale) + it.pos[2] + (it.dropOff ? it.dropOff[2] : 0)];
+          h = Math.min(h, dot(w, u));
+        }
+        worst = Math.max(worst, Math.abs(h - hRef));
+      }
+      return +worst.toFixed(9);
+    })()`);
+    return Number(r) < 1e-6;
+  })(), `worst=${run(`(() => { const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy); let hRef = 1e9; for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u)); return hRef.toFixed(4); })()`)}`);
+  check("GL 的实例变换与 2D 同源（uRot 含 RyG、uShift 过相机旋转——源码级）", (() => {
+    const a = html.indexOf("function glRender(");
+    const src = html.slice(a, html.indexOf("function cwDiag(", a));
+    return /mm3\(mm3\(R, RyG\), Ry\)/.test(src) && /mv\(mm3\(R, RyG\), shift\)/.test(src)
+      && /it\.main \? mm3\(R, Ry\)/.test(src);
+  })());
+  check("closeMuseum(false) 恢复默认单晶视图；closeMuseum(true) 保留组合", (() => {
+    const r = run(`(() => {
+      closeMuseum(true);
+      const kept = state.extras.length === 2 && !document.body.classList.contains("museum-mode") && !state.museum;
+      openMuseum("pyrite", "navajun");
+      closeMuseum(false);
+      const reset = state.extras.length === 0 && state.museum === null && !document.body.classList.contains("museum-mode") && mineral().id === "pyrite";
+      return kept && reset;
     })()`);
     return r === true || r === "true";
   })());

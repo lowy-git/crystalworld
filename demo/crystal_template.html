@@ -270,6 +270,33 @@
   body.darkbg .hud .t1 span,body.darkbg .hud .t2,body.darkbg .hud .t3{color:#a9bdd2}
   body.darkbg .hint{color:#9db3ca}
   body.darkbg .hint kbd{background:rgba(255,255,255,.08);border-color:rgba(160,190,220,.28);color:#dbe6f2}
+  /* ── 矿物志（产地晶习）：舞台左侧的覆盖面板；视口仍是主 GL 管线 ── */
+  body.museum-mode #app{grid-template-columns:0 1fr 0}
+  body.museum-mode .panel{display:none}
+  /* 面板 display:none 后 grid 自动布局会把 stage 塞进第 1 列（0 宽）——必须显式指定列 */
+  body.museum-mode .stage{grid-column:2}
+  body.museum-mode .hud{left:372px}   /* 让开矿物志面板 */
+  #museum{
+    position:absolute;left:0;top:0;bottom:0;width:352px;z-index:5;overflow-y:auto;
+    background:var(--panel);border-right:1px solid var(--line);
+    padding:14px 14px 40px;scrollbar-width:thin;scrollbar-color:var(--scroll) transparent;
+  }
+  #museum .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  #museum .mhead b{font-size:15px}
+  #museum .mlist{display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
+  #museum .mitem{
+    all:unset;cursor:pointer;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
+    font-size:13px;line-height:1.45;
+  }
+  #museum .mitem:hover{background:var(--panel2)}
+  #museum .mitem.on{border-color:var(--acc);background:var(--panel2)}
+  #museum .mitem .loc{font-weight:600}
+  #museum .mitem .sty{opacity:.62;font-size:11.5px}
+  #museum .mtext{font-size:13px;line-height:1.75;white-space:pre-wrap}
+  #museum .mfeat{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+  #museum .mfeat i{font-style:normal;font-size:11.5px;padding:2px 8px;border-radius:99px;
+    border:1px solid var(--line);opacity:.85}
+  #museum .msrc{font-size:11.5px;opacity:.6;line-height:1.5;margin:8px 0 12px}
 
   .note{
     font-size:11.5px;color:var(--ink2);line-height:1.65;background:var(--noteBg);
@@ -361,6 +388,7 @@
         <div class="aboutrow"><span class="aboutlab">有多硬</span><span id="aboutHard"></span></div>
         <div class="aboutrow"><span class="aboutlab">怎么认</span><span id="aboutSpot"></span></div>
         <p class="aboutp dim" id="aboutIntro"></p>
+        <button class="btn" id="aboutLoc" type="button" style="display:none;width:100%;margin-top:8px">产地晶习 · 不同产地怎么长 ›</button>
       </div>
     </div>
 
@@ -417,6 +445,17 @@
     <div class="hud" id="hud"></div>
     <div class="warn" id="warn"></div>
     <div class="hint" id="hint"></div>
+    <div id="museum" style="display:none">
+      <div class="mhead">
+        <button class="btn" id="mBack" type="button">← 返回</button>
+        <b id="mTitle">矿物志</b>
+      </div>
+      <div class="mlist" id="mList"></div>
+      <div class="mtext" id="mText"></div>
+      <div class="mfeat" id="mFeat"></div>
+      <div class="msrc" id="mSrc"></div>
+      <button class="btn" id="mLoad" type="button" style="width:100%">把这套组合带回主界面编辑 →</button>
+    </div>
   </main>
 
   <aside class="panel right">
@@ -1157,12 +1196,14 @@ function rotYv(p, a) {
   return [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c];
 }
 /* 实例变换：先绕 y 轴自转，再缩放，再平移到世界坐标。
-   摆放位置先过"整组旋转" groupYaw——锁定后整组作为刚体一起转。 */
+   摆放位置先过"整组旋转" groupYaw——锁定后整组作为刚体一起转。
+   dropOff：产地组合实例的"落桌"补偿（每帧由 sceneList 算好），沿模型竖直方向平移。 */
 function instXform(inst, p) {
   const q = rotYv(p, inst.yaw);
   const k = inst.scale == null ? 1 : inst.scale;
-  const w = rotYv([q[0] * k + inst.pos[0], q[1] * k + inst.pos[1], q[2] * k + inst.pos[2]], state.groupYaw);
-  return w;
+  let w = [q[0] * k + inst.pos[0], q[1] * k + inst.pos[1], q[2] * k + inst.pos[2]];
+  if (inst.dropOff) w = [w[0] + inst.dropOff[0], w[1] + inst.dropOff[1], w[2] + inst.dropOff[2]];
+  return rotYv(w, state.groupYaw);
 }
 /* 场景列表：主晶体在 index 0。按"离相机由远到近"排序——半透明实例必须从远往近画，
    否则前面画过的东西会被后面的 alpha 混合覆盖（GL 的 blend 不支持乱序）。 */
@@ -1172,7 +1213,33 @@ function sceneList(bgId) {
   for (const e of state.extras) {
     const g = geoForExtra(e);
     if (!g) continue;
-    out.push({ geo: g, pos: e.pos, scale: e.scale, yaw: e.yaw, M: extraMat(e, bgId), main: false, e });
+    // 附加晶体固定染矿物代表色（defColor）：产地组合里蓝灰的"单形配色"没有意义
+    out.push({ geo: g, pos: e.pos, scale: e.scale, yaw: e.yaw, M: extraMat(e, bgId), main: false, e,
+               cm: "mineral", uni: extraMineral(e).defColor || null });
+  }
+  // 落桌补偿（产地组合的 settle 实例）：每帧把最低点对齐到主晶体的最低点，
+  // 于是接触求解把台面放到这条公共线上时，每颗都恰好"坐"在台面上，没有悬空。
+  // 只在 3D 桌面场景生效；拖动照常（实例贴着台面滑，抬不起来——物理上合理）。
+  const s3 = state.bg === "paper" && state.onTable;
+  if (s3 && GEO) {
+    // pos/顶点都在 groupYaw 之前的模型系里，竖直方向用 u = rotYv(up, −gy) 表达，
+    // 主晶体与附加晶体在同一套基下量高度（rotYv 保点积：dot(rotYv(v,gy), up) = dot(v, u)）
+    const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
+    let hRef = 1e9;
+    for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));   // 主晶体已含自然摆放旋转
+    for (const it of out) {
+      if (it.main || !(it.e && it.e.settle) || !it.geo) { it.dropOff = null; continue; }
+      const k0 = it.scale == null ? 1 : it.scale;
+      let h = 1e9;
+      for (const v of it.geo.P) {
+        const q = rotYv(v, it.yaw || 0);
+        h = Math.min(h, dot([q[0] * k0 + it.pos[0], q[1] * k0 + it.pos[1], q[2] * k0 + it.pos[2]], u));
+      }
+      it.dropOff = Number.isFinite(h) && Number.isFinite(hRef)
+        ? [-u[0] * (h - hRef), -u[1] * (h - hRef), -u[2] * (h - hRef)] : null;
+    }
+  } else {
+    for (const it of out) it.dropOff = null;
   }
   const depthOf = (it) => (R[0][2] * it.pos[0] + R[1][2] * it.pos[1] + R[2][2] * it.pos[2]);
   out.sort((a, b) => depthOf(a) - depthOf(b));    // 先画远的（更小的 z）
@@ -1974,10 +2041,22 @@ function glRender(project, M, opts, list) {
     if (!n) continue;
     const ca = Math.cos(it.yaw || 0), sa = Math.sin(it.yaw || 0);
     const Ry = [[ca, 0, sa], [0, 1, 0], [-sa, 0, ca]];
-    const Rt = mm3(R, Ry);
+    /* GL 侧必须与 2D 的 instXform/projOf 逐字对应。锁定整组的既有语义是
+       「主晶体为轴心不动，附加晶体绕它公转+自转」：
+         · 主晶体：2D 用 project 直接投影（无 groupYaw）→ GL uRot = R·Ry、uShift = 0；
+         · 附加晶体：2D 用 instXform（world = R·(RyG·(Ry·p·k + pos+drop))）→
+           GL uRot = R·RyG·Ry、uShift = R·RyG·(pos+drop)。
+       旧版 GL 漏了 RyG、且 pos 没过相机旋转——拖动附加晶体时 GL 填充与 2D 棱线分离
+       （桩查不出数学，只有真浏览器看得见）。 */
+    const cg = Math.cos(state.groupYaw || 0), sg = Math.sin(state.groupYaw || 0);
+    const RyG = [[cg, 0, sg], [0, 1, 0], [-sg, 0, cg]];
+    const Rt = it.main ? mm3(R, Ry) : mm3(mm3(R, RyG), Ry);
+    const dOff = it.dropOff || null;
+    const shift = dOff ? [it.pos[0] + dOff[0], it.pos[1] + dOff[1], it.pos[2] + dOff[2]] : (it.pos || [0, 0, 0]);
     gl.uniformMatrix3fv(glUni.uRot, false, new Float32Array(
       [Rt[0][0], Rt[1][0], Rt[2][0], Rt[0][1], Rt[1][1], Rt[2][1], Rt[0][2], Rt[1][2], Rt[2][2]]));
-    gl.uniform3fv(glUni.uShift, new Float32Array(it.pos || [0, 0, 0]));
+    gl.uniform3fv(glUni.uShift, it.main ? new Float32Array(3) : new Float32Array(
+      mv(mm3(R, RyG), shift)));
     gl.uniform1f(glUni.uScale, it.scale == null ? 1 : it.scale);
     gl.uniform1f(glUni.uAmb, Mi.amb); gl.uniform1f(glUni.uDiff, Mi.diff);
     gl.uniform1f(glUni.uSpec, Mi.spec); gl.uniform1f(glUni.uShin, Mi.shin);
@@ -2492,7 +2571,13 @@ function paintOverlay(g, opts, project, M, inst) {
   const G = (inst && inst.geo) || GEO;
   const ts = inst ? (inst.main ? state.twinShow : "both") : state.twinShow;
   // 实例自转会改变法线方向（投影函数里点已经转过了，法线得自己转一圈）
-  const RN = (v) => ((inst && inst.yaw) ? mv(R0, rotYv(v, inst.yaw)) : mv(R0, v));
+  /* 法线变换与点一致：附加晶体 = Ry(自转)∘RyG(整组)（主晶体为轴心不动，无 RyG）。
+     旧版漏 RyG——锁定整组时附加晶体的光照/棱线朝向差一个整组角。 */
+  const RN = (v) => {
+    let q = (inst && inst.yaw) ? rotYv(v, inst.yaw) : v;
+    if (inst && !inst.main && state.groupYaw) q = rotYv(q, state.groupYaw);
+    return mv(R0, q);
+  };
   const R = R0;
   const eye = [0, 0, DIST];
   for (const f of G.faces) {
@@ -2530,7 +2615,13 @@ function paintFaces2D(g, opts, project, M, inst) {
   const G = (inst && inst.geo) || GEO;
   const R0 = project.R, DIST = project.DIST;
   const P = (inst && !inst.main) ? (p) => project(instXform(inst, p)) : project;
-  const RN = (v) => ((inst && inst.yaw) ? mv(R0, rotYv(v, inst.yaw)) : mv(R0, v));
+  /* 法线变换与点一致：附加晶体 = Ry(自转)∘RyG(整组)（主晶体为轴心不动，无 RyG）。
+     旧版漏 RyG——锁定整组时附加晶体的光照/棱线朝向差一个整组角。 */
+  const RN = (v) => {
+    let q = (inst && inst.yaw) ? rotYv(v, inst.yaw) : v;
+    if (inst && !inst.main && state.groupYaw) q = rotYv(q, state.groupYaw);
+    return mv(R0, q);
+  };
   const R = R0;
   const ts = inst ? (inst.main ? state.twinShow : "both") : state.twinShow;
   const eye = [0, 0, DIST];
@@ -3295,6 +3386,12 @@ function renderAbout() {
   set("aboutHard", a ? a.hard : "—");
   set("aboutSpot", a ? a.spot : "—");
   set("aboutIntro", (m.intro || {}).zh || "");
+  const lb = document.getElementById("aboutLoc");
+  if (lb) {
+    const has = !!(m.localities && m.localities.length);
+    lb.style.display = has ? "" : "none";
+    if (has) lb.onclick = () => openMuseum(m.id);
+  }
 }
 
 function renderInclusions() {
@@ -3567,7 +3664,123 @@ function bindExtras() {
     };
   }
 }
+
+/* ── 矿物志：产地晶习（L1）─────────────────────────────────────
+   每种矿物的 localities[] 描述"某产地典型怎么长"：一个主晶体外形 + 一组附加实例
+   （跨矿物合法）+ 基岩/场景 + 讲解与来源。矿物志页不是图文页——它把组合载进
+   主视口，照常能转、能拖、能改配色。URL hash 深链：#mineral=pyrite&loc=navajun。 */
+state.museum = null;   // { mineralId, locId } 或 null
+
+function museumMineral() { return state.museum && DATA.minerals.find(x => x.id === state.museum.mineralId); }
+function museumLoc() {
+  const m = museumMineral();
+  return m && m.localities ? m.localities.find(l => l.id === state.museum.locId) : null;
+}
+function applyLocality(m, loc) {
+  selectMineral(m.id);
+  const h = m.habits.find(x => x.id === loc.habitId) || m.habits[0];
+  state.habitId = h.id;
+  state.mask = defMask(h);
+  state.extras = [];
+  for (const it of (loc.setup.extras || [])) {
+    const e = mkExtra(it.mineralId);
+    e.habitId = it.habitId || extraHabit(e).id;
+    e.mask = it.mask != null ? it.mask : defMask(extraHabit(e));
+    e.pos = (it.pos || [0, 0, 0]).slice();
+    e.scale = it.scale != null ? it.scale : 1;
+    e.yaw = it.yaw != null ? it.yaw : 0;
+    e.settle = true;                 // 落桌补偿：sceneList 每帧把最低点对齐主晶体
+    state.extras.push(e);
+  }
+  state.zoom = loc.setup.zoom || 0.62;   // 组合视野：多颗一起看，默认拉远
+  state.bg = loc.setup.bg || state.bg;
+  state.bgPicked = true;
+  state.base = loc.setup.base || "none";
+  state.onTable = true;
+  applySceneLights(state.bg);
+  rebuildGeometry();
+  syncPanels(); renderBackgrounds(); renderExtras();
+}
+function renderMuseum() {
+  const m = museumMineral(), loc = museumLoc();
+  const box = document.getElementById("museum");
+  if (!box || !m || !loc) return;
+  document.getElementById("mTitle").textContent = `${m.zh} · 产地晶习`;
+  const list = document.getElementById("mList");
+  list.innerHTML = "";
+  for (const l of m.localities) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mitem" + (l.id === loc.id ? " on" : "");
+    b.innerHTML = `<div class="loc">${l.zh}</div><div class="sty">${l.en} · ${l.styleZh || l.style || ""}</div>`;
+    b.onclick = () => {
+      state.museum.locId = l.id;
+      applyLocality(m, l);
+      renderMuseum();
+      draw();
+      setMuseumHash();
+    };
+    list.appendChild(b);
+  }
+  document.getElementById("mText").textContent = loc.text ? loc.text.zh : "";
+  const feat = document.getElementById("mFeat");
+  feat.innerHTML = "";
+  for (const f of (loc.features || [])) {
+    const i = document.createElement("i");
+    i.textContent = f;
+    feat.appendChild(i);
+  }
+  document.getElementById("mSrc").textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）";
+}
+function setMuseumHash() {
+  const h = state.museum ? `#mineral=${state.museum.mineralId}&loc=${state.museum.locId}` : "";
+  try { history.replaceState(null, "", location.pathname + location.search + h); } catch (err) { /* 某些 file:// 环境 */ }
+}
+function openMuseum(mineralId, locId) {
+  const m = DATA.minerals.find(x => x.id === mineralId);
+  if (!m || !m.localities || !m.localities.length) return false;
+  const loc = m.localities.find(l => l.id === locId) || m.localities[0];
+  state.museum = { mineralId: m.id, locId: loc.id };
+  document.body.classList.add("museum-mode");
+  document.getElementById("museum").style.display = "";
+  resize();   // 舞台宽度变了（侧栏收起）：画布位图必须重设，否则晶体被 CSS 拉伸错位
+  applyLocality(m, loc);
+  renderMuseum();
+  draw();
+  setMuseumHash();
+  return true;
+}
+function closeMuseum(keepSetup) {
+  if (!state.museum) return;
+  const backTo = state.museum.mineralId;
+  state.museum = null;
+  document.body.classList.remove("museum-mode");
+  document.getElementById("museum").style.display = "none";
+  resize();
+  if (!keepSetup) {
+    state.extras = [];                 // 「← 返回」：恢复该矿物的默认单晶视图
+    selectMineral(backTo);
+  }
+  setMuseumHash();
+}
+function parseMuseumHash() {
+  const mm = /[#&]mineral=([\w-]+)/.exec(location.hash || "");
+  const ll = /[#&]loc=([\w-]+)/.exec(location.hash || "");
+  return mm ? { mineralId: mm[1], locId: ll ? ll[1] : null } : null;
+}
 bindExtras();
+{
+  const mb = document.getElementById("mBack");
+  if (mb && !mb.dataset.done) {
+    mb.dataset.done = "1";
+    mb.onclick = () => closeMuseum(false);
+  }
+  const ml = document.getElementById("mLoad");
+  if (ml && !ml.dataset.done) {
+    ml.dataset.done = "1";
+    ml.onclick = () => closeMuseum(true);   // 保留当前组合回主界面，照常编辑/导出
+  }
+}
 function syncPanels() {
   const m = mineral(), h = habit();
   document.getElementById("modeMouse").classList.toggle("on", state.inputMode === "mouse");
@@ -4041,6 +4254,13 @@ if (!state.bgPicked) {
   renderBackgrounds();
   renderBases();
   draw();
+}
+/* URL hash 深链（#mineral=pyrite&loc=navajun）：放在所有 UI 就绪之后 */
+{
+  const mh = parseMuseumHash();
+  try { if (mh) openMuseum(mh.mineralId, mh.locId); }
+  catch (e) { document.title = "OM-ERR:" + (e.message || e); }
+  try { document.title = "晶体世界 · Crystal World"; } catch (e) {}
 }
 </script>
 </body>
