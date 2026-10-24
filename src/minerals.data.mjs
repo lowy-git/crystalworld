@@ -120,6 +120,7 @@ export const MINERALS = [
         habitId: "cube",
         setup: {
           base: "matrix", bg: "paper", zoom: 0.5,     // matrix：灰绿色泥灰岩基岩，晶体底埋入丘中
+          rig: "showcase", ambK: 0.55,                // 展示灯：暗环境、暖强主光——镜面金属不被亮背景洗白
           extras: [
             // 构图对照实拍标本（fineartminerals 视频）：主晶体旁一左一右两颗
             // 中立方体、前下方一小簇——各晶面朝向不同，底部埋进泥灰岩里
@@ -142,7 +143,7 @@ export const MINERALS = [
         style: "cluster", styleZh: "晶簇",
         habitId: "pyritohedron",
         setup: {
-          base: "none", bg: "paper",
+          base: "none", bg: "paper", rig: "showcase", ambK: 0.55,
           extras: [
             { mineralId: "pyrite", habitId: "combo", pos: [0.82, 0, -0.25], scale: 0.75, yaw: 28 },
             { mineralId: "pyrite", habitId: "cube", pos: [-0.72, 0, 0.28], scale: 0.5, yaw: -74 },
@@ -264,7 +265,7 @@ export const MINERALS = [
   },
   {
     id: "beryl",
-  defColor: "#7fb6c9",
+  defColor: "#3fc0ba",
   luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽；宝石级（海蓝宝/祖母绿）透明
     zh: "绿柱石", en: "Beryl", formula: "Be₃Al₂Si₆O₁₈",
     system: "hexagonal", pointGroup: "6/mmm",
@@ -272,6 +273,7 @@ export const MINERALS = [
     cell: { a: 9.215, b: 9.215, c: 9.192, alpha: 90, beta: 90, gamma: 120 },
     cellText: "a = b = 9.215 Å，c = 9.192 Å，γ = 120°",
     colors: [
+      { zh: "蓝绿（克什米尔）", en: "Kashmir teal", hex: "#3fc0ba" },
       { zh: "海蓝", en: "Aquamarine", hex: "#7fb6c9" },
       { zh: "祖母绿", en: "Emerald",  hex: "#2f8f6a" },
       { zh: "粉红", en: "Morganite", hex: "#d9a0b4" },
@@ -288,11 +290,46 @@ export const MINERALS = [
     },
     habits: [
       {
+        id: "prismatic-long", zh: "长柱状", en: "Long prismatic",
+        forms: [
+          { hkl: [1, 0, 0], k: 0.45, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
+        ],
+      },
+      {
         id: "prismatic", zh: "柱状", en: "Prismatic",
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱", en: "Prism" },
           { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
         ],
+      },
+    ],
+    localities: [
+      {
+        id: "kashmir",
+        zh: "巴基斯坦 · 斯卡都（克什米尔）", en: "Skardu, Gilgit-Baltistan, Pakistan",
+        style: "parallel", styleZh: "直立并生",
+        habitId: "prismatic-long",
+        setup: {
+          base: "matrix", bg: "void", zoom: 0.46,      // 黑底标本照：白色石英长石基质 + 蓝绿柱体
+          restPose: false,                              // 直立并生（实拍里柱体全部站姿）
+          transp: "transl",                             // 半透明：蓝绿体色在黑场上"发光"
+          ambK: 1.7,                                    // 背光辉光：环境抬亮，柱体像从内部透出蓝绿
+          matrixCol: [0.66, 0.64, 0.58],                // 白色石英-长石基质（黑场上读作"被照亮的白"）
+          extras: [                                     // 环主晶体一圈（主晶体半宽~0.67，柱体要越过它才探头）
+            { mineralId: "beryl", habitId: "prismatic-long", pos: [1.18, 0, 0.68], scale: 0.66, yaw: 8 },
+            { mineralId: "beryl", habitId: "prismatic-long", pos: [0.85, 0, -1.05], scale: 0.56, yaw: -12 },
+            { mineralId: "beryl", habitId: "prismatic-long", pos: [-0.82, 0, -0.98], scale: 0.50, yaw: 4 },
+            { mineralId: "beryl", habitId: "prismatic-long", pos: [-1.05, 0, 0.72], scale: 0.44, yaw: 18 },
+          ],
+        },
+        text: {
+          zh: "传奇海蓝宝石标本「克什米尔之王」：多根长柱状海蓝宝石直立并生，从白色石英-长石基质上拔地而起。颜色是罕见的饱和蓝绿——比常见海蓝宝的淡蓝深得多、又比祖母绿偏蓝；晶体全透明、{0001} 平坦端面带生长台阶，转动时像一小片蓝绿色的水晶森林。产地为巴基斯坦斯卡都地区（克什米尔）的花岗岩晶洞。",
+          en: "The legendary “King of Kashmir” aquamarine: a cluster of long prismatic aquamarines standing upright from a white quartz-feldspar matrix. The color is a rare saturated blue-green, far deeper than common aquamarine yet bluer than emerald. Fully transparent crystals with flat {0001} terminations, from granite pockets in Skardu, Kashmir, Pakistan.",
+        },
+        features: ["长柱状并生", "饱和蓝绿", "白色石英长石基质"],
+        source: "fine_mineral_show 实拍（King of Kashmir）；Mindat Shigar District",
+        confidence: "medium", checked: "2026-10",
       },
     ],
   },

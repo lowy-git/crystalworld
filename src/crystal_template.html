@@ -1020,6 +1020,15 @@ const SCENE_RIGS = {
              {dir:[0.03,1.00,0.05],  col:[1.00,0.99,0.96], inten:0.80, spec:0.4},
              {dir:[-0.20,-0.95,0.22], col:[0.96,0.94,0.90], inten:0.45, spec:0.2},
              {dir:[-0.58,0.30,-0.76], col:[0.94,0.96,1.00], inten:0.20, spec:0.4} ],
+/* 展示灯（矿物页产地组合用）：暗环境、暖强主光、弱补光——
+   深色标本（镜面金属、深色晶体）在亮场景里会被环境"洗白"，
+   展示灯把环境压暗、把主光集中，标本自己亮起来（矿物摄影的布光逻辑） */
+  showcase:[ {dir:null, col:[1.00,0.95,0.86], inten:1.65, spec:1.30},
+             {dir:[0.62,0.46,-0.64], col:[0.52,0.58,0.74], inten:0.30, spec:0.9},
+             {dir:[-0.78,-0.32,0.54], col:[0.42,0.40,0.36], inten:0.10, spec:0.3},
+             {dir:[0.05,1.00,0.08],  col:[0.52,0.55,0.64], inten:0.22, spec:0.4},
+             {dir:[-0.20,-0.95,0.20], col:[0.32,0.30,0.28], inten:0.05, spec:0.1},
+             {dir:[-0.56,0.28,-0.78], col:[0.48,0.53,0.68], inten:0.28, spec:0.8} ],
 };
 /* 换场景时把灯换成该场景的一套；主光方向仍然归滑杆管 */
 function applySceneLights(id) {
@@ -1225,8 +1234,12 @@ function extraMat(e, bgId) {
   const m = extraMineral(e);
   const L = LUSTERS[m.luster] || LUSTERS.glass;
   const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.void;
-  const alpha = L.opaqueOnly ? 1 : defaultAlpha(m);
-  return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
+  // 产地透明度覆盖（如克什米尔之王）：附加晶体跟随主晶体的产地档位
+  const locT = state.locTransp && transpById(state.locTransp);
+  const alpha = L.opaqueOnly ? 1
+    : (locT ? locT.alpha : defaultAlpha(m));
+  const ambK = state.locAmbK != null ? state.locAmbK : BG.amb;
+  return { ...L, alpha, ambK, ambT: BG.ambT };
 }
 /* 绕 y 轴转一个三维点（自转用） */
 function rotYv(p, a) {
@@ -1243,6 +1256,14 @@ function instXform(inst, p) {
   if (inst.dropOff) w = [w[0] + inst.dropOff[0], w[1] + inst.dropOff[1], w[2] + inst.dropOff[2]];
   return rotYv(w, state.groupYaw);
 }
+/* 基质圆丘（scMatrixMesh 与 settle 共用的形状参数）：半径 R、中心高 H、衰减幂 K；
+   落点用噪声下限 SINK·hAt + BASE——丘面每点高度在 [SINK, 1.25]·hAt 间随机，
+   晶体坐到下限上，任何种子都保证不悬空（陷进基质是"长出来"，浮空是穿帮）。 */
+const SC_MOUND = { R: 2.20, H: 0.38, K: 1.25, SINK: 0.8, BASE: -0.012 };
+function scMoundLow(r) {
+  const t = Math.max(0, 1 - r / SC_MOUND.R);
+  return Math.max(SC_MOUND.SINK * SC_MOUND.H * Math.pow(t, SC_MOUND.K) + SC_MOUND.BASE, SC_MOUND.BASE);
+}
 /* 场景列表：主晶体在 index 0。按"离相机由远到近"排序——半透明实例必须从远往近画，
    否则前面画过的东西会被后面的 alpha 混合覆盖（GL 的 blend 不支持乱序）。 */
 function sceneList(bgId) {
@@ -1255,26 +1276,37 @@ function sceneList(bgId) {
     out.push({ geo: g, pos: e.pos, scale: e.scale, yaw: e.yaw, M: extraMat(e, bgId), main: false, e,
                cm: "mineral", uni: extraMineral(e).defColor || null });
   }
-  // 落桌补偿（产地组合的 settle 实例）：每帧把最低点对齐到主晶体的最低点，
-  // 于是接触求解把台面放到这条公共线上时，每颗都恰好"坐"在台面上，没有悬空。
-  // 只在 3D 桌面场景生效；拖动照常（实例贴着台面滑，抬不起来——物理上合理）。
-  const s3 = state.bg === "paper" && state.onTable;
+  // 落桌补偿（产地组合的 settle 实例）：把每颗的最低点放到该坐的支撑面上——
+  // 普通台面对齐主晶体最低点；基质圆丘则跟随自己足印处的丘面高度
+  // （丘面噪声取下限：宁可陷进基质半截，也不能悬空——"从基质里长出来"）。
+  // 只在 3D 桌面/标本照场景生效；拖动照常（实例贴着支撑面滑，抬不起来）。
+  const s3 = (state.bg === "paper" || state.bg === "void") && state.onTable;
   if (s3 && GEO) {
     // pos/顶点都在 groupYaw 之前的模型系里，竖直方向用 u = rotYv(up, −gy) 表达，
     // 主晶体与附加晶体在同一套基下量高度（rotYv 保点积：dot(rotYv(v,gy), up) = dot(v, u)）
     const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
     let hRef = 1e9;
     for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));   // 主晶体已含自然摆放旋转
+    const onMound = state.base === "matrix";
     for (const it of out) {
       if (it.main || !(it.e && it.e.settle) || !it.geo) { it.dropOff = null; continue; }
       const k0 = it.scale == null ? 1 : it.scale;
-      let h = 1e9;
+      let h = 1e9, pb = null;
       for (const v of it.geo.P) {
         const q = rotYv(v, it.yaw || 0);
-        h = Math.min(h, dot([q[0] * k0 + it.pos[0], q[1] * k0 + it.pos[1], q[2] * k0 + it.pos[2]], u));
+        const w = [q[0] * k0 + it.pos[0], q[1] * k0 + it.pos[1], q[2] * k0 + it.pos[2]];
+        const d = dot(w, u);
+        if (d < h) { h = d; pb = w; }     // 最低点连同位置一起留：足印要从它量起
       }
-      it.dropOff = Number.isFinite(h) && Number.isFinite(hRef)
-        ? [-u[0] * (h - hRef), -u[1] * (h - hRef), -u[2] * (h - hRef)] : null;
+      let target = hRef;
+      if (onMound && pb) {
+        const m = mv(SC_PRE_INV, pb);     // 最低点换回台面系，量足印半径
+        target = hRef + scMoundLow(Math.hypot(m[0], m[1]));   // 丘面高度是相对量：
+        // 台面/基质整体被接触求解平移到主晶体最低点（hRef），晶体几何又以原点为中心，
+        // 所以附加晶体的落点 = 主晶体最低点 + 足印处丘面高度。用绝对高度会整体悬空。
+      }
+      it.dropOff = Number.isFinite(h) && Number.isFinite(target)
+        ? [u[0] * (target - h), u[1] * (target - h), u[2] * (target - h)] : null;
     }
   } else {
     for (const it of out) it.dropOff = null;
@@ -1527,7 +1559,9 @@ const mat = (bgId) => {
   const BG = BACKGROUNDS[bgId || state.bg] || BACKGROUNDS.void;
   // 金属光泽天然不透明；其余按通透度档位/滑杆取值
   const alpha = L.opaqueOnly ? 1 : (state.alpha == null ? defaultAlpha(mineral()) : state.alpha);
-  return { ...L, alpha, ambK: BG.amb, ambT: BG.ambT };
+  // 产地组合可自带环境压暗（setup.ambK）：展示灯模式下，晶体环境随灯组走暗，避免被亮背景"洗白"
+  const ambK = state.locAmbK != null ? state.locAmbK : BG.amb;
+  return { ...L, alpha, ambK, ambT: BG.ambT };
 };
 
 /* 程序化"影棚环境"：方向固定在世界/观察空间，晶体转动时反射内容随之扫过各个晶面——
@@ -2192,10 +2226,19 @@ const SC_STRIDE = 8;                                  // pos3 + nrm3 + uv2
 /* 台面预倾（模型空间绕 x 轴 +0.30 rad）。绕序不需要管：法线是显式属性，且不开背面剔除。 */
 const SC_PRE = qToMat(qNorm(qAxis(1, 0, 0, 0.30)));
 const SC_PRE_N = mv(SC_PRE, [0, 0, 1]);               // 台面法线（模型空间）
+const SC_PRE_INV = [[SC_PRE[0][0], SC_PRE[1][0], SC_PRE[2][0]],
+                    [SC_PRE[0][1], SC_PRE[1][1], SC_PRE[2][1]],
+                    [SC_PRE[0][2], SC_PRE[1][2], SC_PRE[2][2]]];   // 旋转阵的逆 = 转置
 /* 3D 场景何时激活：纸面 + 勾了「放在桌面上」 + 不是导出路径（导出是图鉴卡，noTable）
    + GL 可用。GL 不可用时回落到照片背景 + 屏幕空间贴合的老路径，一行不缺。 */
 function scene3dActive(opts) {
-  return state.bg === "paper" && state.onTable && !(opts && opts.noTable) && glInit();
+  // paper = 台面+纸的目录照模式；void = 标本照模式（无台面无纸，只有基岩/晶体）
+  return (state.bg === "paper" || state.bg === "void") && state.onTable
+    && !(opts && opts.noTable) && glInit();
+}
+/* 黑底标本照：void 场景 + matrix 基岩——深色背景让标本自己发光（克什米尔之王实拍同款布光） */
+function voidSpecimen() {
+  return state.bg === "void" && state.base === "matrix" && state.onTable;
 }
 /* 自然摆放何时生效：3D 场景 + 用户没关掉。翻动几何要在 rebuildGeometry 里做
    （要把旋转烤进顶点），所以开关变化必须触发一次 rebuildGeometry。 */
@@ -2367,22 +2410,22 @@ function scSceneMeshes() {
    法线逐面平直（flat）：低多边形的碎面感正是粗糙基质该有的样子。 */
 function scMatrixMesh() {
   const rnd = mulberry32(20261025);
-  const R = 2.20, SEG = 48, RINGS = 4, H = 0.38;
+  const R = SC_MOUND.R, SEG = 48, RINGS = 4, H = SC_MOUND.H;
   const arr = [];
   const push = (p, n) => arr.push(p[0], p[1], p[2], n[0], n[1], n[2], 0, 0);
   const nrm = (a, b, c) => {
     const n = unit(cross(sub(b, a), sub(c, a)));
     return n[2] < 0 ? [-n[0], -n[1], -n[2]] : n;      // 朝上
   };
-  // 环形顶点：ri = 0..RINGS（0 为中心），半径线性、高度中心高边缘收到台面下 0.012
-  const hAt = (r) => H * Math.pow(Math.max(0, 1 - r / R), 1.25);
+  // 环形顶点：ri = 0..RINGS（0 为中心），半径线性、高度中心高边缘收到台面下 BASE
+  const hAt = (r) => H * Math.pow(Math.max(0, 1 - r / R), SC_MOUND.K);
   const pt = (ri, si) => {
     const r = (ri / RINGS) * R;
     const a = (si / SEG) * Math.PI * 2 + (ri % 2) * (Math.PI / SEG);   // 隔环错半格
     const rr = r * (1 + (rnd() - 0.5) * 0.20);                          // 轮廓不规则
     const z = ri === 0
       ? H * (0.9 + rnd() * 0.2)
-      : Math.max(hAt(r) * (0.8 + rnd() * 0.45) - 0.012, -0.012);
+      : Math.max(hAt(r) * (SC_MOUND.SINK + rnd() * (1.25 - SC_MOUND.SINK)) + SC_MOUND.BASE, SC_MOUND.BASE);
     return [Math.cos(a) * rr, Math.sin(a) * rr, z];
   };
   const ring = (ri) => Array.from({ length: SEG }, (_, si) => pt(ri, si));
@@ -2549,7 +2592,8 @@ function scShadowFan(contact, project, insts) {
 function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   if (!glSceneInit()) return false;
   const contact = scContact(project, insts);
-  const B = BACKGROUNDS.paper;
+  const B = BACKGROUNDS[state.bg] || BACKGROUNDS.paper;
+  const paperMode = state.bg === "paper";               // void = 黑底标本照：无台面无纸
   gl.useProgram(scProg);
   gl.uniform1f(scUni.uDist, GL_DIST);
   gl.uniform1f(scUni.uFoc, 3.05 * opts.scale * Math.min(opts.vw, opts.vh) * 0.5);
@@ -2577,27 +2621,32 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   gl.uniformMatrix3fv(scUni.uRot, false, colMajor(Rsc));
   gl.uniform3fv(scUni.uShift, new Float32Array(contact.P0));
   gl.uniform1f(scUni.uAlpha, 1); gl.uniform1f(scUni.uHasTex, 0);
-  gl.uniform3fv(scUni.uColor, new Float32Array([0.80, 0.78, 0.74]));   // 桌面：暖浅灰
-  gl.uniform1f(scUni.uSpec, 0.10); gl.uniform1f(scUni.uShin, 8);
-  bindAttr(scTableBuf);
-  gl.drawArrays(gl.TRIANGLES, 0, scTableN);
-  const tex = scTexture();
-  gl.uniform1f(scUni.uHasTex, tex ? 1 : 0);
-  gl.uniform3fv(scUni.uColor, new Float32Array(tex ? [1, 1, 1] : [0.95, 0.93, 0.88]));
-  gl.uniform1f(scUni.uSpec, 0.04); gl.uniform1f(scUni.uShin, 4);
-  bindAttr(scPaperBuf);
-  gl.drawArrays(gl.TRIANGLES, 0, scPaperN);
+  if (paperMode) {
+    gl.uniform3fv(scUni.uColor, new Float32Array([0.80, 0.78, 0.74]));   // 桌面：暖浅灰
+    gl.uniform1f(scUni.uSpec, 0.10); gl.uniform1f(scUni.uShin, 8);
+    bindAttr(scTableBuf);
+    gl.drawArrays(gl.TRIANGLES, 0, scTableN);
+  }
+  if (paperMode) {
+    const tex = scTexture();
+    gl.uniform1f(scUni.uHasTex, tex ? 1 : 0);
+    gl.uniform3fv(scUni.uColor, new Float32Array(tex ? [1, 1, 1] : [0.95, 0.93, 0.88]));
+    gl.uniform1f(scUni.uSpec, 0.04); gl.uniform1f(scUni.uShin, 4);
+    bindAttr(scPaperBuf);
+    gl.drawArrays(gl.TRIANGLES, 0, scPaperN);
+  }
   // 泥灰岩基岩：产地组合 setup.base = "matrix" 时，画在纸面上方，
   // 晶体底部（台面平面）正好埋进丘里约 0.30——"从基质里长出来"的观感
   if (state.base === "matrix" && scMatrixN) {
     gl.uniform1f(scUni.uHasTex, 0);
-    gl.uniform3fv(scUni.uColor, new Float32Array([0.45, 0.50, 0.44]));   // 灰绿色泥灰岩（白纸前要读成"岩石"）
+    const mc = state.matrixCol || [0.45, 0.50, 0.44];
+    gl.uniform3fv(scUni.uColor, new Float32Array(mc));
     gl.uniform1f(scUni.uSpec, 0.03); gl.uniform1f(scUni.uShin, 4);
     bindAttr(scMatrixBuf);
     gl.drawArrays(gl.TRIANGLES, 0, scMatrixN);
   }
   // 接触阴影：扇面顶点已是世界坐标 → uRot 单位阵、uShift 归零，直接画
-  const fan = (state.base === "matrix") ? null : scShadowFan(contact, project, insts);
+  const fan = (state.base === "matrix" || !paperMode) ? null : scShadowFan(contact, project, insts);
   // matrix 基岩时跳过接触阴影：扇面在台面上、被圆丘整个盖住，画了也看不见
   if (fan && fan.length <= 4096 * 4 && gl.bufferSubData) {
     gl.uniformMatrix3fv(scUni.uRot, false, colMajor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
@@ -3049,7 +3098,12 @@ function paint(g, opts) {
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.void;
   const s3d = scene3dActive(opts);           // 纸面 3D：桌面/纸张/阴影都在 GL 里
   if (!opts.noBg) {
-    if (s3d) {
+    if (s3d && voidSpecimen()) {
+      // 影棚黑：中央略亮的深灰渐变（标本照布光——晶体和白色基质在黑场上自己发光）
+      const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.42, 0, opts.vw * 0.5, opts.vh * 0.45, Math.max(opts.vw, opts.vh) * 0.75);
+      grd.addColorStop(0, "#20262d"); grd.addColorStop(0.55, "#141a20"); grd.addColorStop(1, "#0a0e13");
+      g.fillStyle = grd; g.fillRect(0, 0, opts.vw, opts.vh);
+    } else if (s3d) {
       // 3D 模式的底子：影棚暖灰渐变 + 底部压暗（台面 GL 网格浮在它上面；
       // 台面盖不满的地方读作"地面的阴影过渡"，不会露馅）
       const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.36, 0, opts.vw * 0.5, opts.vh * 0.42, Math.max(opts.vw, opts.vh) * 0.8);
@@ -3177,7 +3231,7 @@ function draw() {
   paint(ctx, { cx: W / 2, cy: H / 2, scale: state.zoom, vw: W, vh: H, pan: state.pan, dpr: DPR });
   // 舞台浮层（HUD/提示）的颜色跟着"场景背景"的明暗走：浅背景配深字，深背景配浅字。
   // 这和"主题三态"是两件事——主题管左右面板，这里管画布上的字。
-  const bgDark = !!(BACKGROUNDS[state.bg] && BACKGROUNDS[state.bg].dark);
+  const bgDark = !!(BACKGROUNDS[state.bg] && BACKGROUNDS[state.bg].dark) || voidSpecimen();
   if (document.body) {
     document.body.classList.toggle("lightbg", !bgDark);
     document.body.classList.toggle("darkbg", bgDark);
@@ -3834,7 +3888,7 @@ function enterMineralPage(mineralId, locId) {
       e.mask = it.mask != null ? it.mask : defMask(extraHabit(e));
       e.pos = (it.pos || [0, 0, 0]).slice();
       e.scale = it.scale != null ? it.scale : 1;
-      e.yaw = it.yaw != null ? it.yaw : 0;
+      e.yaw = (it.yaw != null ? it.yaw : 0) * Math.PI / 180;   // 数据用角度，渲染用弧度
       e.settle = true;             // 落桌补偿：sceneList 每帧把最低点对齐主晶体
       state.extras.push(e);
     }
@@ -3850,7 +3904,21 @@ function enterMineralPage(mineralId, locId) {
   }
   state.onTable = true;
   state.bgPicked = true;
-  applySceneLights(state.bg);
+  // 产地可覆盖：灯组（展示灯）+ 环境压暗 + 基岩颜色 + 自然摆放开关（无产地 = 全用默认）
+  if (loc) {
+    state.locAmbK = loc.setup.ambK != null ? loc.setup.ambK : null;
+    state.matrixCol = loc.setup.matrixCol || null;
+    state.locTransp = loc.setup.transp || null;
+    if (loc.setup.restPose !== undefined) state.restPose = !!loc.setup.restPose;
+    if (loc.setup.transp && transpById(loc.setup.transp)) {
+      state.transp = loc.setup.transp;
+      state.alpha = transpById(loc.setup.transp).alpha;
+    }
+    applySceneLights(loc.setup.rig || state.bg);
+  } else {
+    state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
+    applySceneLights(state.bg);
+  }
   rebuildGeometry();
   syncPanels(); renderBackgrounds(); renderExtras(); renderMuseum(); draw();
 }
@@ -3976,6 +4044,8 @@ function enterBrowse() {
   document.body.classList.add("browse-mode");
   document.body.classList.remove("museum-mode");
   state.museum = null;
+  state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
+  applySceneLights(state.bg);
   document.getElementById("museum").style.display = "none";
   document.getElementById("browse").style.display = "";
   if (!wasBrowse) resize();
@@ -3988,6 +4058,8 @@ function enterStudio() {
     document.getElementById("browse").style.display = "none";
     document.getElementById("museum").style.display = "none";
     state.museum = null;
+    state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
+    applySceneLights(state.bg);
     resize(); syncPanels(); draw();
   }
   markPtab("studio");

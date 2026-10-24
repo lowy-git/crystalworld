@@ -912,12 +912,12 @@ const glLastOptsOk = (glw, vw, vh) => {
 
   // ── S1：3D 场景（纸面）——接触求解 / 投影阴影 / 深度范围 / 场景着色器纪律 ──
   run(`state.bg = "paper"; state.onTable = true; state.base = "none"; draw();`);
-  check("scene3dActive：纸面+勾选桌面时激活（导出 noTable 时必须关）", (() => {
-    const on = run(`scene3dActive({})`);
+  check("scene3dActive：paper=目录照模式、void=黑底标本照模式（导出 noTable 时必须关）", (() => {
+    const onPaper = run(`scene3dActive({})`);
+    const onVoid = run(`(state.bg = "void", scene3dActive({}))`);
     const off = run(`scene3dActive({ noTable: true })`);
-    const otherBg = run(`(state.bg = "void", scene3dActive({}))`);
     run(`state.bg = "paper";`);
-    return on === true && off === false && otherBg === false;
+    return onPaper === true && onVoid === true && off === false;
   })());
   check("接触求解：台面托住所有晶体（每个顶点都在台面之上，最低点恰好接触）", (() => {
     const r = run(`(() => {
@@ -1113,23 +1113,27 @@ const glLastOptsOk = (glw, vw, vh) => {
       && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
       && o.items === 2 && o.hash === "#/m/pyrite/navajun";
   })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
-  check("落桌补偿：settle 实例的最低点与主晶体最低点等高（同一 pre-groupYaw 基）", (() => {
+  check("落桌补偿：settle 实例坐在自己的支撑面上（普通台面=主晶体最低点；基质丘=足印处丘面下限）", (() => {
     const r = run(`(() => {
       const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
       let hRef = 1e9;
       for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));
+      const onMound = state.base === "matrix";
       const insts = sceneList(state.bg).filter(it => !it.main);
       let worst = -1e9;
       for (const it of insts) {
-        let h = 1e9;
+        let h = 1e9, pb = null;
         for (const v of it.geo.P) {
           const q = rotYv(v, it.yaw || 0);
           const w = [q[0]*(it.scale==null?1:it.scale) + it.pos[0] + (it.dropOff ? it.dropOff[0] : 0),
                      q[1]*(it.scale==null?1:it.scale) + it.pos[1] + (it.dropOff ? it.dropOff[1] : 0),
                      q[2]*(it.scale==null?1:it.scale) + it.pos[2] + (it.dropOff ? it.dropOff[2] : 0)];
-          h = Math.min(h, dot(w, u));
+          const d = dot(w, u);
+          if (d < h) { h = d; pb = w; }
         }
-        worst = Math.max(worst, Math.abs(h - hRef));
+        let target = hRef;
+        if (onMound && pb) { const m = mv(SC_PRE_INV, pb); target = hRef + scMoundLow(Math.hypot(m[0], m[1])); }
+        worst = Math.max(worst, Math.abs(h - target));
       }
       return +worst.toFixed(9);
     })()`);
