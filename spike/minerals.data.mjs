@@ -21,6 +21,7 @@ export const SYSTEMS = [
 export const MINERALS = [
   {
     id: "fluorite",
+  defColor: "#4fae7a",
   luster: "glass", transp: "clear", inclusion: "pyrite",   // 玻璃光泽（Mindat: Vitreous）；宝石级完全透明
     zh: "萤石", en: "Fluorite", formula: "CaF₂",
     system: "cubic", pointGroup: "m-3m",
@@ -66,6 +67,7 @@ export const MINERALS = [
   },
   {
     id: "pyrite",
+  defColor: "#c9a227",
   luster: "metallic", transp: "opaque", inclusion: "none",   // 金属光泽、天然不透明（唯一例外，不用改）
     zh: "黄铁矿", en: "Pyrite", formula: "FeS₂",
     system: "cubic", pointGroup: "m-3",
@@ -112,6 +114,7 @@ export const MINERALS = [
   },
   {
     id: "diamond",
+  defColor: "#eef4f8",
   luster: "adamantine", transp: "clear", inclusion: "none",  // 金刚光泽（adamantine 的命名来源）；宝石级透明
     zh: "钻石（金刚石）", en: "Diamond", formula: "C",
     system: "cubic", pointGroup: "m-3m",
@@ -153,6 +156,7 @@ export const MINERALS = [
   },
   {
     id: "garnet",
+  defColor: "#8e2b33",
   luster: "glass", transp: "clear", inclusion: "rutile",     // 铁铝榴石：玻璃光泽（Mindat: Vitreous，有的文献记树脂光泽），不是金刚
     zh: "石榴石", en: "Garnet", formula: "Fe₃Al₂(SiO₄)₃",
     system: "cubic", pointGroup: "m-3m",
@@ -187,6 +191,7 @@ export const MINERALS = [
   },
   {
     id: "scheelite",
+  defColor: "#e0a23c",
   luster: "adamantine", transp: "clear", inclusion: "fracture",  // 金刚光泽-玻璃光泽（Mindat: Sub-adamantine, Vitreous）
     zh: "白钨矿", en: "Scheelite", formula: "CaWO₄",
     system: "tetragonal", pointGroup: "4/m",
@@ -213,6 +218,7 @@ export const MINERALS = [
   },
   {
     id: "beryl",
+  defColor: "#7fb6c9",
   luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽；宝石级（海蓝宝/祖母绿）透明
     zh: "绿柱石", en: "Beryl", formula: "Be₃Al₂Si₆O₁₈",
     system: "hexagonal", pointGroup: "6/mmm",
@@ -246,6 +252,7 @@ export const MINERALS = [
   },
   {
     id: "quartz",
+  defColor: "#8b5cb0",
   luster: "glass", transp: "clear", inclusion: "rutile",     // 玻璃光泽；水晶（rock crystal）无色透明
     zh: "石英", en: "Quartz", formula: "SiO₂",
     system: "trigonal", pointGroup: "32",
@@ -328,6 +335,7 @@ export const MINERALS = [
   },
   {
     id: "calcite",
+  defColor: "#e8e6dd",
   luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽（Mindat: Vitreous，解理面珍珠光泽），冰洲石无色透明——之前误标金刚
     zh: "方解石", en: "Calcite", formula: "CaCO₃",
     system: "trigonal", pointGroup: "-3m",
@@ -385,6 +393,7 @@ export const MINERALS = [
   },
   {
     id: "topaz",
+  defColor: "#e0b169",
   luster: "glass", transp: "clear", inclusion: "fluid",
     zh: "黄玉（托帕石）", en: "Topaz", formula: "Al₂SiO₄(F,OH)₂",
     system: "orthorhombic", pointGroup: "mmm",
@@ -420,6 +429,7 @@ export const MINERALS = [
   },
   {
     id: "aragonite",
+  defColor: "#e9e4d6",
   luster: "glass", transp: "clear", inclusion: "fluid",      // 玻璃光泽；透明档按最高品级（宝石级文石透明，常见半透明）
     zh: "文石", en: "Aragonite", formula: "CaCO₃",
     system: "orthorhombic", pointGroup: "mmm",
@@ -455,6 +465,7 @@ export const MINERALS = [
   },
   {
     id: "gypsum",
+  defColor: "#eae7e0",
   luster: "glass", transp: "clear", inclusion: "none",       // 玻璃光泽、解理面珍珠光泽（透石膏 selenite 完全透明）——蜡状是雪花石膏那种块状的，不是晶体
     zh: "石膏", en: "Gypsum", formula: "CaSO₄·2H₂O",
     system: "monoclinic", pointGroup: "2/m",
@@ -488,6 +499,7 @@ export const MINERALS = [
   },
   {
     id: "albite",
+  defColor: "#ece9e4",
   luster: "glass", transp: "clear", inclusion: "tourm",      // 玻璃光泽；清透板状晶体可达透明（常见半透明，按最高取）
     zh: "斜长石（钠长石）", en: "Albite", formula: "NaAlSi₃O₈",
     system: "triclinic", pointGroup: "-1",

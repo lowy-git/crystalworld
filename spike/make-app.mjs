@@ -409,6 +409,7 @@ for (const m of MINERALS) {
     cell: m.cell, cellText: m.cellText, intro: m.intro, colors: m.colors,
     about: m.about ?? null,
     luster: m.luster ?? "glass",
+    defColor: m.defColor ?? null,   // 最具代表性的颜色：换矿物时的默认染色
     transp: m.transp ?? null,
     inclusion: m.inclusion ?? null,
     confidence: m.confidence, source: m.source,

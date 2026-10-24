@@ -79,7 +79,7 @@ gl_VertexID gl_InstanceID gl_VertexIndex gl_DrawID gl_Layer gl_ViewportIndex
 gl_NumWorkGroups gl_WorkGroupID gl_LocalInvocationID gl_GlobalInvocationID gl_LocalInvocationIndex`
   .split(/\s+/).filter(Boolean));
 
-const GLSL_TYPE = "(?:void|bool|int|uint|float|double|vec[234]|ivec[234]|uvec[234]|bvec[234]|mat[234](?:x[234])?)";
+const GLSL_TYPE = "(?:void|bool|int|uint|float|double|vec[234]|ivec[234]|uvec[234]|bvec[234]|mat[234](?:x[234])?|sampler[123]D|samplerCube)";
 
 /** 返回 [] 表示没问题；否则是一串 "未声明标识符"（拼错名字就是编译失败） */
 function glslUndeclared(src) {
@@ -718,12 +718,12 @@ const glLastOptsOk = (glw, vw, vh) => {
   return Number(m[1]) === Math.round(vw * dpr) && Number(m[2]) === Math.round(vh * dpr);
 };
 {
-  // 1) 桩里录到了几个着色器/程序
+  // 1) 桩里录到了几个着色器/程序（晶体 2 个 + 3D 场景 2 个）
   check("WebGL 桩已装（getContext 按 type 分流）", run(`typeof glInit`) === "function" && glStat.shaders.length >= 2, `shaders=${glStat.shaders.length}`);
-  check("两个着色器都编译通过", glStat.shaders.length === 2 && glStat.shaders.every(s => s.compiled),
+  check("四个着色器（晶体 VS/FS + 场景 VS/FS）都编译通过", glStat.shaders.length === 4 && glStat.shaders.every(s => s.compiled),
     glStat.shaders.map(s => `${s.type === 0x8B31 ? "VS" : "FS"}:${s.compiled ? "ok" : s.log}`).join(" "));
   check("着色器 info log 干净（无 warning）", glStat.shaders.every(s => s.log === ""), JSON.stringify(glStat.shaders.map(s => s.log)));
-  check("程序链接成功且 info log 干净", glStat.programs.length === 1 && glStat.programs[0].linked && glStat.programs[0].log === "");
+  check("两个程序（晶体 + 场景）都链接成功且 info log 干净", glStat.programs.length === 2 && glStat.programs.every(p => p.linked && p.log === ""));
   check("深度测试开启且用 LEQUAL", glStat.depthFunc === 0x0203, String(glStat.depthFunc));
   check("混合函数 = SRC_ALPHA / ONE_MINUS_SRC_ALPHA", JSON.stringify(glStat.blendFunc) === "[770,771]", JSON.stringify(glStat.blendFunc));
 
@@ -731,7 +731,7 @@ const glLastOptsOk = (glw, vw, vh) => {
   const src = glStat.shaders.map(s => s.src).join("\n");
   const declU = [...src.matchAll(/uniform\s+\w+\s+(\w+)/g)].map(m => m[1]);
   const declA = [...src.matchAll(/(?:in|layout\s*\(location\s*=\s*\d+\s*\)\s*in)\s+\w+\s+(\w+)/g)]
-    .map(m => m[1]).filter(n => n !== "vCol" && n !== "vFront" && n !== "vPos" && n !== "vNrm");
+    .map(m => m[1]).filter(n => n !== "vCol" && n !== "vFront" && n !== "vPos" && n !== "vNrm" && n !== "vUV");
   const uniq = (a) => [...new Set(a)];
   const missU = uniq(declU).filter(n => !glStat.uniforms.has(n));
   const missA = uniq(declA).filter(n => !glStat.attrs.has(n));
@@ -847,14 +847,18 @@ const glLastOptsOk = (glw, vw, vh) => {
   //     而 2D 棱线不除 —— 正是"棱线飘在晶体外、且随旋转呼吸"。
   //     这里从着色器源码里把 gl_Position 的四个分量抠出来，按 GPU 的规则除一遍再比。
   check("gl_Position.w 是常量 1.0（GPU 的透视除法不会把画面再缩一遍）", (() => {
-    const src = String(run(`GL_VS`) || "");
-    const m = /gl_Position\s*=\s*vec4\s*\(([\s\S]*?)\)\s*;/.exec(src);
-    if (!m) return "找不到 gl_Position";
-    const parts = m[1].split(",").map(s => s.trim());
-    if (parts.length !== 4) return "分量数不是 4：" + parts.length;
-    const w = parts[3];
-    return w === "1.0" ? "ok" : `第 4 分量是 ${w}（应为 1.0）`;
-  })(), String(run(`/gl_Position\\s*=\\s*vec4\\s*\\(([\\s\\S]*?)\\)\\s*;/.exec(GL_VS)[1].replace(/\\s+/g," ").slice(0,140)`) || ""));
+    // 顶层逗号拆分：z 分量里嵌套的括号也带逗号，直接 split(",") 会把 4 个分量数成 5 个。
+    // （旧版此断言返回字符串——字符串恒真，等于从不设卡；这版改成真正的布尔判定。）
+    const wOf = (src) => {
+      const m = /gl_Position\s*=\s*vec4\s*\(([\s\S]*?)\)\s*;/.exec(String(src || ""));
+      if (!m) return null;
+      let s = m[1];
+      while (/\([^()]*\)/.test(s)) s = s.replace(/\([^()]*\)/g, "\u0000");
+      return s.split(",").map(x => x.trim());
+    };
+    const a = wOf(run(`GL_VS`)), b = wOf(run(`SC_VS`));
+    return a !== null && a.length === 4 && a[3] === "1.0" && b !== null && b.length === 4 && b[3] === "1.0";
+  })(), `gl=${(() => { const m = /gl_Position\s*=\s*vec4\s*\(([\s\S]*?)\)\s*;/.exec(String(run("GL_VS") || "")); return m ? m[1].replace(/\s+/g, " ").slice(0, 100) : "?"; })()}`);
 
   // 6) 旋转只改 uniform、不重传缓冲：连画两帧，uploads 不增加
   const up0 = glStat.uploads;
@@ -866,6 +870,103 @@ const glLastOptsOk = (glw, vw, vh) => {
 
   // 7) 回落：2D 路径仍在（无 GL 时不能白屏）
   check("Canvas 2D 兜底路径仍存在", run(`typeof paintFaces2D`) === "function" && run(`typeof paintOverlay`) === "function");
+
+  // ── S1：3D 场景（纸面）——接触求解 / 投影阴影 / 深度范围 / 场景着色器纪律 ──
+  run(`state.bg = "paper"; state.onTable = true; state.base = "none"; draw();`);
+  check("scene3dActive：纸面+勾选桌面时激活（导出 noTable 时必须关）", (() => {
+    const on = run(`scene3dActive({})`);
+    const off = run(`scene3dActive({ noTable: true })`);
+    const otherBg = run(`(state.bg = "void", scene3dActive({}))`);
+    run(`state.bg = "paper";`);
+    return on === true && off === false && otherBg === false;
+  })());
+  check("接触求解：台面托住所有晶体（每个顶点都在台面之上，最低点恰好接触）", (() => {
+    const r = run(`(() => {
+      const insts = sceneList(state.bg);
+      const p = makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 });
+      const c = scContact(p, insts);
+      let worst = 1e9, minD = 1e9;
+      for (const it of insts) {
+        for (const q of it.geo.P) {
+          const m = it.main ? q : instXform(it, q);
+          const v = dot(m, SC_PRE_N);
+          if (v < minD) minD = v;
+          const W = mv(p.R, m);
+          const h = dot(sub(W, c.P0), c.nW);   // 顶点到台面的有向距离
+          if (h < worst) worst = h;
+        }
+      }
+      return JSON.stringify({ d: +c.d.toFixed(6), minD: +minD.toFixed(6), worst: +worst.toFixed(6), shiftDot: +dot(c.P0, c.nW).toFixed(6) });
+    })()`);
+    const o = JSON.parse(r);
+    return Math.abs(o.d - o.minD) < 1e-5 && o.worst >= -0.008 && Math.abs(o.shiftDot - (o.minD - 0.006)) < 1e-5;
+  })(), `info=${run(`(() => { const p = makeProject({cx:400,cy:300,scale:1,vw:800,vh:600}); const c = scContact(p, sceneList(state.bg)); return "d=" + c.d.toFixed(4) + " shift=" + c.s.toFixed(4); })()`)}`);
+  check("接触阴影：顶点沿主光方向投到台面（影子点既在台面上、又落在背离光源的一侧）", (() => {
+    const r = run(`(() => {
+      const insts = sceneList(state.bg);
+      const p = makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 });
+      const c = scContact(p, insts);
+      const L = LIGHTS[0];
+      const dl = [-L.dir[0], -L.dir[1], -L.dir[2]];
+      const den = dot(dl, c.nW);
+      if (Math.abs(den) < 0.12) return JSON.stringify({ skip: true });
+      const it0 = insts[0];
+      const q = it0.main ? it0.geo.P[0] : instXform(it0, it0.geo.P[0]);
+      const W = mv(p.R, q);
+      const t = dot(sub(W, c.P0), c.nW) / den;
+      const S = [W[0] - dl[0] * t, W[1] - dl[1] * t, W[2] - dl[2] * t];
+      const onPlane = Math.abs(dot(sub(S, c.P0), c.nW));
+      const along = dot(sub(S, W), dl);      // 影子点相对顶点沿光行进方向的位移 ≥ 0
+      return JSON.stringify({ skip: false, onPlane: +onPlane.toExponential(2), along: +along.toFixed(4) });
+    })()`);
+    const o = JSON.parse(r);
+    return o.skip === true || (o.onPlane < 1e-9 && o.along >= -1e-9);
+  })());
+  check("阴影扇面：能生成三角形扇（顶点数 ≥ 9 且是 3 的倍数）", (() => {
+    const n = run(`(() => {
+      const insts = sceneList(state.bg);
+      const p = makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 });
+      const fan = scShadowFan(scContact(p, insts), p, insts);
+      return fan ? fan.length / SC_STRIDE : 0;
+    })()`);
+    return Number(n) >= 9 && Number(n) % 3 === 0;
+  })(), `verts=${run(`(() => { const p = makeProject({cx:400,cy:300,scale:1,vw:800,vh:600}); const f = scShadowFan(scContact(p, sceneList(state.bg)), p, sceneList(state.bg)); return f ? f.length/SC_STRIDE : 0; })()`)}`);
+  check("深度范围把 3D 台面包进去（比只有晶体时更宽）", (() => {
+    const r = run(`(() => {
+      const insts = sceneList(state.bg);
+      const p = makeProject({ cx: 400, cy: 300, scale: 1, vw: 800, vh: 600 });
+      const a = glDepthRange(p, insts, null);
+      const b = glDepthRange(p, insts, scBoundsPts(p, insts));
+      return JSON.stringify([a[0], a[1], b[0], b[1]]);
+    })()`);
+    const [a0, a1, b0, b1] = JSON.parse(r);
+    return b0 <= a0 + 1e-9 && b1 >= a1 - 1e-9 && (b1 - b0) > (a1 - a0) && b0 >= 0.4;
+  })(), `range=${run(`(() => { const p = makeProject({cx:400,cy:300,scale:1,vw:800,vh:600}); const i = sceneList(state.bg); return JSON.stringify(glDepthRange(p, i, scBoundsPts(p, i))); })()`)}`);
+  check("场景缓冲只上传一次（台面/纸静态，阴影走 bufferSubData；旋转一帧 uploads 不变）", (() => {
+    const up0 = glStat.uploads;
+    run(`state.quat = qNorm(qMul(state.quat, qAxis(0, 1, 0, 0.25))); draw();`);
+    const same = glStat.uploads === up0;
+    run(`state.quat = Q_VIEW.slice(); draw();`);
+    return same;
+  })(), `uploads ${glStat.uploads}`);
+  run(`state.bg = "paper"; draw();`);
+
+  // ── 默认颜色：换矿物 = 最具代表性的颜色（defColor），单形配色是最后一项 ──
+  check("12 种矿物都有 defColor 且都是自己色板里的颜色", (() => {
+    const bad = run(`DATA.minerals.filter(m => !m.defColor || !(m.colors || []).some(c => c.hex === m.defColor)).map(m => m.id)`);
+    return bad.length === 0;
+  })(), `缺=${run(`DATA.minerals.filter(m => !m.defColor).map(m => m.id).join(",")`)}`);
+  check("标志性默认色：萤石绿 / 黄铁矿金 / 水晶紫（用户点名）", (() => {
+    const f = run(`selectMineral("fluorite"); [state.colorMode, state.uniform]`);
+    const p = run(`selectMineral("pyrite"); state.uniform`);
+    const q = run(`selectMineral("quartz"); state.uniform`);
+    run(`selectMineral("fluorite"); syncPanels();`);
+    return f[0] === "mineral" && f[1] === "#4fae7a" && p === "#c9a227" && q === "#8b5cb0";
+  })(), `fluorite=${run(`(DATA.minerals.find(m=>m.id==="fluorite")||{}).defColor`)} pyrite=${run(`(DATA.minerals.find(m=>m.id==="pyrite")||{}).defColor`)} quartz=${run(`(DATA.minerals.find(m=>m.id==="quartz")||{}).defColor`)}`);
+  check("「单形」配色在色块列表最后一项（默认是单色）", (() => {
+    const last = run(`(() => { renderSwatches(); const c = document.getElementById("swatches").children; return c.length ? c[c.length - 1].className : ""; })()`);
+    return /swform/.test(String(last));
+  })(), `last=${run(`(() => { renderSwatches(); const c = document.getElementById("swatches").children; return c.length ? c[c.length-1].className : "none"; })()`)}`);
   check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
   // 颜色必须是 0..1：GL 顶点属性不分量纲，0..255 会被 clamp 成全白
   const cols = run(`(() => { const s = new Set(); for (const f of GEO.faces) s.add(JSON.stringify(faceColor(f))); return [...s]; })()`);

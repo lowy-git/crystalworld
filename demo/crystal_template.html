@@ -969,7 +969,7 @@ const state = {
   pan: [0, 0],
   axes: true, edges: true, spin: false,
   inputMode: "mouse",
-  colorMode: "form",
+  colorMode: "mineral",   // 默认单色（该矿物最具代表性的颜色）；「单形」是色块列表的最后一项
   luster: null,
   transp: null,        // 通透度档位：opaque / transl / clear / custom
   alpha: null,         // 实际通透度 0–1
@@ -1855,8 +1855,9 @@ function glBuild(geo, cm, uni, twinShow) {
   return new Float32Array(a);
 }
 
-/* 深度范围取当前姿态下的紧外框：范围越窄，深度缓冲精度越高 */
-function glDepthRange(project, list) {
+/* 深度范围取当前姿态下的紧外框：范围越窄，深度缓冲精度越高。
+   extraPts：3D 场景的台面外框点（晶体算的范围不包含场景网格，会把桌子裁掉）。 */
+function glDepthRange(project, list, extraPts) {
   const R = project.R, DIST = project.DIST;
   let lo = 1e9, hi = -1e9;
   const insts = list && list.length ? list : [{ geo: GEO, pos: [0, 0, 0], scale: 1, yaw: 0 }];
@@ -1866,6 +1867,10 @@ function glDepthRange(project, list) {
       const z = DIST - mv(R, instXform(it, p0))[2];
       if (z < lo) lo = z; if (z > hi) hi = z;
     }
+  }
+  if (extraPts) for (const p of extraPts) {
+    const z = DIST - p[2];
+    if (z < lo) lo = z; if (z > hi) hi = z;
   }
   if (lo > hi) return [0.4, 40];
   return [Math.max(0.4, lo - 1.0), hi + 1.0];
@@ -1904,14 +1909,16 @@ function glRender(project, M, opts, list) {
   // 表现为「右键/Shift 平移后，GL 填充不动、2D 棱线动」——棱线整片飘到晶体外面。
   gl.uniform1f(glUni.uCx, project.cx); gl.uniform1f(glUni.uCy, project.cy);
   gl.uniform1f(glUni.uVw, vw);   gl.uniform1f(glUni.uVh, vh);
-  const [zn, zf] = glDepthRange(project, insts);
+  const sceneOn = scene3dActive(opts);               // 3D 台面：先画场景再画晶体，共享深度
+  const [zn, zf] = glDepthRange(project, insts, sceneOn ? scBoundsPts(project, insts) : null);
   gl.uniform1f(glUni.uZn, zn); gl.uniform1f(glUni.uZf, zf);
   const e = ENV_LIGHTS, g3 = LIGHTS;
   // 灯的数量由 LIGHTS 决定（现在是 6 盏），三组 uniform 都用循环拼，别再写死下标
   const litArr = (f) => { const out = []; for (const L of g3) out.push(...f(L)); return new Float32Array(out); };
-  gl.uniform3fv(glUni.uLigDir, litArr(L => L.dir));
-  gl.uniform3fv(glUni.uLigCol, litArr(L => L.col));
-  gl.uniform3fv(glUni.uLigInt, litArr(L => [L.inten, L.spec, 0]));
+  const litDirA = litArr(L => L.dir), litColA = litArr(L => L.col), litIntA = litArr(L => [L.inten, L.spec, 0]);
+  gl.uniform3fv(glUni.uLigDir, litDirA);
+  gl.uniform3fv(glUni.uLigCol, litColA);
+  gl.uniform3fv(glUni.uLigInt, litIntA);
   gl.uniform3fv(glUni.uEnvDir, new Float32Array([...e[0].dir, ...e[1].dir, ...e[2].dir]));
   gl.uniform3fv(glUni.uEnvCol, new Float32Array([...e[0].col, ...e[1].col, ...e[2].col]));
   gl.uniform3fv(glUni.uEnvPar, new Float32Array(
@@ -1919,6 +1926,9 @@ function glRender(project, M, opts, list) {
   gl.uniform1f(glUni.uExpo, EXPO);
   gl.uniform1f(glUni.uKeyExpo, KEY_EXPO);
   gl.uniform1f(glUni.uFillGain, FILL_GAIN);
+  if (sceneOn) glSceneDraw(project, opts, insts, zn, zf, { dir: litDirA, col: litColA, int: litIntA });
+  gl.useProgram(glProg);   // glSceneDraw 切到了场景程序：晶体循环前必须切回来，
+                           // 否则晶体的 uniform 全部上传到错误程序上，画面上晶体直接消失
   const S = GL_STRIDE * 4;
   gl.bindBuffer(gl.ARRAY_BUFFER, glVBO);
   gl.enableVertexAttribArray(glAttr.aPos); gl.vertexAttribPointer(glAttr.aPos, 3, gl.FLOAT, false, S, 0);
@@ -1995,6 +2005,311 @@ function cwDiag() {
   return out;
 }
 window.cwDiag = cwDiag;
+
+/* 全局错误横幅：用户侧出 JS 错误时，控制台之外给一个可见信号（含首条报错的位置），
+   不然"画面空了"只能靠猜。点了可以关掉。 */
+let jsFailShown = false;
+window.addEventListener("error", (ev) => {
+  console.error("[CrystalWorld]", ev.error || ev.message);
+  if (document.body && !jsFailShown) {
+    jsFailShown = true;
+    const d = document.createElement("div");
+    d.id = "jsfail";
+    d.textContent = "脚本出错：" + (ev.message || "") + "（详见控制台）";
+    d.style.cssText = "position:fixed;left:8px;bottom:40px;z-index:99;max-width:70%;" +
+      "padding:6px 10px;border-radius:6px;background:rgba(120,20,20,.92);color:#fff;font:12px/1.5 sans-serif";
+    d.onclick = () => d.remove();
+    document.body.appendChild(d);
+  }
+});
+
+/* ==================== 3D 场景网格（S1：纸面） ====================
+   照片背景的根本缺陷：晶体和背景不在同一个三维空间——透视对不上、接触阴影
+   是画上去的椭圆、晶体反射的也不是眼前的场景。3D 场景把桌面/纸做成真正的
+   网格，与晶体共用同一套投影和深度缓冲：透视自动匹配，接触阴影变成沿主光
+   方向的真实投影（扇面凸包，一帧一次解析求解，无逐帧物理）。
+   几何在**模型空间**与晶体刚性绑定：转晶体＝转整个台面（转台式观感）。
+   地板取模型 z=0 平面（Q_VIEW 下模型 +z 朝上，晶体默认"立"在它上面），
+   台面再绕模型 x 轴预倾 17°——默认视角的俯角从 9° 抬到约 26°，产品照机位。
+   台面高度每帧取「所有晶体在该平面法线上的最低支撑点」平移贴合（屏幕空间的
+   fitToTable 不再参与，3D 透视自己给出桌面在画面里的位置）。 */
+const SC_STRIDE = 8;                                  // pos3 + nrm3 + uv2
+/* 台面预倾（模型空间绕 x 轴 +0.30 rad）。绕序不需要管：法线是显式属性，且不开背面剔除。 */
+const SC_PRE = qToMat(qNorm(qAxis(1, 0, 0, 0.30)));
+const SC_PRE_N = mv(SC_PRE, [0, 0, 1]);               // 台面法线（模型空间）
+/* 3D 场景何时激活：纸面 + 勾了「放在桌面上」 + 不是导出路径（导出是图鉴卡，noTable）
+   + GL 可用。GL 不可用时回落到照片背景 + 屏幕空间贴合的老路径，一行不缺。 */
+function scene3dActive(opts) {
+  return state.bg === "paper" && state.onTable && !(opts && opts.noTable) && glInit();
+}
+
+const SC_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aUV;
+uniform mat3 uRot;
+uniform vec3 uShift;
+uniform float uDist, uFoc, uCx, uCy, uVw, uVh, uZn, uZf;
+out vec3 vPos; out vec3 vNrm; out vec2 vUV;
+vec2 screen(vec3 w) {
+  float z = max(uDist - w.z, 0.4);
+  return vec2(((uCx + w.x * uFoc / z) / uVw) * 2.0 - 1.0,
+              1.0 - ((uCy - w.y * uFoc / z) / uVh) * 2.0);
+}
+void main() {
+  vec3 w = uRot * aPos + uShift;
+  vPos = w; vNrm = uRot * aNrm; vUV = aUV;
+  float z = max(uDist - w.z, 0.4);
+  // 与 GL_VS 同一条纪律：xy 已是 NDC，clip.w 必须是常量 1.0（GPU 还会再除一次 w）
+  vec2 sp = screen(w);
+  gl_Position = vec4(sp.x, sp.y, (2.0 * (z - uZn) / max(uZf - uZn, 1e-4)) - 1.0, 1.0);
+}`;
+
+/* 场景着色：六灯 Lambert + 与晶体同款的"只按主光归一"，材质就三个参数
+   （颜色 / 高光强度 / 锐度），纸面带贴图（贴图就是纸面照片本身）。 */
+const SC_FS = `#version 300 es
+precision highp float;
+in vec3 vPos; in vec3 vNrm; in vec2 vUV;
+uniform vec3 uLigDir[6];
+uniform vec3 uLigCol[6];
+uniform vec3 uLigInt[6];
+uniform float uDist, uAmbK, uExpo, uKeyExpo, uFillGain, uSpec, uShin, uAlpha, uHasTex;
+uniform vec3 uAmbT;
+uniform vec3 uColor;
+uniform sampler2D uTex;
+out vec4 frag;
+void main() {
+  vec3 n = normalize(vNrm);
+  vec3 v = normalize(vec3(0.0, 0.0, uDist) - vPos);
+  float lam = 0.0, sp = 0.0;
+  for (int i = 0; i < 6; i++) {
+    vec3 l = normalize(uLigDir[i]);
+    float inten = uLigInt[i].x, spec = uLigInt[i].y;
+    float gain = (i == 0) ? 1.0 : uFillGain;
+    lam += gain * inten * max(0.0, dot(n, l));
+    vec3 hv = normalize(l + v);
+    sp += gain * inten * spec * pow(max(0.0, dot(n, hv)), uShin);
+  }
+  float keyI = max(uLigInt[0].x, 0.05);
+  float keyS = max(uLigInt[0].x * uLigInt[0].y, 0.02);
+  lam = pow(lam / keyI, 1.12) * uKeyExpo;
+  sp = sp / keyS * uSpec * 0.80;
+  vec3 base = uColor;
+  if (uHasTex > 0.5) base *= texture(uTex, vUV).rgb;
+  vec3 c = base * (uAmbK * uAmbT + 0.62 * lam) + sp;
+  frag = vec4(clamp(c * uExpo, 0.0, 1.0), uAlpha);
+}`;
+
+/* 台面网格：桌面（顶面 + 四侧裙板，看得见厚度才像桌子）+ 一张微斜 4° 的纸。
+   纸的贴图直接用纸面照片（BG_IMGS.paper——它本来就是"一张纸"的照片）。 */
+function scQuadOut(arr, quad, n, uv) {
+  const [a, b, c, d] = quad;
+  const push = (p, t) => arr.push(p[0], p[1], p[2], n[0], n[1], n[2], t[0], t[1]);
+  push(a, uv[0]); push(b, uv[1]); push(c, uv[2]);
+  push(a, uv[0]); push(c, uv[2]); push(d, uv[3]);
+}
+function scSceneMeshes() {
+  const T = 4.6, D = 1.5;             // 桌面半宽 / 裙板深（模型单位；晶体范围约 ±1）
+  const P = 3.3, Q = 1.9, pz = 0.004; // 纸半宽（照片是横构图）/ 台面上方抬高
+  const uvq = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const table = [];
+  scQuadOut(table, [[-T, -T, 0], [T, -T, 0], [T, T, 0], [-T, T, 0]], [0, 0, 1], uvq);
+  scQuadOut(table, [[-T, T, 0], [-T, -T, 0], [-T, -T, -D], [-T, T, -D]], [-1, 0, 0], uvq);
+  scQuadOut(table, [[T, T, 0], [T, -T, 0], [T, -T, -D], [T, T, -D]], [1, 0, 0], uvq);
+  scQuadOut(table, [[T, -T, 0], [-T, -T, 0], [-T, -T, -D], [T, -T, -D]], [0, -1, 0], uvq);
+  const ca = Math.cos(0.07), sa = Math.sin(0.07);     // 纸微转 4°：像随手放上的
+  const rp = (x, y) => [x * ca - y * sa, x * sa + y * ca, pz];
+  const paper = [];
+  scQuadOut(paper, [rp(-P, -Q), rp(P, -Q), rp(P, Q), rp(-P, Q)], [0, 0, 1], uvq);
+  return { table: new Float32Array(table), paper: new Float32Array(paper) };
+}
+
+let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShadowBuf = null;
+let scTableN = 0, scPaperN = 0, scTex = null, scTexImg = null;
+const scUni = {}, scAttr = {};
+function glSceneInit() {
+  if (scReady) return !!scProg;
+  scReady = true;
+  if (!gl) return false;
+  const vs = glCompile(gl.VERTEX_SHADER, SC_VS);
+  const fs = glCompile(gl.FRAGMENT_SHADER, SC_FS);
+  if (!vs || !fs) return false;
+  scProg = gl.createProgram();
+  gl.attachShader(scProg, vs); gl.attachShader(scProg, fs);
+  gl.linkProgram(scProg);
+  if (!gl.getProgramParameter(scProg, gl.LINK_STATUS)) { scProg = null; return false; }
+  gl.deleteShader(vs); gl.deleteShader(fs);
+  for (const n of ["uRot", "uShift", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
+                   "uLigDir", "uLigCol", "uLigInt", "uAmbK", "uAmbT", "uColor", "uHasTex", "uTex",
+                   "uSpec", "uShin", "uAlpha", "uExpo", "uKeyExpo", "uFillGain"]) {
+    scUni[n] = gl.getUniformLocation(scProg, n);
+  }
+  for (const n of ["aPos", "aNrm", "aUV"]) scAttr[n] = gl.getAttribLocation(scProg, n);
+  const mesh = scSceneMeshes();
+  scTableBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scTableBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.table, gl.STATIC_DRAW);
+  scTableN = mesh.table.length / SC_STRIDE;
+  scPaperBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scPaperBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, mesh.paper, gl.STATIC_DRAW);
+  scPaperN = mesh.paper.length / SC_STRIDE;
+  scShadowBuf = gl.createBuffer();                    // 阴影扇面：预分配，之后只 bufferSubData
+  gl.bindBuffer(gl.ARRAY_BUFFER, scShadowBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, 4096 * 4, gl.DYNAMIC_DRAW);
+  return true;
+}
+/* 纸面贴图：复用背景照片的 Image。桩环境没有纹理入口（createTexture 不存在），
+   返回 null → 纸面画纯色，几何与阴影仍然成立。 */
+function scTexture() {
+  const im = bgImgEl("paper");
+  if (!im || !gl.createTexture || !gl.bindTexture || !gl.texImage2D || !gl.texParameteri) return null;
+  if (scTexImg === im) return scTex;
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 || 0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  scTex = tex; scTexImg = im;
+  return tex;
+}
+/* 平面凸包（Andrew 单调链）：阴影扇面 = 晶体顶点沿光路投到台面后的 2D 凸包。
+   晶体是凸体，凸包就是正确影子；双晶并集非凸，凸包是其影子的包络，足够。 */
+function scHull2D(pts) {
+  const p = pts.slice().sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+  if (p.length < 3) return null;
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  const up = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop();
+    up.push(q);
+  }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+/* 每帧接触求解：台面（模型空间 z=0 平面，经 SC_PRE 预倾）沿自己的法线平移到
+   「托住所有晶体」的最低支撑位置。d = min(晶体顶点·n_m)，世界位移 = (d−ε)·R·n_m。
+   附加晶体也参与（各自的 instXform 之后一起量）。 */
+function scContact(project, insts) {
+  let d = 1e9;
+  for (const it of insts) {
+    if (!it.geo) continue;
+    for (const p of it.geo.P) {
+      const q = it.main ? p : instXform(it, p);
+      const v = dot(q, SC_PRE_N);
+      if (v < d) d = v;
+    }
+  }
+  const nW = mv(project.R, SC_PRE_N);
+  const s = d - 0.006;
+  return { d, s, nW, P0: [nW[0] * s, nW[1] * s, nW[2] * s] };
+}
+/* 真实接触阴影：把每颗晶体的世界顶点沿主光方向（光行进方向 = −L）投到台面，
+   取凸包扇面。主光方位/高度滑杆、光源绕行都会实时改变影子方向与长短。 */
+function scShadowFan(contact, project, insts) {
+  const L = LIGHTS[0];
+  const dl = [-L.dir[0], -L.dir[1], -L.dir[2]];
+  const n = contact.nW;
+  const den = dot(dl, n);
+  if (Math.abs(den) < 0.12) return null;              // 光线几乎平行台面：影子无限长，不画
+  const flat = [];
+  for (const it of insts) {
+    if (!it.geo) continue;
+    for (const p of it.geo.P) {
+      const q = it.main ? p : instXform(it, p);
+      const W = mv(project.R, q);
+      const t = dot(sub(W, contact.P0), n) / den;
+      flat.push([W[0] - dl[0] * t, W[1] - dl[1] * t, W[2] - dl[2] * t]);
+    }
+  }
+  const ax = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const u = unit(cross(n, ax)), v = cross(n, u);
+  const h = scHull2D(flat.map(p => [dot(p, u), dot(p, v)]));
+  if (!h || h.length < 3) return null;
+  const cx = avg(h.map(p => p[0])), cy = avg(h.map(p => p[1]));
+  const W = (x, y) => [contact.P0[0] + u[0] * x + v[0] * y, contact.P0[1] + u[1] * x + v[1] * y, contact.P0[2] + u[2] * x + v[2] * y];
+  const out = [];
+  const push = (P) => out.push(P[0], P[1], P[2], n[0], n[1], n[2], 0, 0);
+  for (let i = 0; i < h.length; i++) {
+    push(W(cx, cy)); push(W(h[i][0], h[i][1])); push(W(h[(i + 1) % h.length][0], h[(i + 1) % h.length][1]));
+  }
+  return new Float32Array(out);
+}
+/* 场景绘制入口（在晶体之前调用，共享深度缓冲）。zn/zf 由 glRender 统一算好传入。 */
+function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
+  if (!glSceneInit()) return false;
+  const contact = scContact(project, insts);
+  const B = BACKGROUNDS.paper;
+  gl.useProgram(scProg);
+  gl.uniform1f(scUni.uDist, GL_DIST);
+  gl.uniform1f(scUni.uFoc, 3.05 * opts.scale * Math.min(opts.vw, opts.vh) * 0.5);
+  gl.uniform1f(scUni.uCx, project.cx); gl.uniform1f(scUni.uCy, project.cy);
+  gl.uniform1f(scUni.uVw, opts.vw); gl.uniform1f(scUni.uVh, opts.vh);
+  gl.uniform1f(scUni.uZn, zn); gl.uniform1f(scUni.uZf, zf);
+  gl.uniform3fv(scUni.uLigDir, litArrays.dir);
+  gl.uniform3fv(scUni.uLigCol, litArrays.col);
+  gl.uniform3fv(scUni.uLigInt, litArrays.int);
+  gl.uniform1f(scUni.uAmbK, B.amb);
+  gl.uniform3fv(scUni.uAmbT, B.ambT);
+  gl.uniform1f(scUni.uExpo, EXPO);
+  gl.uniform1f(scUni.uKeyExpo, KEY_EXPO);
+  gl.uniform1f(scUni.uFillGain, FILL_GAIN);
+  const bindAttr = (buf) => {
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    const S = SC_STRIDE * 4;
+    gl.enableVertexAttribArray(scAttr.aPos); gl.vertexAttribPointer(scAttr.aPos, 3, gl.FLOAT, false, S, 0);
+    gl.enableVertexAttribArray(scAttr.aNrm); gl.vertexAttribPointer(scAttr.aNrm, 3, gl.FLOAT, false, S, 12);
+    gl.enableVertexAttribArray(scAttr.aUV);  gl.vertexAttribPointer(scAttr.aUV, 2, gl.FLOAT, false, S, 24);
+  };
+  // 台面整体 = 先预倾 SC_PRE 再随晶体转 R（uRot 列主上传，与晶体同一套约定）
+  const Rsc = mm3(project.R, SC_PRE);
+  const colMajor = (M) => new Float32Array([M[0][0], M[1][0], M[2][0], M[0][1], M[1][1], M[2][1], M[0][2], M[1][2], M[2][2]]);
+  gl.uniformMatrix3fv(scUni.uRot, false, colMajor(Rsc));
+  gl.uniform3fv(scUni.uShift, new Float32Array(contact.P0));
+  gl.uniform1f(scUni.uAlpha, 1); gl.uniform1f(scUni.uHasTex, 0);
+  gl.uniform3fv(scUni.uColor, new Float32Array([0.80, 0.78, 0.74]));   // 桌面：暖浅灰
+  gl.uniform1f(scUni.uSpec, 0.10); gl.uniform1f(scUni.uShin, 8);
+  bindAttr(scTableBuf);
+  gl.drawArrays(gl.TRIANGLES, 0, scTableN);
+  const tex = scTexture();
+  gl.uniform1f(scUni.uHasTex, tex ? 1 : 0);
+  gl.uniform3fv(scUni.uColor, new Float32Array(tex ? [1, 1, 1] : [0.95, 0.93, 0.88]));
+  gl.uniform1f(scUni.uSpec, 0.04); gl.uniform1f(scUni.uShin, 4);
+  bindAttr(scPaperBuf);
+  gl.drawArrays(gl.TRIANGLES, 0, scPaperN);
+  // 接触阴影：扇面顶点已是世界坐标 → uRot 单位阵、uShift 归零，直接画
+  const fan = scShadowFan(contact, project, insts);
+  if (fan && fan.length <= 4096 * 4 && gl.bufferSubData) {
+    gl.uniformMatrix3fv(scUni.uRot, false, colMajor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
+    gl.uniform3fv(scUni.uShift, new Float32Array([0, 0, 0]));
+    gl.uniform3fv(scUni.uColor, new Float32Array([0.05, 0.05, 0.08]));
+    gl.uniform1f(scUni.uAlpha, 0.30); gl.uniform1f(scUni.uHasTex, 0); gl.uniform1f(scUni.uSpec, 0);
+    bindAttr(scShadowBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, fan);
+    if (gl.depthMask) gl.depthMask(false);            // 阴影不写深度：后面的晶体照样通过深度测试
+    gl.drawArrays(gl.TRIANGLES, 0, fan.length / SC_STRIDE);
+    if (gl.depthMask) gl.depthMask(true);
+  }
+  return true;
+}
+/* 深度范围要把台面裙板也包进来（晶体算出的范围不包含场景网格，会把桌子裁掉） */
+function scBoundsPts(project, insts) {
+  const contact = scContact(project, insts);
+  const T = 4.6, D = 1.5;
+  const out = [];
+  for (const x of [-T, T]) for (const y of [-T, T]) for (const z of [0, -D]) {
+    const m = mv(SC_PRE, [x, y, z]);
+    const w = mv(project.R, m);
+    out.push([w[0] + contact.P0[0], w[1] + contact.P0[1], w[2] + contact.P0[2]]);
+  }
+  return out;
+}
 
 /* 画晶体本体（不含坐标轴）。M.alpha 不在这里用——通透度由 paint() 整体合成。
    内含物先画（在晶体下面），于是会被半透明的晶面整体盖住：通透度越低越看得清 */
@@ -2406,15 +2721,26 @@ function paint(g, opts) {
   if (!GEO) return;
   const M = mat(opts.bg);
   const BG = BACKGROUNDS[opts.bg || state.bg] || BACKGROUNDS.void;
-  if (!opts.noBg) {                                     // 照片背景；失败回落程序化渐变/展台/远山/纸面
-    BG.draw(g, opts.vw, opts.vh);
-    if (!bgImgReady(opts.bg || state.bg))                        // 照片自己有真实内容物可"透过去看"，
-      drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh);  // 程序化道具只在回落路径里画
-    drawBase(g, state.base, opts.vw, opts.vh);                 // 基岩/底座（也在晶体身后）
+  const s3d = scene3dActive(opts);           // 纸面 3D：桌面/纸张/阴影都在 GL 里
+  if (!opts.noBg) {
+    if (s3d) {
+      // 3D 模式的底子：影棚暖灰渐变 + 底部压暗（台面 GL 网格浮在它上面；
+      // 台面盖不满的地方读作"地面的阴影过渡"，不会露馅）
+      const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.36, 0, opts.vw * 0.5, opts.vh * 0.42, Math.max(opts.vw, opts.vh) * 0.8);
+      grd.addColorStop(0, "#f7f4ee"); grd.addColorStop(0.55, "#e9e4da"); grd.addColorStop(1, "#cfc8bb");
+      g.fillStyle = grd; g.fillRect(0, 0, opts.vw, opts.vh);
+      const fl = g.createLinearGradient(0, opts.vh * 0.60, 0, opts.vh);
+      fl.addColorStop(0, "rgba(120,110,95,0)"); fl.addColorStop(1, "rgba(120,110,95,.20)");
+      g.fillStyle = fl; g.fillRect(0, opts.vh * 0.60, opts.vw, opts.vh * 0.40);
+    } else {
+      BG.draw(g, opts.vw, opts.vh);                           // 照片（或回落程序化）
+      if (!bgImgReady(opts.bg || state.bg))
+        drawSceneProps(g, opts.bg || state.bg, opts.vw, opts.vh); // 程序化道具只在回落路径里画
+      drawBase(g, state.base, opts.vw, opts.vh);              // 基岩/底座（2D，不在 3D 场景里叠）
+    }
   }
-  // ── 放在桌面上：把晶体底边贴到桌面线，并在桌面线上画接触阴影 ──
-  //    有基岩时贴到基岩的表面（比场景自带的线更靠下，看起来才"坐在上面"）
-  const tbl = (state.onTable && !opts.noTable)
+  // ── 放在桌面上：3D 场景的桌面/贴合/阴影全在 GL 里解决，屏幕空间这条路只留给照片场景 ──
+  const tbl = (state.onTable && !opts.noTable && !s3d)
     ? { y: (BASES[state.base] && BASES[state.base].y) || (BG.table && BG.table.y) } : null;
   const tbl2 = (tbl && tbl.y) ? tbl : null;
   let project;
@@ -2667,7 +2993,10 @@ function selectMineral(id) {
   state.habitId = m.habits[0].id;
   state.mask = (1 << m.habits[0].forms.length) - 1;
   applyHabitView(m.habits[0]);
-  state.uniform = m.colors && m.colors.length ? m.colors[0].hex : null;
+  // 默认染色 = 该矿物最具代表性的颜色（数据里的 defColor：萤石绿、黄铁矿金、水晶紫……），
+  // 没有就退回第一个颜色。默认模式是单色；「按单形配色」在色块列表最后一项，要点才切。
+  state.colorMode = "mineral";
+  state.uniform = m.defColor || (m.colors && m.colors.length ? m.colors[0].hex : null);
   // 换矿物 = 换回这块矿物自己的默认光泽/通透度（数据里的 luster/transp）。
   // 旧版只在首次加载生效：用户一旦动过滑杆，之后换矿物一直沿用上一块的设置——
   // "萤石调到全透明，切到黄铁矿还显示透明度 100%"就是这条漏掉的后果。
@@ -2792,7 +3121,7 @@ function renderBackgrounds() {
     lab: "实拍感实验台照片。勾选「放在桌面上」会贴合台面并加接触阴影。",
     nature: "雾林巨石，环境光偏绿偏暗。勾选后晶体坐在岩石上。",
     cabinet: "暖光木展台照片：最暗，反差最大。",
-    paper: "近白纸面照片：出图最好看，像标本照片。",
+    paper: "3D 桌面 + 一张纸（与晶体同深度缓冲，真实透视与投影阴影）。导出图鉴卡仍用照片底。",
   };
   document.getElementById("bgHint").textContent = hints[state.bg] || "";
   const th = document.getElementById("tableHint");
@@ -2943,13 +3272,6 @@ function renderSwatches() {
   box.innerHTML = "";
   const m = mineral();
   const colors = m.colors || [];
-  // 第一项：「单」＝按单形配色。做成色块列表里的一项，不再单独占一个按钮。
-  const fm = document.createElement("div");
-  fm.className = "sw swform" + (state.colorMode === "form" ? " on" : "");
-  fm.title = "按单形配色（每个单形一种颜色）";
-  fm.textContent = "单";
-  fm.onclick = () => { state.colorMode = "form"; syncPanels(); draw(); };
-  box.appendChild(fm);
   for (const c of colors) {
     const el = document.createElement("div");
     el.className = "sw" + (state.colorMode === "mineral" && state.uniform === c.hex ? " on" : "");
@@ -2962,9 +3284,17 @@ function renderSwatches() {
     };
     box.appendChild(el);
   }
+  // 「单」＝按单形配色，放在色块列表**最后**（用户反馈：单形是少数派用法，
+  // 默认应该是"这块矿物最常见的那种颜色"，单形染色是进阶选项）。
+  const fm = document.createElement("div");
+  fm.className = "sw swform" + (state.colorMode === "form" ? " on" : "");
+  fm.title = "按单形配色（每个单形一种颜色）";
+  fm.textContent = "单";
+  fm.onclick = () => { state.colorMode = "form"; syncPanels(); draw(); };
+  box.appendChild(fm);
   document.getElementById("colorHint").textContent =
     state.colorMode === "form"
-      ? "当前按单形配色（每个单形一种颜色）；点后面的色块＝整块晶体统一染该色（矿物常见色）。"
+      ? "当前按单形配色（每个单形一种颜色）；点前面的色块＝整块晶体统一染该色（矿物常见色）。"
       : `整晶体统一为「${(colors.find(c => c.hex === state.uniform) || {}).zh || "自定义"}」。`;
 }
 
