@@ -279,6 +279,17 @@ vm.runInContext(code, sandbox, { filename: "crystal.html" });
 const run = (expr) => vm.runInContext(expr, sandbox);
 
 const out = [];
+const r2info = () => run(`JSON.stringify((() => {
+  const grid = document.getElementById("browseGrid").children;
+  let card = null, head = null;
+  for (const c of grid) { if (c.className === "bcard" && !card) card = c; if (c.className === "bhead" && !head) head = c; }
+  card.onclick();
+  const opened = mineral().id + "/" + state.habitId + " @" + location.hash + " mode=" + (document.body.classList.contains("browse-mode") ? "browse" : "studio");
+  head.onclick();
+  const page = mineral().id + " @" + location.hash + " mode=" + (document.body.classList.contains("museum-mode") ? "museum" : "?");
+  location.hash = "#/studio"; applyRoute();
+  return { opened, page };
+})())`);
 const check = (name, ok, extra = "") => out.push(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`);
 
 check("启动即绘制", counts.fill > 0, `fill=${counts.fill}`);
@@ -1130,28 +1141,61 @@ const glLastOptsOk = (glw, vw, vh) => {
     return /mm3\(mm3\(R, RyG\), Ry\)/.test(src) && /mv\(mm3\(R, RyG\), shift\)/.test(src)
       && /it\.main \? mm3\(R, Ry\)/.test(src);
   })());
-  check("路由 #/studio：带组合回造型台（extras 保留）；#/gallery：矿物大全 12 卡全带缩略图", (() => {
+  check("两窗体路由：#/browse 卡片墙按矿物分组（12 组头 + 全部晶体卡 + 缩略图）", (() => {
     const r = run(`JSON.stringify((() => {
-      location.hash = "#/studio"; applyRoute();
-      const kept = state.extras.length === 2 && !document.body.classList.contains("museum-mode")
-        && !document.body.classList.contains("gallery-mode") && state.museum === null;
-      location.hash = "#/gallery"; applyRoute();
-      const cards = document.getElementById("gGrid").children.length;
-      // 桩的 querySelectorAll 只认 .sec 选择器——缩略图用子节点遍历数（gcard → gthumb → canvas）
-      let thumbs = 0;
-      for (const c of document.getElementById("gGrid").children) {
-        if (c.children && c.children[0] && c.children[0].children && c.children[0].children[0]) thumbs++;
+      location.hash = "#/browse"; applyRoute();
+      let heads = 0, cards = 0, thumbs = 0, habitTotal = 0;
+      for (const m of DATA.minerals) habitTotal += m.habits.length;
+      for (const c of document.getElementById("browseGrid").children) {
+        if (c.className === "bhead") heads++;
+        else if (c.className === "bcard") {
+          cards++;
+          if (c.children && c.children[0] && c.children[0].children && c.children[0].children[0]) thumbs++;
+        }
       }
-      const gal = document.body.classList.contains("gallery-mode") && cards === DATA.minerals.length && thumbs === DATA.minerals.length;
-      location.hash = "#/m/pyrite"; applyRoute();
-      const sub = document.body.classList.contains("museum-mode") && mineral().id === "pyrite" && state.extras.length === 0;
-      location.hash = "#/studio"; applyRoute();
-      return { kept, cards, thumbs, gal, sub, minerals: DATA.minerals.length };
+      return { mode: document.body.classList.contains("browse-mode"), heads, cards, thumbs, habitTotal,
+               shown: document.getElementById("browse").style.display !== "none" };
     })())`);
     const o = JSON.parse(r);
-    return o.kept && o.gal && o.sub && o.cards === 12;
-  })(), run(`JSON.stringify({ cards: document.getElementById("gGrid") ? document.getElementById("gGrid").children.length : -1 })`));
+    return o.mode === true && o.shown === true && o.heads === 12
+      && o.cards === o.habitTotal && o.thumbs === o.habitTotal;
+  })(), run(`JSON.stringify((() => { let h = 0, c = 0; for (const x of document.getElementById("browseGrid").children) { if (x.className === "bhead") h++; if (x.className === "bcard") c++; } return { h, c }; })())`));
+  check("晶体卡点击：载入该晶体并回工作区（#/studio），矿物名进矿物页", (() => {
+    const r = run(`JSON.stringify((() => {
+      // 找石英的第一张晶体卡（mineralId 记录在 onclick 闭包里，用行为验证）
+      const grid = document.getElementById("browseGrid").children;
+      let card = null;
+      for (const c of grid) if (c.className === "bcard") { card = c; break; }
+      card.onclick();
+      const opened = mineral().id + "/" + state.habitId + " @" + location.hash
+        + " mode=" + (document.body.classList.contains("browse-mode") ? "browse" : "studio");
+      // 矿物名头 → 矿物页
+      let head = null;
+      for (const c of grid) if (c.className === "bhead") { head = c; break; }
+      head.onclick();
+      const page = mineral().id + " @" + location.hash
+        + " mode=" + (document.body.classList.contains("museum-mode") ? "museum" : "?");
+      return { opened, page };
+    })())`);
+    const o = JSON.parse(r);
+    return o.opened.indexOf("studio") > 0 && o.page.indexOf("museum") > 0;
+  })(), r2info());
+  check("路由 #/studio：带组合回工作区（extras 保留）；顶栏「矿物页」到当前矿物", (() => {
+    const r = run(`JSON.stringify((() => {
+      location.hash = "#/m/pyrite/navajun"; applyRoute();
+      const combo = state.extras.length;
+      location.hash = "#/studio"; applyRoute();
+      const kept = state.extras.length === combo && !document.body.classList.contains("museum-mode")
+        && !document.body.classList.contains("browse-mode") && state.museum === null;
+      // 顶栏「矿物页」按钮 = 当前矿物的子页
+      const tab = [...document.querySelectorAll("#tbPages .ptab")].length;   // 桩只认 .sec，遍历走 children
+      return { kept, combo, tab };
+    })())`);
+    const o = JSON.parse(r);
+    return o.kept === true && o.combo === 2;
+  })());
   run(`selectMineral("fluorite"); syncPanels(); draw();`);
+  run(`location.hash = "#/studio"; applyRoute(); state.extras = []; selectMineral("fluorite"); state.habitId = "cube"; state.mask = 1; rebuildGeometry(); syncPanels(); draw();`);
   check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
   // 颜色必须是 0..1：GL 顶点属性不分量纲，0..255 会被 clamp 成全白
   const cols = run(`(() => { const s = new Set(); for (const f of GEO.faces) s.add(JSON.stringify(faceColor(f))); return [...s]; })()`);
