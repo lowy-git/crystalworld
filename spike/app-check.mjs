@@ -1086,8 +1086,8 @@ const glLastOptsOk = (glw, vw, vh) => {
     })`);
     return bad.length === 0;
   })(), `bad=${run(`["pyrite","quartz"].filter(id => { const m = DATA.minerals.find(x=>x.id===id); return !m.localities ? id + ":无" : m.localities.length < 2 ? id + ":" + m.localities.length : ""; }).join(",")`)}`);
-  run(`openMuseum("pyrite", "navajun");`);
-  check("openMuseum：进入矿物志模式（body class + extras 按数据装载 + hash 回读一致）", (() => {
+  run(`location.hash = "#/m/pyrite/navajun"; applyRoute();`);
+  check("路由 #/m/矿物/产地：进入矿物子页（body class + extras 按数据装载 + 状态回读）", (() => {
     const r = run(`JSON.stringify({
       mode: document.body.classList.contains("museum-mode"),
       shown: document.getElementById("museum").style.display !== "none",
@@ -1095,12 +1095,13 @@ const glLastOptsOk = (glw, vw, vh) => {
       settle: state.extras.every(e => e.settle === true),
       museum: state.museum,
       items: document.getElementById("mList").children.length,
+      hash: location.hash,
     })`);
     const o = JSON.parse(r);
-    // hash 深链在桩里验证不了（无 history/location.hash），真浏览器目检
     return o.mode === true && o.shown === true && o.n === 2 && o.settle === true
-      && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun" && o.items === 2;
-  })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum })`));
+      && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
+      && o.items === 2 && o.hash === "#/m/pyrite/navajun";
+  })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
   check("落桌补偿：settle 实例的最低点与主晶体最低点等高（同一 pre-groupYaw 基）", (() => {
     const r = run(`(() => {
       const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
@@ -1129,17 +1130,27 @@ const glLastOptsOk = (glw, vw, vh) => {
     return /mm3\(mm3\(R, RyG\), Ry\)/.test(src) && /mv\(mm3\(R, RyG\), shift\)/.test(src)
       && /it\.main \? mm3\(R, Ry\)/.test(src);
   })());
-  check("closeMuseum(false) 恢复默认单晶视图；closeMuseum(true) 保留组合", (() => {
-    const r = run(`(() => {
-      closeMuseum(true);
-      const kept = state.extras.length === 2 && !document.body.classList.contains("museum-mode") && !state.museum;
-      openMuseum("pyrite", "navajun");
-      closeMuseum(false);
-      const reset = state.extras.length === 0 && state.museum === null && !document.body.classList.contains("museum-mode") && mineral().id === "pyrite";
-      return kept && reset;
-    })()`);
-    return r === true || r === "true";
-  })());
+  check("路由 #/studio：带组合回造型台（extras 保留）；#/gallery：矿物大全 12 卡全带缩略图", (() => {
+    const r = run(`JSON.stringify((() => {
+      location.hash = "#/studio"; applyRoute();
+      const kept = state.extras.length === 2 && !document.body.classList.contains("museum-mode")
+        && !document.body.classList.contains("gallery-mode") && state.museum === null;
+      location.hash = "#/gallery"; applyRoute();
+      const cards = document.getElementById("gGrid").children.length;
+      // 桩的 querySelectorAll 只认 .sec 选择器——缩略图用子节点遍历数（gcard → gthumb → canvas）
+      let thumbs = 0;
+      for (const c of document.getElementById("gGrid").children) {
+        if (c.children && c.children[0] && c.children[0].children && c.children[0].children[0]) thumbs++;
+      }
+      const gal = document.body.classList.contains("gallery-mode") && cards === DATA.minerals.length && thumbs === DATA.minerals.length;
+      location.hash = "#/m/pyrite"; applyRoute();
+      const sub = document.body.classList.contains("museum-mode") && mineral().id === "pyrite" && state.extras.length === 0;
+      location.hash = "#/studio"; applyRoute();
+      return { kept, cards, thumbs, gal, sub, minerals: DATA.minerals.length };
+    })())`);
+    const o = JSON.parse(r);
+    return o.kept && o.gal && o.sub && o.cards === 12;
+  })(), run(`JSON.stringify({ cards: document.getElementById("gGrid") ? document.getElementById("gGrid").children.length : -1 })`));
   run(`selectMineral("fluorite"); syncPanels(); draw();`);
   check("GL 与 2D 用同一个 faceColor（配色不分叉）", run(`typeof faceColor`) === "function");
   // 颜色必须是 0..1：GL 顶点属性不分量纲，0..255 会被 clamp 成全白

@@ -271,11 +271,32 @@
   body.darkbg .hint{color:#9db3ca}
   body.darkbg .hint kbd{background:rgba(255,255,255,.08);border-color:rgba(160,190,220,.28);color:#dbe6f2}
   /* ── 矿物志（产地晶习）：舞台左侧的覆盖面板；视口仍是主 GL 管线 ── */
-  body.museum-mode #app{grid-template-columns:0 1fr 0}
-  body.museum-mode .panel{display:none}
+  body.museum-mode #app, body.gallery-mode #app{grid-template-columns:0 1fr 0}
+  body.museum-mode .panel, body.gallery-mode .panel{display:none}
   /* 面板 display:none 后 grid 自动布局会把 stage 塞进第 1 列（0 宽）——必须显式指定列 */
-  body.museum-mode .stage{grid-column:2}
-  body.museum-mode .hud{left:372px}   /* 让开矿物志面板 */
+  body.museum-mode .stage, body.gallery-mode .stage{grid-column:2}
+  body.museum-mode .hud, body.gallery-mode .hud{left:372px}   /* 让开页面面板 */
+  /* ── 矿物大全（gallery）：卡片墙 ── */
+  #gallery{position:absolute;left:0;top:0;right:0;bottom:0;z-index:5;overflow-y:auto;
+    background:var(--panel);border-right:1px solid var(--line);padding:18px 20px 40px;
+    scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+  .ghead{margin-bottom:14px}
+  .ghead b{font-size:16px}
+  .ghead span{margin-left:10px;font-size:12px;color:var(--ink3)}
+  .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(198px,1fr));gap:12px}
+  .gcard{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2)}
+  .gcard:hover{border-color:var(--acc)}
+  .gthumb{display:block;width:100%;aspect-ratio:4/3}
+  .gthumb canvas{display:block;width:100%;height:100%}
+  .ginfo{padding:8px 10px 10px;display:flex;flex-direction:column;gap:2px}
+  .ginfo b{font-size:14px}
+  .ginfo span{font-size:11px;color:var(--ink3)}
+  .ginfo i{font-style:normal;font-size:11px;color:var(--ink2)}
+  /* ── 顶栏页签：大全 / 造型台 ── */
+  .tb-pages{display:flex;gap:4px}
+  .ptab{all:unset;cursor:pointer;font-size:12.5px;padding:4px 10px;border-radius:6px;color:var(--ink2)}
+  .ptab:hover{background:var(--panel2)}
+  .ptab.on{background:var(--acc);color:#fff}
   #museum{
     position:absolute;left:0;top:0;bottom:0;width:352px;z-index:5;overflow-y:auto;
     background:var(--panel);border-right:1px solid var(--line);
@@ -344,6 +365,10 @@
   <header class="topbar">
     <div class="tb-brand"><b>晶体世界</b><span>Crystal World</span></div>
     <div class="tb-sep"></div>
+    <nav class="tb-pages" id="tbPages">
+      <button class="ptab" type="button" data-page="gallery">矿物大全</button>
+      <button class="ptab" type="button" data-page="studio">造型台</button>
+    </nav>
     <div class="tb-spacer"></div>
     <nav class="tb-tools" id="tbTools">
       <button class="tbtn" type="button" data-pop="view" title="视角 View" aria-label="视角">
@@ -447,14 +472,18 @@
     <div class="hint" id="hint"></div>
     <div id="museum" style="display:none">
       <div class="mhead">
-        <button class="btn" id="mBack" type="button">← 返回</button>
+        <button class="btn" id="mBack" type="button">← 矿物大全</button>
         <b id="mTitle">矿物志</b>
       </div>
       <div class="mlist" id="mList"></div>
       <div class="mtext" id="mText"></div>
       <div class="mfeat" id="mFeat"></div>
       <div class="msrc" id="mSrc"></div>
-      <button class="btn" id="mLoad" type="button" style="width:100%">把这套组合带回主界面编辑 →</button>
+      <button class="btn" id="mLoad" type="button" style="width:100%">在造型台打开 →</button>
+    </div>
+    <div id="gallery" style="display:none">
+      <div class="ghead"><b>矿物大全</b><span>Mineral Gallery — 点击卡片进入矿物页（产地晶习）</span></div>
+      <div class="ggrid" id="gGrid"></div>
     </div>
   </main>
 
@@ -3390,7 +3419,7 @@ function renderAbout() {
   if (lb) {
     const has = !!(m.localities && m.localities.length);
     lb.style.display = has ? "" : "none";
-    if (has) lb.onclick = () => openMuseum(m.id);
+    if (has) lb.onclick = () => { location.hash = "#/m/" + m.id; };
   }
 }
 
@@ -3665,120 +3694,227 @@ function bindExtras() {
   }
 }
 
-/* ── 矿物志：产地晶习（L1）─────────────────────────────────────
-   每种矿物的 localities[] 描述"某产地典型怎么长"：一个主晶体外形 + 一组附加实例
-   （跨矿物合法）+ 基岩/场景 + 讲解与来源。矿物志页不是图文页——它把组合载进
-   主视口，照常能转、能拖、能改配色。URL hash 深链：#mineral=pyrite&loc=navajun。 */
-state.museum = null;   // { mineralId, locId } 或 null
+/* ── 页面路由 + 矿物志（产地晶习）──────────────────────────────
+   三个页面（hash 驱动，单文件内多页，浏览器前进后退可用）：
+     #/gallery              矿物大全：12 张卡片（基本外形缩略图），点击进矿物页
+     #/m/<矿物>[/<产地>]     矿物子页：矿物志（认识它 + 产地晶习），视口即主 GL 管线
+     #/studio（默认）        造型台：现在的主界面
+   产地条目 localities[] 描述"某产地典型怎么长"：主晶体外形 + 附加实例（可跨矿物）
+   + 基岩/场景 + 讲解与来源。旧式深链 #mineral=x&loc=y 自动重定向。 */
+state.museum = null;   // { mineralId, locId } 或 null（造型台/大全时为 null）
 
 function museumMineral() { return state.museum && DATA.minerals.find(x => x.id === state.museum.mineralId); }
 function museumLoc() {
   const m = museumMineral();
-  return m && m.localities ? m.localities.find(l => l.id === state.museum.locId) : null;
+  return m && state.museum.locId && m.localities ? m.localities.find(l => l.id === state.museum.locId) : null;
 }
-function applyLocality(m, loc) {
+function enterMineralPage(mineralId, locId) {
+  const m = DATA.minerals.find(x => x.id === mineralId);
+  if (!m) { location.hash = "#/gallery"; return; }
+  state.museum = { mineralId: m.id, locId: locId || null };
+  document.body.classList.add("museum-mode");
+  document.body.classList.remove("gallery-mode");
+  document.getElementById("museum").style.display = "";
+  document.getElementById("gallery").style.display = "none";
+  resize();                                  // 舞台宽度变了（侧栏收起）
   selectMineral(m.id);
-  const h = m.habits.find(x => x.id === loc.habitId) || m.habits[0];
-  state.habitId = h.id;
-  state.mask = defMask(h);
-  state.extras = [];
-  for (const it of (loc.setup.extras || [])) {
-    const e = mkExtra(it.mineralId);
-    e.habitId = it.habitId || extraHabit(e).id;
-    e.mask = it.mask != null ? it.mask : defMask(extraHabit(e));
-    e.pos = (it.pos || [0, 0, 0]).slice();
-    e.scale = it.scale != null ? it.scale : 1;
-    e.yaw = it.yaw != null ? it.yaw : 0;
-    e.settle = true;                 // 落桌补偿：sceneList 每帧把最低点对齐主晶体
-    state.extras.push(e);
+  const loc = locId ? (m.localities || []).find(l => l.id === locId) : null;
+  if (loc) {
+    const h = m.habits.find(x => x.id === loc.habitId) || m.habits[0];
+    state.habitId = h.id;
+    state.mask = defMask(h);
+    state.extras = [];
+    for (const it of (loc.setup.extras || [])) {
+      const e = mkExtra(it.mineralId);
+      e.habitId = it.habitId || extraHabit(e).id;
+      e.mask = it.mask != null ? it.mask : defMask(extraHabit(e));
+      e.pos = (it.pos || [0, 0, 0]).slice();
+      e.scale = it.scale != null ? it.scale : 1;
+      e.yaw = it.yaw != null ? it.yaw : 0;
+      e.settle = true;             // 落桌补偿：sceneList 每帧把最低点对齐主晶体
+      state.extras.push(e);
+    }
+    state.zoom = loc.setup.zoom || 0.62;    // 组合视野：多颗一起看
+    state.base = loc.setup.base || "none";
+    state.bg = loc.setup.bg || "paper";
+  } else {
+    // 矿物页默认视图：代表晶体（默认外形/代表色）站在 3D 桌面上
+    state.extras = [];
+    state.zoom = 1;
+    state.base = "none";
+    state.bg = "paper";
   }
-  state.zoom = loc.setup.zoom || 0.62;   // 组合视野：多颗一起看，默认拉远
-  state.bg = loc.setup.bg || state.bg;
-  state.bgPicked = true;
-  state.base = loc.setup.base || "none";
   state.onTable = true;
+  state.bgPicked = true;
   applySceneLights(state.bg);
   rebuildGeometry();
-  syncPanels(); renderBackgrounds(); renderExtras();
+  syncPanels(); renderBackgrounds(); renderExtras(); renderMuseum(); draw();
 }
 function renderMuseum() {
-  const m = museumMineral(), loc = museumLoc();
-  const box = document.getElementById("museum");
-  if (!box || !m || !loc) return;
-  document.getElementById("mTitle").textContent = `${m.zh} · 产地晶习`;
+  const m = museumMineral();
+  if (!m) return;
+  const loc = museumLoc();
+  document.getElementById("mTitle").textContent = `${m.zh} · 矿物页`;
   const list = document.getElementById("mList");
   list.innerHTML = "";
-  for (const l of m.localities) {
+  for (const l of (m.localities || [])) {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "mitem" + (l.id === loc.id ? " on" : "");
+    b.className = "mitem" + (loc && l.id === loc.id ? " on" : "");
     b.innerHTML = `<div class="loc">${l.zh}</div><div class="sty">${l.en} · ${l.styleZh || l.style || ""}</div>`;
-    b.onclick = () => {
-      state.museum.locId = l.id;
-      applyLocality(m, l);
-      renderMuseum();
-      draw();
-      setMuseumHash();
-    };
+    b.onclick = () => { location.hash = "#/m/" + m.id + "/" + l.id; };
     list.appendChild(b);
   }
-  document.getElementById("mText").textContent = loc.text ? loc.text.zh : "";
+  const text = document.getElementById("mText");
   const feat = document.getElementById("mFeat");
-  feat.innerHTML = "";
-  for (const f of (loc.features || [])) {
-    const i = document.createElement("i");
-    i.textContent = f;
-    feat.appendChild(i);
+  const src = document.getElementById("mSrc");
+  if (loc) {
+    text.textContent = loc.text ? loc.text.zh : "";
+    feat.innerHTML = "";
+    for (const f of (loc.features || [])) {
+      const i = document.createElement("i");
+      i.textContent = f;
+      feat.appendChild(i);
+    }
+    src.textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）";
+  } else {
+    text.textContent = (m.intro || {}).zh || "";
+    feat.innerHTML = "";
+    src.textContent = (m.localities && m.localities.length) ? "左侧选择产地，载入该产地的典型晶习组合。" : "产地条目筹备中。";
   }
-  document.getElementById("mSrc").textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）";
 }
-function setMuseumHash() {
-  const h = state.museum ? `#mineral=${state.museum.mineralId}&loc=${state.museum.locId}` : "";
-  try { history.replaceState(null, "", location.pathname + location.search + h); } catch (err) { /* 某些 file:// 环境 */ }
+/* ── 矿物大全：卡片墙（缩略图 = 各矿物默认外形的 2D 实渲染，只画一次）── */
+let galleryBuilt = false;
+function renderGallery() {
+  if (galleryBuilt) return;
+  const grid = document.getElementById("gGrid");
+  grid.innerHTML = "";
+  for (const m of DATA.minerals) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "gcard";
+    card.title = m.zh + " " + m.en + " — 进入矿物页";
+    const thumb = document.createElement("div");
+    thumb.className = "gthumb";
+    thumb.appendChild(renderThumb(m));
+    const info = document.createElement("div");
+    info.className = "ginfo";
+    const nloc = (m.localities || []).length;
+    info.innerHTML = `<b>${m.zh}</b><span>${m.en} · ${m.formula}</span><i>${systemName(m.system)}${nloc ? " · " + nloc + " 个产地" : ""}</i>`;
+    card.appendChild(thumb); card.appendChild(info);
+    card.onclick = () => { location.hash = "#/m/" + m.id; };
+    grid.appendChild(card);
+  }
+  galleryBuilt = true;
 }
-function openMuseum(mineralId, locId) {
-  const m = DATA.minerals.find(x => x.id === mineralId);
-  if (!m || !m.localities || !m.localities.length) return false;
-  const loc = m.localities.find(l => l.id === locId) || m.localities[0];
-  state.museum = { mineralId: m.id, locId: loc.id };
-  document.body.classList.add("museum-mode");
-  document.getElementById("museum").style.display = "";
-  resize();   // 舞台宽度变了（侧栏收起）：画布位图必须重设，否则晶体被 CSS 拉伸错位
-  applyLocality(m, loc);
-  renderMuseum();
-  draw();
-  setMuseumHash();
-  return true;
+/* 缩略图：复用 2D 画家管线，把该矿物默认外形的实渲染画进小画布。
+   状态切换到该矿物（bg=void → 直立教科书姿态），画完全部还原。 */
+function renderThumb(m) {
+  const sv = { mi: state.mineralId, hi: state.habitId, mk: state.mask, bg: state.bg, uni: state.uniform, cm: state.colorMode, q: state.quat.slice() };
+  state.mineralId = m.id; state.habitId = m.habits[0].id; state.mask = defMask(m.habits[0]);
+  state.bg = "void";
+  state.uniform = m.defColor || (m.colors && m.colors[0] ? m.colors[0].hex : null);
+  state.colorMode = "mineral";
+  state.quat = Q_VIEW.slice();
+  const keep = GEO, ks = keep ? keep.stamp : 0;
+  rebuildGeometry();
+  const geo = GEO;
+  const cnv = document.createElement("canvas");
+  cnv.width = 240; cnv.height = 180;
+  const g = cnv.getContext("2d");
+  const grd = g.createRadialGradient(120, 82, 0, 120, 82, 210);
+  grd.addColorStop(0, "#fbfaf7"); grd.addColorStop(1, "#e8e4dc");
+  g.fillStyle = grd; g.fillRect(0, 0, 240, 180);
+  const opts = { cx: 120, cy: 96, scale: 0.56, vw: 240, vh: 180, pan: [0, 0], dpr: 1 };
+  const project = makeProject(opts);
+  const L = LUSTERS[m.luster] || LUSTERS.glass;
+  const M = { ...L, alpha: 1, ambK: 1.05, ambT: [1, 1, 1], envI: (L.envI || 0) * 0.4 };
+  const inst = { geo, pos: [0, 0, 0], scale: 1, yaw: 0, main: true };
+  // 全局灯与环境反射是"当前场景"的（偏暖）——大全缩略图要一眼认出色种，临时切中性白灯
+  const savedLights = LIGHTS.map(l => ({ col: l.col.slice(), dir: l.dir.slice(), inten: l.inten, spec: l.spec }));
+  for (const l of LIGHTS) { l.col = [1, 1, 1]; }
+  try {
+    paintFaces2D(g, opts, project, M, inst);
+    paintOverlay(g, opts, project, M, inst);
+  } finally {
+    for (let i = 0; i < LIGHTS.length; i++) { LIGHTS[i].col = savedLights[i].col; }
+    // 状态与几何在绘制【之后】才还原——2D 画家读的是全局 state（先前恢复会把
+    // 所有缩略图都染成主晶体的颜色，这是第一版"满屏绿"的根因）
+    GEO = keep;
+    if (keep) keep.stamp = ks;
+    state.mineralId = sv.mi; state.habitId = sv.hi; state.mask = sv.mk; state.bg = sv.bg;
+    state.uniform = sv.uni; state.colorMode = sv.cm; state.quat = sv.q;
+    buildInclusions();                     // 主晶体的内含物按主晶体重算
+  }
+  return cnv;
 }
-function closeMuseum(keepSetup) {
-  if (!state.museum) return;
-  const backTo = state.museum.mineralId;
+/* ── 路由器 ── */
+function enterPage(p, mid, locId) {
+  const gal = document.getElementById("gallery");
+  const mus = document.getElementById("museum");
+  if (p === "gallery") {
+    if (!document.body.classList.contains("gallery-mode")) {
+      document.body.classList.add("gallery-mode");
+      document.body.classList.remove("museum-mode");
+      state.museum = null;
+      mus.style.display = "none";
+      gal.style.display = "";
+      resize();
+    }
+    renderGallery();
+    markPtab("gallery");
+    return;
+  }
+  if (p === "mineral") {
+    // 已在同一矿物页（同矿物同产地）则不重载，只刷高亮
+    if (document.body.classList.contains("museum-mode") && state.museum
+        && state.museum.mineralId === mid && (state.museum.locId || null) === (locId || null)) {
+      renderMuseum(); markPtab("studio"); return;
+    }
+    markPtab("studio");
+    enterMineralPage(mid, locId);
+    return;
+  }
+  // 造型台：保留一切工作状态（组合/缩放/配色）
+  if (!document.body.classList.contains("gallery-mode") && !document.body.classList.contains("museum-mode")) return;
+  document.body.classList.remove("gallery-mode", "museum-mode");
   state.museum = null;
-  document.body.classList.remove("museum-mode");
-  document.getElementById("museum").style.display = "none";
-  resize();
-  if (!keepSetup) {
-    state.extras = [];                 // 「← 返回」：恢复该矿物的默认单晶视图
-    selectMineral(backTo);
-  }
-  setMuseumHash();
+  gal.style.display = "none"; mus.style.display = "none";
+  resize(); syncPanels(); draw();
+  markPtab("studio");
 }
-function parseMuseumHash() {
-  const mm = /[#&]mineral=([\w-]+)/.exec(location.hash || "");
-  const ll = /[#&]loc=([\w-]+)/.exec(location.hash || "");
-  return mm ? { mineralId: mm[1], locId: ll ? ll[1] : null } : null;
+function markPtab(p) {
+  document.querySelectorAll("#tbPages .ptab").forEach(b => {
+    b.classList.toggle("on", (p === "gallery") === (b.dataset.page === "gallery"));
+  });
 }
+function applyRoute() {
+  const h = location.hash || "";
+  if (h.startsWith("#/gallery")) return enterPage("gallery");
+  const m = /^#\/m\/([\w-]+)(?:\/([\w-]+))?/.exec(h);
+  if (m) return enterPage("mineral", m[1], m[2]);
+  const legacy = /^#mineral=([\w-]+)(?:[&]loc=([\w-]+))?/.exec(h);   // 旧式深链兼容
+  if (legacy) { location.hash = "#/m/" + legacy[1] + (legacy[2] ? "/" + legacy[2] : ""); return; }
+  return enterPage("studio");
+}
+window.addEventListener("hashchange", applyRoute);
+
 bindExtras();
 {
   const mb = document.getElementById("mBack");
   if (mb && !mb.dataset.done) {
     mb.dataset.done = "1";
-    mb.onclick = () => closeMuseum(false);
+    mb.onclick = () => { location.hash = "#/gallery"; };
+  }
+  for (const b of document.querySelectorAll("#tbPages .ptab")) {
+    if (b.dataset.done) continue;
+    b.dataset.done = "1";
+    b.onclick = () => { location.hash = b.dataset.page === "gallery" ? "#/gallery" : "#/studio"; };
   }
   const ml = document.getElementById("mLoad");
   if (ml && !ml.dataset.done) {
     ml.dataset.done = "1";
-    ml.onclick = () => closeMuseum(true);   // 保留当前组合回主界面，照常编辑/导出
+    ml.onclick = () => { location.hash = "#/studio"; };   // 带当前组合去造型台
   }
 }
 function syncPanels() {
@@ -4255,13 +4391,8 @@ if (!state.bgPicked) {
   renderBases();
   draw();
 }
-/* URL hash 深链（#mineral=pyrite&loc=navajun）：放在所有 UI 就绪之后 */
-{
-  const mh = parseMuseumHash();
-  try { if (mh) openMuseum(mh.mineralId, mh.locId); }
-  catch (e) { document.title = "OM-ERR:" + (e.message || e); }
-  try { document.title = "晶体世界 · Crystal World"; } catch (e) {}
-}
+/* 页面路由：放在所有 UI 就绪之后（hash 为唯一页面事实来源） */
+applyRoute();
 </script>
 </body>
 </html>
