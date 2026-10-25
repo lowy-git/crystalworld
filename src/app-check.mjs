@@ -1184,20 +1184,39 @@ const glLastOptsOk = (glw, vw, vh) => {
     const o = JSON.parse(r);
     return o.opened.indexOf("studio") > 0 && o.page.indexOf("museum") > 0;
   })(), r2info());
-  check("路由 #/studio：带组合回工作区（extras 保留）；顶栏「矿物页」到当前矿物", (() => {
+  check("标本页退出还原：#/studio 回来时组合/场景/视角还原为进页前（残留 bug 修复）", (() => {
+    const r = run(`JSON.stringify((() => {
+      location.hash = "#/studio"; applyRoute();
+      // 造一个特征工作区状态：1 颗附加晶体 + 非纸面场景 + 特征视角
+      state.extras = []; const e = mkExtra("quartz"); e.pos = [0.5, 0, -0.4]; state.extras.push(e);
+      state.bg = "lab"; state.bgPicked = true; state.groupYaw = 0.42; draw();
+      // 进标本组合页 → 组合/基岩/灯组全部被覆盖
+      location.hash = "#/m/pyrite/navajun"; applyRoute();
+      const inMuseum = state.extras.length === 3 && state.base === "matrix"
+        && state.museum != null && state.locAmbK != null;
+      // 普通退出（顶栏/hash，非 mLoad）→ 必须整体还原
+      location.hash = "#/studio"; applyRoute();
+      return { inMuseum, back: { extras: state.extras.length, bg: state.bg, base: state.base,
+        museum: state.museum, gy: state.groupYaw, locAmbK: state.locAmbK, snap: STUDIO_SNAP } };
+    })())`);
+    const o = JSON.parse(r);
+    return o.inMuseum === true && o.back.extras === 1 && o.back.bg === "lab"
+      && o.back.base === "none" && o.back.museum === null && o.back.locAmbK === null
+      && Math.abs(o.back.gy - 0.42) < 1e-9 && o.back.snap === null;
+  })(), `back=${run("JSON.stringify({ e: state.extras.length, bg: state.bg, base: state.base, gy: state.groupYaw })")}`);
+  check("「带当前组合去造型台」：mLoad 不还原快照，组合带进工作区", (() => {
     const r = run(`JSON.stringify((() => {
       location.hash = "#/m/pyrite/navajun"; applyRoute();
       const combo = state.extras.length;
-      location.hash = "#/studio"; applyRoute();
-      const kept = state.extras.length === combo && !document.body.classList.contains("museum-mode")
-        && !document.body.classList.contains("browse-mode") && state.museum === null;
-      // 顶栏「矿物页」按钮 = 当前矿物的子页
-      const tab = [...document.querySelectorAll("#tbPages .ptab")].length;   // 桩只认 .sec，遍历走 children
-      return { kept, combo, tab };
+      document.getElementById("mLoad").onclick();
+      return { combo, kept: state.extras.length, museum: state.museum,
+        mode: document.body.classList.contains("museum-mode") ? "museum" : "studio",
+        carry: CARRY_COMBO, snap: STUDIO_SNAP };
     })())`);
     const o = JSON.parse(r);
-    return o.kept === true && o.combo === 3;
-  })());
+    return o.combo === 3 && o.kept === 3 && o.museum === null && o.mode === "studio"
+      && o.carry === false && o.snap === null;
+  })(), run("JSON.stringify({ e: state.extras.length, museum: state.museum })"));
   check("镜面金属：GL/2D 同式的环境反射对比增益 + 反射色去饱和（Navajún 黄铁矿观感）", (() => {
     const gl = run(`GL_FS`);
     const d2 = html.slice(html.indexOf("function shadeFace("), html.indexOf("const rgbStr"));

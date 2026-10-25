@@ -3865,10 +3865,44 @@ function museumLoc() {
   const m = museumMineral();
   return m && state.museum.locId && m.localities ? m.localities.find(l => l.id === state.museum.locId) : null;
 }
+/* 矿物页（标本）与工作区共用同一个 state：进标本页会被大改（extras 组合、黑底、
+   灯组、通透度……），退出时必须整体还原，否则标本组合"残留"在工作区，直到刷新。
+   进页前快照、出页时还原；「带当前组合去造型台」(mLoad) 是唯一例外——故意保留。 */
+let STUDIO_SNAP = null, CARRY_COMBO = false;
+function snapStudio() {
+  STUDIO_SNAP = {
+    mineralId: state.mineralId, habitId: state.habitId, mask: state.mask,
+    twinShow: state.twinShow, twinSplit: state.twinSplit,
+    colorMode: state.colorMode, uniform: state.uniform,
+    luster: state.luster, transp: state.transp, alpha: state.alpha,
+    extras: state.extras.map(e => ({ ...e, pos: e.pos.slice() })),
+    bg: state.bg, base: state.base, zoom: state.zoom,
+    onTable: state.onTable, bgPicked: state.bgPicked, restPose: state.restPose,
+    quat: state.quat.slice(), groupYaw: state.groupYaw, pan: state.pan.slice(),
+    locAmbK: state.locAmbK, matrixCol: state.matrixCol, locTransp: state.locTransp,
+  };
+}
+function restoreStudio() {
+  if (!STUDIO_SNAP) return;
+  const s = STUDIO_SNAP; STUDIO_SNAP = null;
+  state.mineralId = s.mineralId; state.habitId = s.habitId; state.mask = s.mask;
+  state.twinShow = s.twinShow; state.twinSplit = s.twinSplit;
+  state.colorMode = s.colorMode; state.uniform = s.uniform;
+  state.luster = s.luster; state.transp = s.transp; state.alpha = s.alpha;
+  state.extras = s.extras;
+  state.bg = s.bg; state.base = s.base; state.zoom = s.zoom;
+  state.onTable = s.onTable; state.bgPicked = s.bgPicked; state.restPose = s.restPose;
+  state.quat = s.quat.slice(); state.groupYaw = s.groupYaw; state.pan = s.pan.slice();
+  state.locAmbK = s.locAmbK; state.matrixCol = s.matrixCol; state.locTransp = s.locTransp;
+  rebuildGeometry();               // 矿物/外形/掩码可能整个换了，几何必须重建
+  applySceneLights(state.bg);      // 灯组按还原后的场景重挂
+}
 /* 矿物页（附属窗体）：默认显示代表晶体，选产地载入组合 */
 function enterMineralPage(mineralId, locId) {
   const m = DATA.minerals.find(x => x.id === mineralId);
   if (!m) { location.hash = "#/studio"; return; }
+  if (!document.body.classList.contains("museum-mode")) snapStudio();
+  // （标本页之间互跳不重新快照——否则后一个标本页会把前一个的状态当成"工作区"记下来）
   state.museum = { mineralId: m.id, locId: locId || null };
   document.body.classList.add("museum-mode");
   document.body.classList.remove("browse-mode");
@@ -4041,11 +4075,13 @@ function renderThumb(m, h) {
 /* ── 路由 ── */
 function enterBrowse() {
   const wasBrowse = document.body.classList.contains("browse-mode");
+  const fromMuseum = document.body.classList.contains("museum-mode");
   document.body.classList.add("browse-mode");
   document.body.classList.remove("museum-mode");
   state.museum = null;
   state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
   applySceneLights(state.bg);
+  if (fromMuseum) restoreStudio();   // 标本组合不带到卡片墙后面去
   document.getElementById("museum").style.display = "none";
   document.getElementById("browse").style.display = "";
   if (!wasBrowse) resize();
@@ -4054,13 +4090,18 @@ function enterBrowse() {
 }
 function enterStudio() {
   if (document.body.classList.contains("browse-mode") || document.body.classList.contains("museum-mode")) {
+    const fromMuseum = document.body.classList.contains("museum-mode");
     document.body.classList.remove("browse-mode", "museum-mode");
     document.getElementById("browse").style.display = "none";
     document.getElementById("museum").style.display = "none";
     state.museum = null;
     state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
     applySceneLights(state.bg);
-    resize(); syncPanels(); draw();
+    // 从标本页回来：还原快照的工作区（组合/场景/视角全部回到进页前的样子）；
+    // 「带当前组合去造型台」(mLoad) 设了 CARRY_COMBO——组合是特意带来的，不还原
+    if (fromMuseum && CARRY_COMBO) { CARRY_COMBO = false; STUDIO_SNAP = null; }
+    else if (fromMuseum) restoreStudio();
+    resize(); syncPanels(); renderExtras(); draw();
   }
   markPtab("studio");
 }
@@ -4122,7 +4163,7 @@ bindExtras();
   const ml = document.getElementById("mLoad");
   if (ml && !ml.dataset.done) {
     ml.dataset.done = "1";
-    ml.onclick = () => { location.hash = "#/studio"; applyRoute(); };   // 带当前组合去造型台
+    ml.onclick = () => { CARRY_COMBO = true; location.hash = "#/studio"; applyRoute(); };   // 带当前组合去造型台（不还原快照）
   }
 }
 function syncPanels() {
