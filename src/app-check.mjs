@@ -432,6 +432,21 @@ check("晶体卡：无产地矿物页仍走图鉴版式（字段勾选在，矿�
   const o = JSON.parse(r);
   return o.n === 9 && o.w === 1400 && o.file.indexOf("晶形") >= 0;
 })(), "");
+check("3D 台面场景：纸面/木桌/白台都有随标本转动的桌面网格，照片场景与黑底没有", (() => {
+  const r = run(`JSON.stringify((() => {
+    const out = {};
+    for (const b of ["paper", "wood", "bench", "void", "lab", "cabinet"]) {
+      const keep = state.bg;
+      state.bg = b; state.onTable = true; state.base = "none";
+      out[b] = scene3dActive();
+      state.bg = keep;
+    }
+    return out;
+  })())`);
+  const o = JSON.parse(r);
+  return o.paper === true && o.wood === true && o.bench === true
+    && o.void === true && o.lab === false && o.cabinet === false;   // void=黑底标本照也走 3D（丘），lab/cabinet 照片场景不走
+})(), "");
 check("导出对话框全部控件逐个真实点击不报错（未定义函数/绑定遗漏直接炸出来）", (() => {
   // 画幅切换曾调用不存在的 drawExportPreview——桩里 onclick 执行到未定义名会抛
   // ReferenceError，run() 把它变成断言失败。逐个点：尺寸×背景×画幅×字号 全按钮。
@@ -783,7 +798,7 @@ const glLastOptsOk = (glw, vw, vh) => {
   const src = glStat.shaders.map(s => s.src).join("\n");
   const declU = [...src.matchAll(/uniform\s+\w+\s+(\w+)/g)].map(m => m[1]);
   const declA = [...src.matchAll(/(?:in|layout\s*\(location\s*=\s*\d+\s*\)\s*in)\s+\w+\s+(\w+)/g)]
-    .map(m => m[1]).filter(n => n !== "vCol" && n !== "vFront" && n !== "vPos" && n !== "vNrm" && n !== "vUV");
+    .map(m => m[1]).filter(n => n !== "vCol" && n !== "vFront" && n !== "vPos" && n !== "vNrm" && n !== "vUV" && n !== "vLocal");
   const uniq = (a) => [...new Set(a)];
   const missU = uniq(declU).filter(n => !glStat.uniforms.has(n));
   const missA = uniq(declA).filter(n => !glStat.attrs.has(n));

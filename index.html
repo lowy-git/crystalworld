@@ -1361,7 +1361,7 @@ function sceneList(bgId) {
     const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
     let hRef = 1e9;
     for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));   // 主晶体已含自然摆放旋转
-    const onMound = state.base === "matrix" && (state.bg === "paper" || state.bg === "void");   // 丘面跟随：丘只在 3D 场景画
+    const onMound = state.base === "matrix" && (state.bg === "paper" || state.bg === "void" || state.bg === "wood" || state.bg === "bench");   // 丘面跟随：丘只在 3D 台面场景画
     for (const it of out) {
       if (it.main || !(it.e && it.e.settle) || !it.geo) { it.dropOff = null; continue; }
       const k0 = it.scale == null ? 1 : it.scale;
@@ -2307,7 +2307,7 @@ const SC_PRE_INV = [[SC_PRE[0][0], SC_PRE[1][0], SC_PRE[2][0]],
    + GL 可用。GL 不可用时回落到照片背景 + 屏幕空间贴合的老路径，一行不缺。 */
 function scene3dActive(opts) {
   // paper = 台面+纸的目录照模式；void = 标本照模式（无台面无纸，只有基岩/晶体）
-  return (state.bg === "paper" || state.bg === "void") && state.onTable
+  return (state.bg === "paper" || state.bg === "void" || state.bg === "wood" || state.bg === "bench") && state.onTable
     && !(opts && opts.noTable) && glInit();
 }
 /* 黑底标本照：void 场景 + matrix 基岩——深色背景让标本自己发光（克什米尔之王实拍同款布光） */
@@ -2403,7 +2403,7 @@ layout(location=2) in vec2 aUV;
 uniform mat3 uRot;
 uniform vec3 uShift;
 uniform float uDist, uFoc, uCx, uCy, uVw, uVh, uZn, uZf;
-out vec3 vPos; out vec3 vNrm; out vec2 vUV;
+out vec3 vPos; out vec3 vNrm; out vec2 vUV; out vec2 vLocal;
 vec2 screen(vec3 w) {
   float z = max(uDist - w.z, 0.4);
   return vec2(((uCx + w.x * uFoc / z) / uVw) * 2.0 - 1.0,
@@ -2411,7 +2411,7 @@ vec2 screen(vec3 w) {
 }
 void main() {
   vec3 w = uRot * aPos + uShift;
-  vPos = w; vNrm = uRot * aNrm; vUV = aUV;
+  vPos = w; vNrm = uRot * aNrm; vUV = aUV; vLocal = aPos.xy;   // 局部坐标：程序纹理钉在网格上
   float z = max(uDist - w.z, 0.4);
   // 与 GL_VS 同一条纪律：xy 已是 NDC，clip.w 必须是常量 1.0（GPU 还会再除一次 w）
   vec2 sp = screen(w);
@@ -2422,13 +2422,14 @@ void main() {
    （颜色 / 高光强度 / 锐度），纸面带贴图（贴图就是纸面照片本身）。 */
 const SC_FS = `#version 300 es
 precision highp float;
-in vec3 vPos; in vec3 vNrm; in vec2 vUV;
+in vec3 vPos; in vec3 vNrm; in vec2 vUV; in vec2 vLocal;
 uniform vec3 uLigDir[6];
 uniform vec3 uLigCol[6];
 uniform vec3 uLigInt[6];
 uniform float uDist, uAmbK, uExpo, uKeyExpo, uFillGain, uSpec, uShin, uAlpha, uHasTex;
 uniform vec3 uAmbT;
 uniform vec3 uColor;
+uniform float uWood;          // >0.5 = 台面画木纹（世界坐标程序条纹，不贴图）
 uniform sampler2D uTex;
 out vec4 frag;
 void main() {
@@ -2448,6 +2449,11 @@ void main() {
   lam = pow(lam / keyI, 1.12) * uKeyExpo;
   sp = sp / keyS * uSpec * 0.80;
   vec3 base = uColor;
+  if (uWood > 0.5) {
+    // 木纹：沿台面一个主方向的正弦条 + 低频扰动，深浅 8%（世界坐标算，转动不"滑"）
+    float gr = sin(vLocal.x * 2.3 + sin(vLocal.y * 1.6) * 1.3 + vLocal.y * 0.4);
+    base *= 1.0 - 0.08 * smoothstep(0.15, 0.9, gr);
+  }
   if (uHasTex > 0.5) base *= texture(uTex, vUV).rgb;
   vec3 c = base * (uAmbK * uAmbT + 0.62 * lam) + sp;
   frag = vec4(clamp(c * uExpo, 0.0, 1.0), uAlpha);
@@ -2561,7 +2567,7 @@ function glSceneInit() {
   gl.deleteShader(vs); gl.deleteShader(fs);
   for (const n of ["uRot", "uShift", "uDist", "uFoc", "uCx", "uCy", "uVw", "uVh", "uZn", "uZf",
                    "uLigDir", "uLigCol", "uLigInt", "uAmbK", "uAmbT", "uColor", "uHasTex", "uTex",
-                   "uSpec", "uShin", "uAlpha", "uExpo", "uKeyExpo", "uFillGain"]) {
+                   "uSpec", "uShin", "uAlpha", "uExpo", "uKeyExpo", "uFillGain", "uWood"]) {
     scUni[n] = gl.getUniformLocation(scProg, n);
   }
   for (const n of ["aPos", "aNrm", "aUV"]) scAttr[n] = gl.getAttribLocation(scProg, n);
@@ -2677,6 +2683,9 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   const contact = scContact(project, insts);
   const B = BACKGROUNDS[state.bg] || BACKGROUNDS.paper;
   const paperMode = state.bg === "paper";               // void = 黑底标本照：无台面无纸
+  // 3D 台面场景：纸面/木质桌面/白色工作台——真桌面网格，随晶体一起转（用户：
+  // 台面就该是"和标本一起转动的平台"，不是贴死的背景画）
+  const TABLE3D = { paper: 1, wood: 1, bench: 1 };
   gl.useProgram(scProg);
   gl.uniform1f(scUni.uDist, GL_DIST);
   gl.uniform1f(scUni.uFoc, 3.05 * opts.scale * Math.min(opts.vw, opts.vh) * 0.5);
@@ -2704,11 +2713,19 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   gl.uniformMatrix3fv(scUni.uRot, false, colMajor(Rsc));
   gl.uniform3fv(scUni.uShift, new Float32Array(contact.P0));
   gl.uniform1f(scUni.uAlpha, 1); gl.uniform1f(scUni.uHasTex, 0);
-  if (paperMode) {
-    gl.uniform3fv(scUni.uColor, new Float32Array([0.80, 0.78, 0.74]));   // 桌面：暖浅灰
-    gl.uniform1f(scUni.uSpec, 0.10); gl.uniform1f(scUni.uShin, 8);
+  if (TABLE3D[state.bg]) {
+    const looks = {   // 台面质感按场景：暖浅灰 / 漆面木（高光锐） / 哑光白
+      paper: { c: [0.80, 0.78, 0.74], spec: 0.10, shin: 8, wood: 0 },
+      wood:  { c: [0.47, 0.33, 0.19], spec: 0.18, shin: 22, wood: 1 },
+      bench: { c: [0.93, 0.94, 0.96], spec: 0.05, shin: 6, wood: 0 },
+    }[state.bg];
+    gl.uniform3fv(scUni.uColor, new Float32Array(looks.c));
+    gl.uniform1f(scUni.uSpec, looks.spec); gl.uniform1f(scUni.uShin, looks.shin);
+    gl.uniform1f(scUni.uWood, looks.wood);
     bindAttr(scTableBuf);
     gl.drawArrays(gl.TRIANGLES, 0, scTableN);
+  } else {
+    gl.uniform1f(scUni.uWood, 0);
   }
   if (paperMode) {
     const tex = scTexture();
@@ -2731,6 +2748,7 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   }
   // 接触阴影：扇面顶点已是世界坐标 → uRot 单位阵、uShift 归零，直接画
   const fan = (state.base === "matrix" || !paperMode) ? null : scShadowFan(contact, project, insts);
+  // （wood/bench 虽也是 3D 台面，但用户点名不要投影黑影：fan 只属于纸面）
   // matrix 基岩时跳过接触阴影：扇面在台面上、被圆丘整个盖住，画了也看不见
   if (fan && fan.length <= 4096 * 4 && gl.bufferSubData) {
     gl.uniformMatrix3fv(scUni.uRot, false, colMajor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
@@ -3193,13 +3211,17 @@ function paint(g, opts) {
       grd.addColorStop(0, "#08090b"); grd.addColorStop(0.55, "#030405"); grd.addColorStop(1, "#000000");
       g.fillStyle = grd; g.fillRect(0, 0, opts.vw, opts.vh);
     } else if (s3d) {
-      // 3D 模式的底子：影棚暖灰渐变 + 底部压暗（台面 GL 网格浮在它上面；
-      // 台面盖不满的地方读作"地面的阴影过渡"，不会露馅）
+      // 3D 模式的底子（台面 GL 网格浮在它上面；台面盖不满的地方读作"地面的阴影
+      // 过渡"，不会露馅）。纸面=影棚暖灰；木桌=暖棕暗室；白台=浅灰白房间。
+      const base3d = { paper: ["#f7f4ee", "#e9e4da", "#cfc8bb", "120,110,95"],
+                       wood:  ["#33261a", "#2b2015", "#1c130c", "70,50,30"],
+                       bench: ["#eef0f2", "#dfe3e7", "#c6ccd2", "130,140,150"] }[state.bg]
+                      || ["#f7f4ee", "#e9e4da", "#cfc8bb", "120,110,95"];
       const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.36, 0, opts.vw * 0.5, opts.vh * 0.42, Math.max(opts.vw, opts.vh) * 0.8);
-      grd.addColorStop(0, "#f7f4ee"); grd.addColorStop(0.55, "#e9e4da"); grd.addColorStop(1, "#cfc8bb");
+      grd.addColorStop(0, base3d[0]); grd.addColorStop(0.55, base3d[1]); grd.addColorStop(1, base3d[2]);
       g.fillStyle = grd; g.fillRect(0, 0, opts.vw, opts.vh);
       const fl = g.createLinearGradient(0, opts.vh * 0.60, 0, opts.vh);
-      fl.addColorStop(0, "rgba(120,110,95,0)"); fl.addColorStop(1, "rgba(120,110,95,.20)");
+      fl.addColorStop(0, "rgba(" + base3d[3] + ",0)"); fl.addColorStop(1, "rgba(" + base3d[3] + ",.20)");
       g.fillStyle = fl; g.fillRect(0, opts.vh * 0.60, opts.vw, opts.vh * 0.40);
     } else {
       BG.draw(g, opts.vw, opts.vh);                           // 照片（或回落程序化）
