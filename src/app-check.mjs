@@ -406,6 +406,42 @@ for (const b of [...bgKeys, "none"]) {
   check(`导出背景可用：${b}`, ok);
 }
 // —— 分享信息卡：晶体卡（图鉴版式）与标本卡（标本照+标本信息）——
+check("第三十二轮标本库扩充：托帕石晶型修正（{110}{010}{011}{111} 无平底）+ 芒果渐变染色 + 三新产地装载", (() => {
+  const r = run(`JSON.stringify((() => {
+    const tz = DATA.minerals.find(x => x.id === "topaz").habits[0];
+    const tzForms = tz.forms.map(f => f.idx).join(",");
+    const has001 = tz.forms.some(f => f.idx === "{001}");
+    // 芒果渐变：mango 模式下晶头面色 ≠ 柱底面色
+    location.hash = "#/m/quartz/mango"; applyRoute();
+    const mangoMode = state.colorMode === "mango";
+    let mangoDiff = false;
+    try {
+      let zmin = 1e9, zmax = -1e9;
+      for (const v of GEO.P) { if (v[2] < zmin) zmin = v[2]; if (v[2] > zmax) zmax = v[2]; }
+      let fTop = null, fBot = null;
+      for (const f of GEO.faces) {
+        let mx = -1e9, mn = 1e9;
+        for (const q of f.pts) { if (q[2] > mx) mx = q[2]; if (q[2] < mn) mn = q[2]; }
+        if (mx > zmax - 0.05 * (zmax - zmin) && !fTop) fTop = f;
+        if (mn < zmin + 0.05 * (zmax - zmin) && !fBot) fBot = f;
+      }
+      const cT = faceColor(fTop), cB = faceColor(fBot);
+      mangoDiff = Math.abs(cT[0] - cB[0]) + Math.abs(cT[1] - cB[1]) > 0.15;
+    } catch (e) {}
+    const mangoLoc = state.museum && state.museum.locId === "mango" && state.extras.length === 3;
+    // 萤石两产地
+    location.hash = "#/m/fluorite/binntal"; applyRoute();
+    const red = state.uniform === "#b04a6e" && state.extras.length === 2;
+    location.hash = "#/m/fluorite/xinjiang"; applyRoute();
+    const lilac = state.uniform === "#6b7ed0" && state.extras.length === 2;
+    location.hash = "#/studio"; applyRoute();
+    return { tzForms, has001, mangoMode, mangoDiff, mangoLoc, red, lilac };
+  })())`);
+  const o = JSON.parse(r);
+  return o.tzForms === "{110},{010},{011},{111}" && o.has001 === false
+    && o.mangoMode === true && o.mangoDiff === true && o.mangoLoc === true
+    && o.red === true && o.lilac === true;
+})(), "");
 check("标本卡：矿物页产地导出走标本版式（尺寸 4:3 + 副标题 + 固定版式说明 + 文件名带标本名）", (() => {
   const r = run(`JSON.stringify((() => {
     location.hash = "#/m/beryl/kashmir"; applyRoute();

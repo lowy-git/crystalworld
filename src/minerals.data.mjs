@@ -33,8 +33,9 @@ export const MINERALS = [
       { zh: "无色", en: "Colorless", hex: "#dfe8ee" },
       { zh: "绿色", en: "Green",     hex: "#4fae7a" },
       { zh: "紫色", en: "Purple",    hex: "#8a63b8" },
-      { zh: "红色", en: "Red",       hex: "#c2544f" },
+      { zh: "莓红", en: "Red",       hex: "#b04a6e" },
       { zh: "蓝色", en: "Blue",      hex: "#4a7fc1" },
+      { zh: "蓝紫", en: "Blue-lilac", hex: "#6b7ed0" },
     ],
     intro: {
       zh: "等轴晶系最典型的矿物，立方体、八面体与两者的聚形都常见；尖晶石律是两个立方体沿 [111] 互相穿插，是「贯穿双晶」的标准案例。",
@@ -63,6 +64,54 @@ export const MINERALS = [
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" },
         ],
+      },
+    ],
+    localities: [
+      {   // 阿尔卑斯红萤石（用户三段参考视频：alandhart / Ziga Mineral / Mont Blanc cristallier）
+        id: "binntal",
+        zh: "瑞士 · 宾河谷（阿尔卑斯）", en: "Binn Valley, Valais, Swiss Alps",
+        style: "octahedral", styleZh: "八面体阶梯",
+        habitId: "octahedron",
+        setup: {
+          base: "matrix", bg: "black", zoom: 0.52, sizeCM: 4,
+          rig: "showcase", ambK: 0.75, transp: "clear",
+          color: "#b04a6e",                        // 莓紫红：阳光下内部透红的高彩
+          matrixCol: [0.73, 0.72, 0.69],           // 白云石-石英围岩
+          extras: [                                 // 白水晶柱伴生（阿尔卑斯型脉）
+            { mineralId: "quartz", habitId: "prismatic", pos: [0.66, 0, -0.30], scale: 0.5, yaw: 18 },
+            { mineralId: "quartz", habitId: "prismatic", pos: [-0.58, 0, 0.34], scale: 0.38, yaw: -25 },
+          ],
+        },
+        text: {
+          zh: "阿尔卑斯山脊裂隙型矿床的镇山之宝：深莓红色的八面体萤石，晶棱常呈阶梯状生长，透明度极高——阳光下整颗晶体像一块红玻璃。与白色白云石、清澈水晶同生，采自海拔两千多米的岩缝，由被称为 cristallier 的阿尔卑斯采晶人徒手凿出。宾河谷是世界公认的红萤石圣地。",
+          en: "The treasure of Alpine cleft deposits: deep raspberry-red octahedral fluorite with stepped edges and superb transparency, found with white dolomite and rock crystal at over 2,000 m, collected by hand by the Alpine cristalliers. The Binn Valley is the world's shrine of red fluorite.",
+        },
+        features: ["莓红色", "八面体阶梯", "白云石-水晶共生", "阿尔卑斯裂隙型"],
+        source: "Mindat Binntal；用户参考视频（alandhart / Ziga Mineral / Mont Blanc cristallier）",
+        confidence: "medium", checked: "2026-10",
+      },
+      {   // 新疆蓝紫阶梯萤石（liminerals 视频：11×8.6×6.7cm，stepped fluorite + dolomite）
+        id: "xinjiang",
+        zh: "中国 · 新疆", en: "Xinjiang, China",
+        style: "stepped", styleZh: "阶梯聚形",
+        habitId: "cuboctahedron",                  // 立方+八面聚形=阶梯观感
+        setup: {
+          base: "matrix", bg: "black", zoom: 0.5, sizeCM: 11,   // 实测 11×8.6×6.7cm
+          rig: "showcase", ambK: 0.7, transp: "transl",
+          color: "#6b7ed0",                        // 蓝中带紫
+          matrixCol: [0.75, 0.74, 0.71],           // 白云石围岩
+          extras: [                                 // 白云石（白色菱面体，以方解石菱面体近似）
+            { mineralId: "calcite", habitId: "rhombohedron", pos: [0.72, 0, 0.26], scale: 0.42, yaw: 30 },
+            { mineralId: "calcite", habitId: "rhombohedron", pos: [-0.60, 0, -0.34], scale: 0.34, yaw: -18 },
+          ],
+        },
+        text: {
+          zh: "新疆出产的蓝紫色萤石：立方体与八面体反复交替生长，形成层层收拢的阶梯状轮廓，颜色在蓝与紫之间流动。白色白云石菱面体贴着晶面生长，对比强烈。标本实测约 11×8.6×6.7 cm——矿区近年产量大，好标本仍一票难求。",
+          en: "Blue-lilac fluorite from Xinjiang: cube and octahedron alternating growth builds stepped, terraced outlines, with white dolomite rhombohedra clinging to the faces. The referenced specimen measures about 11 × 8.6 × 6.7 cm.",
+        },
+        features: ["蓝紫色", "阶梯状聚形", "白云石共生", "11cm 级标本"],
+        source: "liminerals 视频（尺寸 11×8.6×6.7cm）+ Mindat Xinjiang",
+        confidence: "medium", checked: "2026-10",
       },
     ],
   },
@@ -351,6 +400,7 @@ export const MINERALS = [
       { zh: "紫水晶", en: "Amethyst", hex: "#8b5cb0" },
       { zh: "黄水晶", en: "Citrine", hex: "#d9a441" },
       { zh: "烟晶", en: "Smoky", hex: "#6b5a52" },
+      { zh: "芒果", en: "Mango", hex: "#f0b445", mango: true },
     ],
     intro: {
       zh: "点群 32 没有对称中心也没有镜面，所以 r {10-11} 与 z {01-11} 是两个不同单形，在晶体上下交替出现。日本律双晶的两个 c 轴夹角 84°33′。",
@@ -420,6 +470,30 @@ export const MINERALS = [
       },
     ],
     localities: [
+      {
+        id: "mango",
+        zh: "哥伦比亚 · 芒果水晶", en: "Mango quartz, Colombia",
+        style: "parallel", styleZh: "柱状并生",
+        habitId: "prismatic-long",
+        setup: {
+          base: "matrix", bg: "black", zoom: 0.5, sizeCM: 14,
+          rig: "showcase", ambK: 0.85, transp: "clear",
+          color: "mango",
+          matrixCol: [0.58, 0.55, 0.50],
+          extras: [
+            { mineralId: "quartz", habitId: "prismatic-long", pos: [0.78, 0, 0.22], scale: 0.62, yaw: 10 },
+            { mineralId: "quartz", habitId: "prismatic-long", pos: [-0.66, 0, -0.30], scale: 0.5, yaw: -16 },
+            { mineralId: "quartz", habitId: "prismatic", pos: [-0.42, 0, 0.55], scale: 0.36, yaw: 24 },
+          ],
+        },
+        text: {
+          zh: "哥伦比亚中部山区独有的品种：无色透明的水晶柱，顶端被金黄色浸染——像切开的芒果，果肉黄得最浓的地方在晶头。浸染由铁氧化物沿晶体生长方向富集在端部形成，颜色从柱底的清水色一路渐浓到顶端的芒果黄。晶型与普通水晶无异，全部价值都在这一抹黄上。",
+          en: "A Colombian specialty: colourless rock crystal with golden-yellow staining concentrated at the terminations, like a sliced mango, deepest at the head. Iron oxides enrich toward the tips; the prism itself is ordinary quartz.",
+        },
+        features: ["晶头金黄浸染", "无色柱体渐变", "哥伦比亚独有"],
+        source: "用户参考视频（Ziga Mineral: great Mango Quartz specimen）；Mindat Colombia",
+        confidence: "medium", checked: "2026-10",
+      },
       {
         id: "arkansas",
         zh: "美国 · 阿肯色水晶山区", en: "Crystal Mountains, Arkansas, USA",
@@ -544,13 +618,15 @@ export const MINERALS = [
       en: "The flagship orthorhombic mineral: {110} prism with {101} and {011} truncations, a standard pegmatite giant. Nothing to do with jade.",
     },
     habits: [
-      {
+      {   // Three Amigos 参考修正（用户："晶型完全错误"）：柱体长、端部楔形锥收拢——
+          // {110} 主柱面 + {010} 让横截面呈菱形，{011} 是终端大楔面（托帕石的招牌），
+          // {111} 双锥锐化棱角；旧版 {001} 平底截头是错的（天然托帕石端部收尖不截平）
         id: "prismatic", zh: "柱状", en: "Prismatic",
         forms: [
           { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [1, 0, 1], k: 1.3, idx: "{101}", zh: "斜方柱", en: "Dome" },
-          { hkl: [0, 1, 1], k: 1.3, idx: "{011}", zh: "斜方柱", en: "Dome" },
-          { hkl: [0, 0, 1], k: 1.9, idx: "{001}", zh: "底面", en: "Pinacoid c" },
+          { hkl: [0, 1, 0], k: 1.24, idx: "{010}", zh: "轴面 b", en: "Pinacoid b" },
+          { hkl: [0, 1, 1], k: 1.04, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [1, 1, 1], k: 1.18, idx: "{111}", zh: "斜方双锥", en: "Bipyramid" },
         ],
       },
     ],

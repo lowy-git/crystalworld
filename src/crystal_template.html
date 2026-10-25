@@ -1778,7 +1778,18 @@ const CLIP_TINT = [0.58, 0.62, 0.68];
 function faceColorOf(f, cm, uni) {
   if (f.form < 0) return CLIP_TINT;                       // 边界盒截断面
   let base;
-  if (cm === "mineral" && uni) {
+  if (cm === "mango") {
+    // 芒果水晶（哥伦比亚）：晶头（c 轴正向顶端）金黄浸染、往下渐回无色——
+    // 面级渐变取"面的最高点"做渐变位（晶头锥面金黄，柱面上段微黄，下段无色）
+    let zmin = 1e9, zmax = -1e9;
+    for (const v of GEO.P) { if (v[2] < zmin) zmin = v[2]; if (v[2] > zmax) zmax = v[2]; }
+    let top = -1e9;
+    for (const q of f.pts) if (q[2] > top) top = q[2];
+    const t = Math.max(0, Math.min(1, (top - zmin) / Math.max(1e-9, zmax - zmin)));
+    const m = t * t * (3 - 2 * t);
+    const c1 = [0.91, 0.66, 0.24];
+    base = [0.93 + (c1[0] - 0.93) * m, 0.95 + (c1[1] - 0.95) * m, 0.96 + (c1[2] - 0.96) * m];
+  } else if (cm === "mineral" && uni) {
     const c = hexToRgb(uni);
     base = [c[0], c[1], c[2]];
   } else {
@@ -3914,12 +3925,13 @@ function renderSwatches() {
   const colors = m.colors || [];
   for (const c of colors) {
     const el = document.createElement("div");
-    el.className = "sw" + (state.colorMode === "mineral" && state.uniform === c.hex ? " on" : "");
+    const isMango = c.mango && state.colorMode === "mango";
+    el.className = "sw" + ((state.colorMode === "mineral" && state.uniform === c.hex) || isMango ? " on" : "");
     el.style.background = c.hex;
     el.title = `${c.zh} ${c.en}`;
     el.onclick = () => {
-      state.colorMode = "mineral";
-      state.uniform = c.hex;
+      if (c.mango) { state.colorMode = "mango"; state.uniform = c.hex; }   // 芒果=晶头浸染渐变
+      else { state.colorMode = "mineral"; state.uniform = c.hex; }
       syncPanels(); draw();
     };
     box.appendChild(el);
@@ -4188,6 +4200,8 @@ function enterMineralPage(mineralId, locId) {
       state.transp = loc.setup.transp;
       state.alpha = transpById(loc.setup.transp).alpha;
     }
+    if (loc.setup.color === "mango") { state.colorMode = "mango"; state.uniform = "#f0b445"; }
+    else if (loc.setup.color) { state.colorMode = "mineral"; state.uniform = loc.setup.color; }
     applySceneLights(loc.setup.rig || state.bg);
   } else {
     state.locAmbK = null; state.matrixCol = null; state.locTransp = null; state.locRig = null;
