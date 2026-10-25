@@ -1,6 +1,6 @@
 # 构建门禁 + GitHub Pages 部署：push 到 main 即
 #   1) 重新生成 index.html（源码与成品永不脱节）
-#   2) 跑全部断言（201 应用 + 24 内核）——不过不部署
+#   2) 跑全部应用断言 + 24 条内核断言——不过不部署
 #   3) 把 index.html 发布到 GitHub Pages
 # 首次启用：仓库 Settings → Pages → Source 选 "GitHub Actions"。
 name: build & deploy
@@ -29,7 +29,7 @@ jobs:
           node-version: 20
       - name: 生成成品
         run: node src/make-app.mjs
-      - name: 应用断言（201 条）
+      - name: 应用断言
         run: node src/app-check.mjs
       - name: 内核断言（24 条）
         run: node src/check.mjs
@@ -41,6 +41,8 @@ jobs:
 
   deploy:
     needs: build
+    # 若本步持续失败而 build 全绿：仓库 Settings → Pages → Build and deployment
+    # → Source 必须选 "GitHub Actions"（deploy-pages 对未启用的仓库会 404）。
     runs-on: ubuntu-latest
     environment:
       name: github-pages

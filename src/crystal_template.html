@@ -1172,6 +1172,7 @@ const state = {
   turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
   locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
   backboard: false,    // 展台背板（L 形展托；wood/white/glass 有台时可用）
+  zoomBase: 1,         // 产地的原始终缩放（展台场景自动拉远，切回全黑恢复）
   twinTint: false,
   twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
   twinShow: "both",    // both / A / B：只显示其中一个个体
@@ -2499,8 +2500,29 @@ function scQuadOut(arr, quad, n, uv) {
 /* 博物馆式展台（wood/white/glass 场景）：小方台 + 可选背板 = 标准矿物展托。
    台面顶=局部 z0（接触求解把整组放到这条线上），向下有厚度；背板立在台面
    后缘。大英博物馆风：深色哑光、干净直角、无花哨纹理（用户反馈）。 */
-function scPedestalMesh(withBack) {
-  const W = 1.38, Dp = 0.95, TH = 0.15, BH = 1.15, BT = 0.05;   // 半宽/半深/台厚/背板高/背板厚
+/* 标本尺寸定标：产地 setup.sizeCM（厘米，组合特征宽）→ cm/unit 比例尺。
+   展台物理尺寸固定（底板 60×45cm、背板高 50cm），换算成世界单位生成——
+   任何标本的展台都真实地远大于标本（用户："你见过比展品小的展台吗"）。 */
+function specSizeCM() {
+  const m = museumMineral(), loc = museumLoc();
+  return (loc && loc.setup && loc.setup.sizeCM) || (m && m.sizeCM) || 10;
+}
+function specHalfW() {          // 组合的世界渲染半宽（主晶 + extras，xz 平面）
+  let hw = 0;
+  for (const it of sceneList(state.bg)) {
+    const k = it.scale == null ? 1 : it.scale;
+    hw = Math.max(hw, Math.hypot(it.pos[0], it.pos[2]) + (it.geo ? it.geo.extent * k : 0));
+  }
+  return hw || 1;
+}
+const PED_PHYS = { W: 30, D: 22.5, TH: 3, BH: 50, BT: 1.5 };   // 物理半宽/半深/半厚/背板高/背板半厚（cm）
+function pedParams() {
+  const cmPerUnit = specSizeCM() / (2 * specHalfW());
+  const f = (cm) => cm / cmPerUnit;   // 厘米 → 世界单位
+  return { W: f(PED_PHYS.W), Dp: f(PED_PHYS.D), TH: f(PED_PHYS.TH), BH: f(PED_PHYS.BH), BT: f(PED_PHYS.BT) };
+}
+function scPedestalMesh(withBack, P) {
+  const W = P.W, Dp = P.Dp, TH = P.TH, BH = P.BH, BT = P.BT;
   const arr = [];
   const quad = (pts, n) => scQuadOut(arr, pts, n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
   quad([[-W, -Dp, 0], [W, -Dp, 0], [W, Dp, 0], [-W, Dp, 0]], [0, 0, 1]);          // 台面顶
@@ -2605,7 +2627,7 @@ function scQuadPush(arr, quad, n) {
 let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShadowBuf = null;
 let scTableN = 0, scPaperN = 0, scMatrixN = 0, scMatrixNRN = 0, scTex = null, scTexImg = null;
 let scMatrixNRBuf = null;
-let scPedBuf = null, scPedBackBuf = null, scPedN = 0, scPedBackN = 0;
+let scPedBuf = null, scPedBackBuf = null, scPedN = 0, scPedBackN = 0, scPedKey = "";
 const scUni = {}, scAttr = {};
 function glSceneInit() {
   if (scReady) return !!scProg;
@@ -2642,7 +2664,8 @@ function glSceneInit() {
   gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixBuf);
   gl.bufferData(gl.ARRAY_BUFFER, matrixMesh, gl.STATIC_DRAW);
   scMatrixN = matrixMesh.length / SC_STRIDE;
-  const ped = scPedestalMesh(false), pedBack = scPedestalMesh(true);
+  const P0 = pedParams();
+  const ped = scPedestalMesh(false, P0), pedBack = scPedestalMesh(true, P0);
   scPedBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, scPedBuf);
   gl.bufferData(gl.ARRAY_BUFFER, ped, gl.STATIC_DRAW);
@@ -2786,6 +2809,18 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
     gl.uniform3fv(scUni.uColor, new Float32Array(looks.c));
     gl.uniform1f(scUni.uSpec, looks.spec); gl.uniform1f(scUni.uShin, looks.shin);
     gl.uniform1f(scUni.uAlpha, looks.alpha);
+    // 标本尺寸变化（换产地/组合）→ 按新比例尺重建展台 buffer（顶点少，重建便宜）
+    const P = pedParams(), key = [P.W, P.Dp, P.TH, P.BH, P.BT].map(x => x.toFixed(3)).join("|");
+    if (key !== scPedKey) {
+      scPedKey = key;
+      const ped = scPedestalMesh(false, P), pedBack = scPedestalMesh(true, P);
+      gl.bindBuffer(gl.ARRAY_BUFFER, scPedBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, ped, gl.DYNAMIC_DRAW);
+      scPedN = ped.length / SC_STRIDE;
+      gl.bindBuffer(gl.ARRAY_BUFFER, scPedBackBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, pedBack, gl.DYNAMIC_DRAW);
+      scPedBackN = pedBack.length / SC_STRIDE;
+    }
     const drawPed = (buf, n) => { bindAttr(buf); gl.drawArrays(gl.TRIANGLES, 0, n); };
     drawPed(state.backboard ? scPedBackBuf : scPedBuf, state.backboard ? scPedBackN : scPedN);
     gl.uniform1f(scUni.uAlpha, 1);
@@ -4062,8 +4097,10 @@ function enterMineralPage(mineralId, locId) {
       state.extras.push(e);
     }
     state.zoom = loc.setup.zoom || 0.62;
+    state.zoomBase = state.zoom;                  // 展台场景的拉远以此为基准
     state.base = loc.setup.base || "none";
-    state.bg = loc.setup.bg || "paper";
+    state.bg = loc.setup.bg || "black";
+    if (state.bg !== "black") state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);
   } else {
     // 默认视图：代表晶体站在 3D 桌面上
     state.extras = [];
@@ -4122,7 +4159,8 @@ function renderMuseum() {
       i.textContent = f;
       feat.appendChild(i);
     }
-    src.textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）";
+    src.textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）"
+      + "　标本宽约 " + specSizeCM() + " cm";
     // 标本名（如「克什米尔之王」）：有就顶在讲解前面——标本页的主角是标本不是矿物
     if (loc.title) text.textContent = "「" + loc.title + "」\n\n" + text.textContent;
   } else {
@@ -4150,6 +4188,10 @@ function renderMuseumRig() {
       state.onTable = true;                       // 展柜场景恒贴台（黑底=标本照、纸面=桌面）
       applySceneLights(state.locRig || id);       // 灯组保持用户选择，没选就随场景
       rebuildGeometry();                          // 场景换桌面/黑底，自然摆放与贴台都要重烤
+      // 展台远大于标本：拉远视野让台+标本全入镜（标本回到真实比例的小）；
+      // 切回全黑悬浮恢复产地原始 zoom（近景标本照）
+      if (id === "black") state.zoom = state.zoomBase;
+      else state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);
       renderMuseumRig(); draw();
     };
     scenes.appendChild(b);

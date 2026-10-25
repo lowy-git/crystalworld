@@ -432,6 +432,23 @@ check("晶体卡：无产地矿物页仍走图鉴版式（字段勾选在，矿�
   const o = JSON.parse(r);
   return o.n === 9 && o.w === 1400 && o.file.indexOf("晶形") >= 0;
 })(), "");
+check("展台真实比例：物理 60×45cm 底板换算后远大于标本（≥2.5×），zoom 自动拉远全入镜", (() => {
+  const r = run(`JSON.stringify((() => {
+    location.hash = "#/m/pyrite/navajun"; applyRoute();
+    const zb = state.zoomBase;
+    const hw = specHalfW(), P = pedParams();
+    const size = specSizeCM();
+    // 切到木质展台：zoom 拉远、台半宽/标本半宽 ≥ 2.5
+    for (const b of [...document.getElementById("mrScenes").children]) if (b.textContent === "木质展台") b.onclick();
+    const zAfter = state.zoom;
+    const zoomOut = state.zoom < zb * 0.9;
+    const ratio = P.W / hw;
+    location.hash = "#/studio"; applyRoute();
+    return { size, zb, hw: +hw.toFixed(2), pedW: +P.W.toFixed(2), ratio: +ratio.toFixed(2), zoomOut, z: +zAfter.toFixed(3) };
+  })())`);
+  const o = JSON.parse(r);
+  return o.size === 15 && o.ratio >= 2.5 && o.zoomOut === true;
+})(), "");
 check("展台场景体系：black 全黑悬浮 + wood/white/glass 三材质展台都走 3D；照片场景不走", (() => {
   const r = run(`JSON.stringify((() => {
     const out = {};

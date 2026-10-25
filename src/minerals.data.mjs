@@ -119,7 +119,7 @@ export const MINERALS = [
         style: "penetration", styleZh: "穿插连晶",
         habitId: "cube",
         setup: {
-          base: "matrix", bg: "paper", zoom: 0.5,     // matrix：灰绿色泥灰岩基岩，晶体底埋入丘中
+          base: "matrix", bg: "black", zoom: 0.5, sizeCM: 15,     // matrix：灰绿色泥灰岩基岩，晶体底埋入丘中
           rig: "showcase", ambK: 0.55,                // 展示灯：暗环境、暖强主光——镜面金属不被亮背景洗白
           extras: [
             // 构图对照实拍标本（fineartminerals 视频）：主晶体旁一左一右两颗
@@ -145,7 +145,7 @@ export const MINERALS = [
         setup: {
           // 黑底标本照 + 浅灰白围岩（Huanzala 标本多产自石英-白云石脉）：展示灯的
           // 暗面在黑底上自然吸收——亮纸面下金属背光面会黑成"一圈黑矿"（用户反馈）
-          base: "matrix", bg: "black", zoom: 0.52,
+          base: "matrix", bg: "black", zoom: 0.52, sizeCM: 6,
           rig: "showcase", ambK: 0.55, matrixCol: [0.72, 0.70, 0.66],
           extras: [
             { mineralId: "pyrite", habitId: "combo", pos: [0.82, 0, -0.25], scale: 0.75, yaw: 28 },
@@ -315,7 +315,7 @@ export const MINERALS = [
         style: "parallel", styleZh: "直立并生",
         habitId: "prismatic-long",
         setup: {
-          base: "matrix", bg: "black", zoom: 0.46,      // 黑底标本照：白色石英长石基质 + 蓝绿柱体
+          base: "matrix", bg: "black", zoom: 0.46, sizeCM: 20,      // 黑底标本照：白色石英长石基质 + 蓝绿柱体
           restPose: false,                              // 直立并生（实拍里柱体全部站姿）
           transp: "transl",                             // 半透明：蓝绿体色在黑场上"发光"
           ambK: 1.7,                                    // 背光辉光：环境抬亮，柱体像从内部透出蓝绿
@@ -426,7 +426,7 @@ export const MINERALS = [
         style: "parallel", styleZh: "平行连生",
         habitId: "prismatic-long",
         setup: {
-          base: "none", bg: "paper",
+          base: "none", bg: "black",
           extras: [
             { mineralId: "quartz", habitId: "prismatic-long", pos: [0.78, 0, 0.2], scale: 0.8, yaw: 14 },
             { mineralId: "quartz", habitId: "prismatic", pos: [-0.72, 0, -0.24], scale: 0.55, yaw: -22 },
@@ -446,7 +446,7 @@ export const MINERALS = [
         style: "single", styleZh: "裂隙单晶",
         habitId: "prismatic-short",
         setup: {
-          base: "none", bg: "paper",
+          base: "none", bg: "black",
           extras: [
             { mineralId: "quartz", habitId: "prismatic-short", pos: [0.85, 0, -0.18], scale: 0.6, yaw: 100 },
           ],
