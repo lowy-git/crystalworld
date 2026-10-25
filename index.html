@@ -2869,9 +2869,16 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
 /* 深度范围要把台面裙板也包进来（晶体算出的范围不包含场景网格，会把桌子裁掉） */
 function scBoundsPts(project, insts) {
   const contact = scContact(project, insts);
-  const T = 4.6, D = 1.5;
+  // 深度包围必须罩住实际要画的场景几何：1×2 米大台的世界尺寸远超旧桌面常数，
+  // 用旧值会把大台裁到远裁剪面外——画面上"台子整个消失"（用户实测）。
+  const isPed = state.bg === "wood" || state.bg === "white" || state.bg === "glass";
+  const P = isPed ? pedParams() : null;
+  const T = P ? P.W + 2 : 4.6;
+  const Dp = P ? P.Dp + 2 : 4.6;
+  const zLo = P ? -(P.TH + 1) : 0;
+  const zHi = P ? ((state.backboard ? P.BH : 0) + 1) : 0;
   const out = [];
-  for (const x of [-T, T]) for (const y of [-T, T]) for (const z of [0, -D]) {
+  for (const x of [-T, T]) for (const y of [-Dp, Dp]) for (const z of [zHi, zLo]) {
     const m = mv(SC_PRE, [x, y, z]);
     const w = mv(project.R, m);
     out.push([w[0] + contact.P0[0], w[1] + contact.P0[1], w[2] + contact.P0[2]]);
