@@ -483,6 +483,12 @@
         <div class="mrow"><span class="mlab">场景</span><span class="btns" id="mrScenes"></span></div>
         <div class="mrow"><span class="mlab">灯组</span><span class="btns" id="mrRigs"></span></div>
         <div class="mrow">
+          <label class="ck"><input type="checkbox" id="mrLamp0"> 主灯</label>
+          <label class="ck"><input type="checkbox" id="mrLamp1"> 轮廓灯</label>
+          <label class="ck"><input type="checkbox" id="mrLamp2"> 补灯</label>
+        </div>
+        <div class="srow"><span>台面尺寸 <b id="mrPedVal" class="val"></b></span><input type="range" id="mrPedSize" min="50" max="200" step="5"></div>
+        <div class="mrow">
           <label class="ck"><input type="checkbox" id="mrTurn"> 转台 Turntable</label>
           <label class="ck"><input type="checkbox" id="mrRest"> 自然摆放 Rest</label>
           <label class="ck"><input type="checkbox" id="mrBack"> 背板 Backboard</label>
@@ -1170,7 +1176,10 @@ const state = {
   incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
   lightAz: -25, lightEl: 38,
   lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
-  lightVis: true,      // 光源可见：主光方向画小太阳标记（用户要求）
+  lightVis: true,      // 灯具可见：3D 射灯模型画在光位（用户要求；太阳符号退役）
+  lampOn: [true, true, true],   // 三盏可控灯：主光/轮廓光/补光（关=置零强度+不画模型）
+  lampKeep: [0, 0, 0],          // 关灯前的强度存档
+  pedScale: 1,         // 台面尺寸倍率（0.5–2；0.5m×1m 基准）
   turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
   locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
   backboard: false,    // 展台背板（L 形展托；wood/white/glass 有台时可用）
@@ -2517,11 +2526,13 @@ function specHalfW() {          // 组合的世界渲染半宽（主晶 + extras
   }
   return hw || 1;
 }
-const PED_PHYS = { W: 100, D: 50, TH: 4, BH: 70, BT: 2 };   // 物理半宽/半深/半厚/背板高/背板半厚（cm）——1m×2m 大桌面，标本置中央
+const PED_PHYS = { W: 50, D: 25, TH: 3, BH: 60, BT: 2 };   // 物理半宽/半深/半厚/背板高/背板半厚（cm）——0.5m×1m（用户定），台面尺寸滑杆可再放大
 function pedParams() {
   const cmPerUnit = specSizeCM() / (2 * specHalfW());
-  const f = (cm) => cm / cmPerUnit;   // 厘米 → 世界单位
-  return { W: f(PED_PHYS.W), Dp: f(PED_PHYS.D), TH: f(PED_PHYS.TH), BH: f(PED_PHYS.BH), BT: f(PED_PHYS.BT) };
+  const k = state.pedScale || 1;      // 用户可调台面尺寸（0.5×–2×；0.5m×1m 基准）
+  const f = (cm) => cm / cmPerUnit * k;
+  return { W: f(PED_PHYS.W), Dp: f(PED_PHYS.D), TH: f(PED_PHYS.TH), BH: f(PED_PHYS.BH), BT: f(PED_PHYS.BT),
+           lamp: 12 / cmPerUnit * Math.sqrt(k), lampDist: 70 / cmPerUnit * Math.sqrt(k) };   // 灯具尺寸/灯距（cm→世界）
 }
 function scPedestalMesh(withBack, P) {
   const W = P.W, Dp = P.Dp, TH = P.TH, BH = P.BH, BT = P.BT;
@@ -2540,6 +2551,34 @@ function scPedestalMesh(withBack, P) {
   };
   box(-W, W, -Dp, Dp, -TH, 0);                       // 底板：顶面 z=0（接触线），厚 TH
   if (withBack) box(-W, W, -Dp - 2 * BT, -Dp, 0, BH); // 背板：贴台面后缘立起（也是标准长方体）
+  return new Float32Array(arr);
+}
+
+/* 博物馆射灯模型（用户："灯具建模化，不要太阳符号"）：8 段圆柱灯体 + 亮白灯口盘。
+   局部 z 轴 = 灯轴（灯口朝 +z，画时旋到指向标本）。单位尺寸，画时按 cm 换算缩放。 */
+function scLampMesh() {
+  const arr = [], SEG = 8, R = 0.5, L = 1.6;
+  const uvq = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const ring = (z, r) => Array.from({ length: SEG }, (_, i) => {
+    const a = i / SEG * Math.PI * 2;
+    return [Math.cos(a) * r, Math.sin(a) * r, z];
+  });
+  const top = ring(0, R), bot = ring(-L, R), mouth = ring(0, R * 1.16), glow = ring(0.02, R * 0.82);
+  for (let i = 0; i < SEG; i++) {
+    const j = (i + 1) % SEG;
+    const nx = Math.cos((i + 0.5) / SEG * Math.PI * 2), ny = Math.sin((i + 0.5) / SEG * Math.PI * 2);
+    scQuadOut(arr, [bot[i], bot[j], top[j], top[i]], [nx, ny, 0], uvq);          // 灯体侧面（法线径向）
+    scQuadOut(arr, [mouth[i], mouth[j], glow[j], glow[i]], [nx * 0.5, ny * 0.5, 0.86], uvq); // 灯口锥面
+  }
+  const cap = ring(-L, R);
+  for (let i = 1; i < SEG - 1; i++) {                                             // 后盖扇面
+    const n = [0, 0, -1];
+    arr.push(...cap[0], ...n, 0, 0, ...cap[i], ...n, 0, 0, ...cap[i + 1], ...n, 0, 0);
+  }
+  const gz = ring(0.05, R * 0.82), cn = [0.5, 0.5, 0.7];
+  for (let i = 1; i < SEG - 1; i++) {                                             // 灯口亮盘（朝 +z 微倾法线）
+    arr.push(...gz[0], ...cn, 0, 0, ...gz[i], ...cn, 0, 0, ...gz[i + 1], ...cn, 0, 0);
+  }
   return new Float32Array(arr);
 }
 
@@ -2629,6 +2668,7 @@ let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShad
 let scTableN = 0, scPaperN = 0, scMatrixN = 0, scMatrixNRN = 0, scTex = null, scTexImg = null;
 let scMatrixNRBuf = null;
 let scPedBuf = null, scPedBackBuf = null, scPedN = 0, scPedBackN = 0, scPedKey = "";
+let scLampBuf = null, scLampN = 0;
 const scUni = {}, scAttr = {};
 function glSceneInit() {
   if (scReady) return !!scProg;
@@ -2667,6 +2707,11 @@ function glSceneInit() {
   scMatrixN = matrixMesh.length / SC_STRIDE;
   const P0 = pedParams();
   const ped = scPedestalMesh(false, P0), pedBack = scPedestalMesh(true, P0);
+  const lamp = scLampMesh();
+  scLampBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scLampBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, lamp, gl.STATIC_DRAW);
+  scLampN = lamp.length / SC_STRIDE;
   scPedBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, scPedBuf);
   gl.bufferData(gl.ARRAY_BUFFER, ped, gl.STATIC_DRAW);
@@ -2863,6 +2908,34 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
     if (gl.depthMask) gl.depthMask(false);            // 阴影不写深度：后面的晶体照样通过深度测试
     gl.drawArrays(gl.TRIANGLES, 0, fan.length / SC_STRIDE);
     if (gl.depthMask) gl.depthMask(true);
+  }
+  // 灯具建模（用户："灯具建模化"）：主光/轮廓光/补光三盏射灯画在光位，朝向标本；
+  // 开关关掉的灯不画（强度也已置零）。lightVis 总开关控制显隐。
+  if (state.lightVis && scLampN) {
+    const P = pedParams();
+    for (let i = 0; i < 3; i++) {
+      if (!state.lampOn[i]) continue;
+      const d = LIGHTS[i].dir || LIGHT_V;                 // 主光 dir=null 由滑杆给 LIGHT_V
+      const w = mv(project.R, [d[0] * P.lampDist, d[1] * P.lampDist, d[2] * P.lampDist]);
+      // 局部 +z（灯口）→ 世界 -d：构造正交基，列即新轴
+      const z2 = [-d[0], -d[1], -d[2]];
+      let up = Math.abs(z2[1]) > 0.93 ? [1, 0, 0] : [0, 1, 0];
+      const x2 = unit(cross(up, z2)), y2 = cross(z2, x2);
+      const M = [[x2[0], y2[0], z2[0]], [x2[1], y2[1], z2[1]], [x2[2], y2[2], z2[2]]];
+      gl.uniformMatrix3fv(scUni.uRot, false, new Float32Array(
+        [M[0][0], M[1][0], M[2][0], M[0][1], M[1][1], M[2][1], M[0][2], M[1][2], M[2][2]]));
+      // 相机系合成：Rc = R · M（灯随场景刚体转）
+      const Rc = mm3(project.R, M);
+      gl.uniformMatrix3fv(scUni.uRot, false, new Float32Array(
+        [Rc[0][0], Rc[1][0], Rc[2][0], Rc[0][1], Rc[1][1], Rc[2][1], Rc[0][2], Rc[1][2], Rc[2][2]]));
+      gl.uniform3fv(scUni.uShift, new Float32Array(w));
+      gl.uniform1f(scUni.uHasTex, 0); gl.uniform1f(scUni.uWood, 0);
+      gl.uniform3fv(scUni.uColor, new Float32Array(i === 0 ? [0.30, 0.30, 0.33] : [0.24, 0.25, 0.28]));
+      gl.uniform1f(scUni.uSpec, 0.5); gl.uniform1f(scUni.uShin, 40);
+      gl.uniform1f(scUni.uAlpha, 1);
+      bindAttr(scLampBuf);
+      gl.drawArrays(gl.TRIANGLES, 0, scLampN);
+    }
   }
   return true;
 }
@@ -3452,29 +3525,6 @@ function draw() {
   ctx.clearRect(0, 0, W, H);
   const opts = { cx: W / 2, cy: H / 2, scale: state.zoom, vw: W, vh: H, pan: state.pan, dpr: DPR };
   paint(ctx, opts);
-  // 光源可见：主光方向的"小太阳"标记（用户要求）——投到相机系远处再上屏，
-  // 转动晶体时标记跟着方位走，光源绕行时能看到它划过天穹
-  if (state.lightVis) {
-    try {
-      const pr = makeProject(opts);
-      const w = mv(qToMat(state.quat), LIGHT_V.map(x => x * 9));
-      const sc = pr(w);
-      if (sc[0] > 8 && sc[0] < W - 8 && sc[1] > 8 && sc[1] < H - 8) {
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = "#ffd98a"; ctx.fillStyle = "#ffe9b0"; ctx.lineWidth = 1.6;
-        ctx.beginPath(); ctx.arc(sc[0], sc[1], 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        for (let i = 0; i < 8; i++) {
-          const a = i * Math.PI / 4;
-          ctx.beginPath();
-          ctx.moveTo(sc[0] + Math.cos(a) * 10, sc[1] + Math.sin(a) * 10);
-          ctx.lineTo(sc[0] + Math.cos(a) * 14, sc[1] + Math.sin(a) * 14);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-    } catch (e) {}
-  }
   // 舞台浮层（HUD/提示）的颜色跟着"场景背景"的明暗走：浅背景配深字，深背景配浅字。
   // 这和"主题三态"是两件事——主题管左右面板，这里管画布上的字。
   const bgDark = !!(BACKGROUNDS[state.bg] && BACKGROUNDS[state.bg].dark) || voidSpecimen();
@@ -4238,6 +4288,33 @@ function renderMuseumRig() {
     rest.checked = state.restPose;
     rest.disabled = !(state.bg === "wood" || state.bg === "white" || state.bg === "glass" || state.bg === "paper");   // 有台才谈自然摆放；全黑悬浮恒直立
     rest.onchange = () => { state.restPose = rest.checked; rebuildGeometry(); draw(); };
+  }
+  // 三盏灯独立开关（用户："多个光源分别调整"）：关=强度置零+灯模不画，开=恢复存档强度
+  for (let i = 0; i < 3; i++) {
+    const el = document.getElementById("mrLamp" + i);
+    if (!el) continue;
+    el.checked = state.lampOn[i];
+    el.onchange = () => {
+      state.lampOn[i] = el.checked;
+      if (!el.checked) { state.lampKeep[i] = LIGHTS[i].inten; LIGHTS[i].inten = 0; }
+      else if (LIGHTS[i].inten === 0) LIGHTS[i].inten = state.lampKeep[i] || 0.3;
+      LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
+      LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
+      draw();
+    };
+  }
+  const ped = document.getElementById("mrPedSize");
+  if (ped) {
+    ped.value = String(Math.round((state.pedScale || 1) * 100));
+    const lab = document.getElementById("mrPedVal");
+    if (lab) lab.textContent = ped.value + "%";
+    ped.oninput = () => {
+      state.pedScale = Number(ped.value) / 100;
+      const l2 = document.getElementById("mrPedVal");
+      if (l2) l2.textContent = ped.value + "%";
+      state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);   // 台变了视野重配
+      draw();
+    };
   }
   const back = document.getElementById("mrBack");
   if (back) {
