@@ -557,6 +557,7 @@
           <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
           <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
           <label class="ck"><input type="checkbox" id="optLMove"> 光源绕行 Light orbit</label>
+          <label class="ck"><input type="checkbox" id="optLightVis" checked> 光源可见 Show light</label>
           <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
         </div>
         <!-- 双晶拆解：只在双晶习惯出现。0＝合在一起；>0＝个体 B 沿拆解方向平移 -->
@@ -1169,6 +1170,7 @@ const state = {
   incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
   lightAz: -25, lightEl: 38,
   lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
+  lightVis: true,      // 光源可见：主光方向画小太阳标记（用户要求）
   turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
   locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
   backboard: false,    // 展台背板（L 形展托；wood/white/glass 有台时可用）
@@ -2328,7 +2330,7 @@ window.addEventListener("error", (ev) => {
    fitToTable 不再参与，3D 透视自己给出桌面在画面里的位置）。 */
 const SC_STRIDE = 8;                                  // pos3 + nrm3 + uv2
 /* 台面预倾（模型空间绕 x 轴 +0.30 rad）。绕序不需要管：法线是显式属性，且不开背面剔除。 */
-const SC_PRE = qToMat(qNorm(qAxis(1, 0, 0, 0.30)));
+const SC_PRE = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];   // 曾是 17° 预倾（纸面照片的视角感）；纸面退役后展台必须水平（用户："奇怪的形状"）
 const SC_PRE_N = mv(SC_PRE, [0, 0, 1]);               // 台面法线（模型空间）
 const SC_PRE_INV = [[SC_PRE[0][0], SC_PRE[1][0], SC_PRE[2][0]],
                     [SC_PRE[0][1], SC_PRE[1][1], SC_PRE[2][1]],
@@ -3315,9 +3317,9 @@ function paint(g, opts) {
       // 3D 模式的底子（台面 GL 网格浮在它上面；台面盖不满的地方读作"地面的阴影
       // 过渡"，不会露馅）。纸面=影棚暖灰；木桌=暖棕暗室；白台=浅灰白房间。
       const base3d = { black: ["#08090b", "#030405", "#000000", "0,0,0"],          // 全黑悬浮（无丘也纯黑）
-                       wood:  ["#33261a", "#2b2015", "#1c130c", "70,50,30"],
-                       white: ["#eef0f2", "#dfe3e7", "#c6ccd2", "130,140,150"],
-                       glass: ["#3c4148", "#31363c", "#20242a", "20,24,30"] }[state.bg]
+                       wood:  ["#08090b", "#030405", "#000000", "0,0,0"],          // 展台场景同全黑（用户：背景全黑+展台）
+                       white: ["#08090b", "#030405", "#000000", "0,0,0"],
+                       glass: ["#08090b", "#030405", "#000000", "0,0,0"] }[state.bg]
                       || ["#f7f4ee", "#e9e4da", "#cfc8bb", "120,110,95"];
       const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.36, 0, opts.vw * 0.5, opts.vh * 0.42, Math.max(opts.vw, opts.vh) * 0.8);
       grd.addColorStop(0, base3d[0]); grd.addColorStop(0.55, base3d[1]); grd.addColorStop(1, base3d[2]);
@@ -3441,7 +3443,31 @@ function drawAxes(g, R, project, scale) {
 function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  paint(ctx, { cx: W / 2, cy: H / 2, scale: state.zoom, vw: W, vh: H, pan: state.pan, dpr: DPR });
+  const opts = { cx: W / 2, cy: H / 2, scale: state.zoom, vw: W, vh: H, pan: state.pan, dpr: DPR };
+  paint(ctx, opts);
+  // 光源可见：主光方向的"小太阳"标记（用户要求）——投到相机系远处再上屏，
+  // 转动晶体时标记跟着方位走，光源绕行时能看到它划过天穹
+  if (state.lightVis) {
+    try {
+      const pr = makeProject(opts);
+      const w = mv(qToMat(state.quat), LIGHT_V.map(x => x * 9));
+      const sc = pr(w);
+      if (sc[0] > 8 && sc[0] < W - 8 && sc[1] > 8 && sc[1] < H - 8) {
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = "#ffd98a"; ctx.fillStyle = "#ffe9b0"; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(sc[0], sc[1], 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(sc[0] + Math.cos(a) * 10, sc[1] + Math.sin(a) * 10);
+          ctx.lineTo(sc[0] + Math.cos(a) * 14, sc[1] + Math.sin(a) * 14);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    } catch (e) {}
+  }
   // 舞台浮层（HUD/提示）的颜色跟着"场景背景"的明暗走：浅背景配深字，深背景配浅字。
   // 这和"主题三态"是两件事——主题管左右面板，这里管画布上的字。
   const bgDark = !!(BACKGROUNDS[state.bg] && BACKGROUNDS[state.bg].dark) || voidSpecimen();
@@ -4437,6 +4463,8 @@ function syncPanels() {
   document.getElementById("optStri").checked = state.striations;
   document.getElementById("optSpin").checked = state.spin;
   document.getElementById("optLMove").checked = state.lightMove;
+  const lv = document.getElementById("optLightVis");
+  if (lv) lv.checked = state.lightVis;
   const twinRow = document.getElementById("twinRow");
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
@@ -4506,6 +4534,7 @@ document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.c
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
 document.getElementById("optLMove").onchange = (e) => { state.lightMove = e.target.checked; };
+document.getElementById("optLightVis").onchange = (e) => { state.lightVis = e.target.checked; draw(); };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
 document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 
