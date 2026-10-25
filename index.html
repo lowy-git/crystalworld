@@ -636,6 +636,8 @@
         <h4 style="margin-top:16px">背景 Background</h4>
         <div class="row" id="expBg">
           <button class="btn on" data-bg="void">空白</button>
+          <button class="btn" data-bg="wood">木质桌面</button>
+          <button class="btn" data-bg="bench">白色工作台</button>
           <button class="btn" data-bg="lab">实验室</button>
           <button class="btn" data-bg="nature">自然界</button>
           <button class="btn" data-bg="cabinet">藏品柜</button>
@@ -901,6 +903,51 @@ const BACKGROUNDS = {
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     },
   },
+  /* 木质桌面 / 白色工作台（标本照场景，程序化画法）：上半环境色、下半台面 + 台面线。
+     2D 照片式场景——没有 3D 桌面网格，也就没有纸面的投影阴影扇面（用户点名
+     "木桌白台上不该出现黑图案"）。 */
+  wood: {
+    zh: "木质桌面", dark: false, amb: 1.06, ambT: [1.00, 0.96, 0.90], table: { y: 0.62 },
+    draw(g, w, h) {
+      const ty = h * this.table.y;
+      const sky = g.createLinearGradient(0, 0, 0, ty);          // 上半：暖暗室内
+      sky.addColorStop(0, "#231a12"); sky.addColorStop(1, "#3b2b1d");
+      g.fillStyle = sky; g.fillRect(0, 0, w, ty);
+      const desk = g.createLinearGradient(0, ty, 0, h);         // 台面：木色
+      desk.addColorStop(0, "#7d5c36"); desk.addColorStop(1, "#573d22");
+      g.fillStyle = desk; g.fillRect(0, ty, w, h - ty);
+      g.strokeStyle = "rgba(38,24,10,.26)"; g.lineWidth = 1.6;  // 木纹：正弦扰动的横纹
+      for (let i = 0; i < 16; i++) {
+        const y0 = ty + (h - ty) * (i + 0.5) / 16;
+        g.beginPath();
+        for (let x = 0; x <= w; x += 26) g.lineTo(x, y0 + Math.sin(x * 0.007 + i * 2.3) * 2.6);
+        g.stroke();
+      }
+      g.fillStyle = "rgba(30,18,8,.35)"; g.fillRect(0, ty, w, h * 0.014);   // 台面接缝
+      g.strokeStyle = "rgba(255,225,180,.28)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, ty + 0.5); g.lineTo(w, ty + 0.5); g.stroke();
+    },
+  },
+  bench: {
+    zh: "白色工作台", dark: false, amb: 1.12, ambT: [1.00, 1.00, 1.01], table: { y: 0.60 },
+    draw(g, w, h) {
+      const ty = h * this.table.y;
+      const sky = g.createLinearGradient(0, 0, 0, ty);          // 上半：浅灰白
+      sky.addColorStop(0, "#f1f3f5"); sky.addColorStop(1, "#dcdfe4");
+      g.fillStyle = sky; g.fillRect(0, 0, w, ty);
+      const desk = g.createLinearGradient(0, ty, 0, h);         // 台面：白
+      desk.addColorStop(0, "#f6f7f8"); desk.addColorStop(1, "#d9dee3");
+      g.fillStyle = desk; g.fillRect(0, ty, w, h - ty);
+      g.strokeStyle = "rgba(140,155,170,.14)"; g.lineWidth = 1; // 台面细纹（拉丝感）
+      for (let i = 0; i < 22; i++) {
+        const y0 = ty + (h - ty) * (i + 0.5) / 22;
+        g.beginPath(); g.moveTo(0, y0); g.lineTo(w, y0); g.stroke();
+      }
+      g.fillStyle = "rgba(120,135,150,.30)"; g.fillRect(0, ty, w, h * 0.012);
+      g.strokeStyle = "rgba(255,255,255,.75)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(0, ty + 0.5); g.lineTo(w, ty + 0.5); g.stroke();
+    },
+  },
   lab: {
     zh: "实验室", dark: false, amb: 1.14, ambT: [0.99, 1.00, 1.04], table: { y: 0.60 },
     img: "lab", focus: [0.5, 0.60], vig: 0.16,
@@ -1032,6 +1079,18 @@ const SCENE_RIGS = {
              {dir:[0.03,1.00,0.05],  col:[1.00,0.99,0.96], inten:0.80, spec:0.4},
              {dir:[-0.20,-0.95,0.22], col:[0.96,0.94,0.90], inten:0.45, spec:0.2},
              {dir:[-0.58,0.30,-0.76], col:[0.94,0.96,1.00], inten:0.20, spec:0.4} ],
+  wood:    [ {dir:null, col:[1.00,0.96,0.88], inten:1.30, spec:0.9},
+             {dir:[0.60,0.46,-0.64], col:[1.00,0.92,0.78], inten:0.40, spec:0.7},
+             {dir:[-0.78,-0.30,0.55], col:[0.88,0.76,0.62], inten:0.26, spec:0.4},
+             {dir:[0.04,1.00,0.06],  col:[1.00,0.95,0.86], inten:0.62, spec:0.6},
+             {dir:[-0.20,-0.95,0.20], col:[0.52,0.40,0.28], inten:0.28, spec:0.2},
+             {dir:[-0.58,0.30,-0.76], col:[0.92,0.84,0.72], inten:0.20, spec:0.5} ],
+  bench:   [ {dir:null, col:[1.00,1.00,1.00], inten:1.24, spec:0.8},
+             {dir:[0.60,0.48,-0.62], col:[0.96,0.97,1.02], inten:0.46, spec:0.6},
+             {dir:[-0.78,-0.32,0.54], col:[0.98,0.99,1.02], inten:0.38, spec:0.4},
+             {dir:[0.03,1.00,0.05],  col:[1.00,1.00,1.00], inten:0.72, spec:0.5},
+             {dir:[-0.20,-0.95,0.22], col:[0.90,0.92,0.96], inten:0.30, spec:0.2},
+             {dir:[-0.58,0.30,-0.76], col:[0.95,0.97,1.00], inten:0.22, spec:0.5} ],
 /* 展示灯（矿物页产地组合用）：暗环境、暖强主光、弱补光——
    深色标本（镜面金属、深色晶体）在亮场景里会被环境"洗白"，
    展示灯把环境压暗、把主光集中，标本自己亮起来（矿物摄影的布光逻辑） */
@@ -1293,15 +1352,16 @@ function sceneList(bgId) {
   // 落桌补偿（产地组合的 settle 实例）：把每颗的最低点放到该坐的支撑面上——
   // 普通台面对齐主晶体最低点；基质圆丘则跟随自己足印处的丘面高度
   // （丘面噪声取下限：宁可陷进基质半截，也不能悬空——"从基质里长出来"）。
-  // 只在 3D 桌面/标本照场景生效；拖动照常（实例贴着支撑面滑，抬不起来）。
-  const s3 = (state.bg === "paper" || state.bg === "void") && state.onTable;
+  // 所有贴台场景生效（纸面 3D / 黑底标本照 / 木质桌面等工作台照片场景——后者无丘，
+  // 对齐主晶体最低点即可）；拖动照常（实例贴着支撑面滑，抬不起来）。
+  const s3 = state.onTable;
   if (s3 && GEO) {
     // pos/顶点都在 groupYaw 之前的模型系里，竖直方向用 u = rotYv(up, −gy) 表达，
     // 主晶体与附加晶体在同一套基下量高度（rotYv 保点积：dot(rotYv(v,gy), up) = dot(v, u)）
     const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
     let hRef = 1e9;
     for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));   // 主晶体已含自然摆放旋转
-    const onMound = state.base === "matrix";
+    const onMound = state.base === "matrix" && (state.bg === "paper" || state.bg === "void");   // 丘面跟随：丘只在 3D 场景画
     for (const it of out) {
       if (it.main || !(it.e && it.e.settle) || !it.geo) { it.dropOff = null; continue; }
       const k0 = it.scale == null ? 1 : it.scale;
@@ -3130,7 +3190,7 @@ function paint(g, opts) {
     if (s3d && voidSpecimen()) {
       // 影棚黑：中央略亮的深灰渐变（标本照布光——晶体和白色基质在黑场上自己发光）
       const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.42, 0, opts.vw * 0.5, opts.vh * 0.45, Math.max(opts.vw, opts.vh) * 0.75);
-      grd.addColorStop(0, "#20262d"); grd.addColorStop(0.55, "#141a20"); grd.addColorStop(1, "#0a0e13");
+      grd.addColorStop(0, "#08090b"); grd.addColorStop(0.55, "#030405"); grd.addColorStop(1, "#000000");
       g.fillStyle = grd; g.fillRect(0, 0, opts.vw, opts.vh);
     } else if (s3d) {
       // 3D 模式的底子：影棚暖灰渐变 + 底部压暗（台面 GL 网格浮在它上面；
@@ -3994,7 +4054,7 @@ function renderMuseumRig() {
   if (!scenes) return;
   scenes.innerHTML = "";
   // 场景全家搬来标本页：黑底标本照/纸面 3D + 三套照片场景（晶体台固定 void 摄影棚底）
-  for (const [id, zh] of [["void", "黑底标本照"], ["paper", "纸面"], ["lab", "实验室"], ["nature", "自然界"], ["cabinet", "藏品柜"]]) {
+  for (const [id, zh] of [["void", "黑底标本照"], ["paper", "纸面"], ["wood", "木质桌面"], ["bench", "白色工作台"], ["lab", "实验室"], ["cabinet", "藏品柜"]]) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "btn" + (state.bg === id ? " on" : "");
@@ -4426,7 +4486,7 @@ function buildSpecimenCanvas() {
   off.width = w; off.height = h;
   const g = off.getContext("2d");
   const grd = g.createLinearGradient(0, 0, 0, h);          // 影棚黑渐变（与标本页同款）
-  grd.addColorStop(0, "#20262d"); grd.addColorStop(0.55, "#141a20"); grd.addColorStop(1, "#0a0e13");
+  grd.addColorStop(0, "#08090b"); grd.addColorStop(0.55, "#030405"); grd.addColorStop(1, "#000000");
   g.fillStyle = grd; g.fillRect(0, 0, w, h);
 
   let imgX = 0, imgY = 0, imgW, imgH, textX, textY, textW;
@@ -4674,7 +4734,7 @@ document.getElementById("modal").addEventListener("click", (e) => {
     if (!b) return;
     state.exp.aspect = b.dataset.a;
     [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b));
-    drawExportPreview();
+    refreshPreview();
   });
 for (const [boxId, key, attr] of [["expSize", "w", "w"], ["expBg", "bg", "bg"], ["expScale", "scale", "s"]]) {
   document.getElementById(boxId).addEventListener("click", (e) => {

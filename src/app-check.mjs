@@ -432,6 +432,25 @@ check("晶体卡：无产地矿物页仍走图鉴版式（字段勾选在，矿�
   const o = JSON.parse(r);
   return o.n === 9 && o.w === 1400 && o.file.indexOf("晶形") >= 0;
 })(), "");
+check("导出对话框全部控件逐个真实点击不报错（未定义函数/绑定遗漏直接炸出来）", (() => {
+  // 画幅切换曾调用不存在的 drawExportPreview——桩里 onclick 执行到未定义名会抛
+  // ReferenceError，run() 把它变成断言失败。逐个点：尺寸×背景×画幅×字号 全按钮。
+  try {
+    run(`(() => {
+      document.getElementById("openExport").onclick();
+      for (const box of ["expSize", "expBg", "expAspect", "expScale", "expFields"]) {
+        const el = document.getElementById(box);
+        for (const b of [...el.querySelectorAll("input"), ...el.children]) {
+          if (b.onclick) b.onclick();
+          else if (b.querySelector && b.querySelector("input")) { const c = b.querySelector("input"); if (c.onchange) c.onchange(); }
+        }
+      }
+      location.hash = "#/studio"; applyRoute();
+      return "ok";
+    })()`);
+    return true;
+  } catch (e) { return false; }
+})(), "任一 handler 抛错即 FAIL");
 check("光照方位/高度 → 主光方向", (() => {
   run(`setLight(90, 0);`);
   const v = run(`LIGHT_V`);
@@ -1135,23 +1154,23 @@ const glLastOptsOk = (glw, vw, vh) => {
       && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
       && o.items === 2 && o.hash === "#/m/pyrite/navajun";
   })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
-  check("展柜控制栏：5 场景按钮 + 灯组初值随产地（navajun=showcase）+ 转台默认开 + 场景切换换 bg", (() => {
+  check("展柜控制栏：6 场景按钮（黑底/纸面/木桌/白台/实验室/藏品柜）+ 灯组初值随产地 + 转台默认开 + 切换换 bg", (() => {
     const r = run(`JSON.stringify((() => {
       const scenes = document.getElementById("mrScenes").children.length;
       const rigs = document.getElementById("mrRigs").children.length;
       const turnDef = document.getElementById("mrTurn").checked;
       const locRig = state.locRig;
       const bgBefore = state.bg;
-      // 点「纸面」场景按钮：标本组合换到纸面 3D 桌面
+      // 点「木质桌面」场景按钮：标本组合换到木桌照片场景
       const btns = [...document.getElementById("mrScenes").children];
-      const paperBtn = btns.find(b => b.textContent === "纸面");
-      if (paperBtn) paperBtn.onclick();
-      const after = { bg: state.bg, onTable: state.onTable };
+      const woodBtn = btns.find(b => b.textContent === "木质桌面");
+      if (woodBtn) woodBtn.onclick();
+      const after = { bg: state.bg, onTable: state.onTable, amb: BACKGROUNDS[state.bg].table ? 1 : 0 };
       return { scenes, rigs, turnDef, locRig, bgBefore, after };
     })())`);
     const o = JSON.parse(r);
-    return o.scenes === 5 && o.rigs === 2 && o.turnDef === true && o.locRig === "showcase"
-      && o.bgBefore === "paper" && o.after.bg === "paper" && o.after.onTable === true;
+    return o.scenes === 6 && o.rigs === 2 && o.turnDef === true && o.locRig === "showcase"
+      && o.bgBefore === "paper" && o.after.bg === "wood" && o.after.onTable === true && o.after.amb === 1;
   })(), run(`JSON.stringify({ locRig: state.locRig, turntable: state.turntable, bg: state.bg })`));
   check("转台生命周期：进标本页默认开，退出到晶体台/卡片墙即关（loop 只在标本页转）", (() => {
     const r = run(`JSON.stringify((() => {
