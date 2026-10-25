@@ -143,7 +143,10 @@ export const MINERALS = [
         style: "cluster", styleZh: "晶簇",
         habitId: "pyritohedron",
         setup: {
-          base: "none", bg: "paper", rig: "showcase", ambK: 0.55,
+          // 黑底标本照 + 浅灰白围岩（Huanzala 标本多产自石英-白云石脉）：展示灯的
+          // 暗面在黑底上自然吸收——亮纸面下金属背光面会黑成"一圈黑矿"（用户反馈）
+          base: "matrix", bg: "void", zoom: 0.52,
+          rig: "showcase", ambK: 0.55, matrixCol: [0.72, 0.70, 0.66],
           extras: [
             { mineralId: "pyrite", habitId: "combo", pos: [0.82, 0, -0.25], scale: 0.75, yaw: 28 },
             { mineralId: "pyrite", habitId: "cube", pos: [-0.72, 0, 0.28], scale: 0.5, yaw: -74 },
