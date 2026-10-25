@@ -486,6 +486,11 @@
           <label class="ck"><input type="checkbox" id="mrTurn"> 转台 Turntable</label>
           <label class="ck"><input type="checkbox" id="mrRest"> 自然摆放 Rest</label>
         </div>
+        <div class="mrow">
+          <label class="ck"><input type="checkbox" id="mrEdges"> 棱线 Edges</label>
+          <label class="ck"><input type="checkbox" id="mrStri"> 晶纹 Striations</label>
+          <label class="ck"><input type="checkbox" id="mrAxes"> 坐标轴 Axes</label>
+        </div>
         <div class="srow"><span>透明度 <b id="mrAlphaVal" class="val"></b></span><input type="range" id="mrAlpha" min="0" max="100" step="1"></div>
       </div>
       <div class="mlist" id="mList"></div>
@@ -3859,6 +3864,7 @@ function snapStudio() {
     extras: state.extras.map(e => ({ ...e, pos: e.pos.slice() })),
     bg: state.bg, base: state.base, zoom: state.zoom,
     onTable: state.onTable, bgPicked: state.bgPicked, restPose: state.restPose,
+    axes: state.axes, edges: state.edges, striations: state.striations,
     quat: state.quat.slice(), groupYaw: state.groupYaw, pan: state.pan.slice(),
     locAmbK: state.locAmbK, matrixCol: state.matrixCol, locTransp: state.locTransp, locRig: state.locRig,
   };
@@ -3874,6 +3880,7 @@ function restoreStudio() {
   state.bg = s.bg; state.base = s.base; state.zoom = s.zoom;
   state.onTable = s.onTable; state.bgPicked = s.bgPicked; state.restPose = s.restPose;
   state.quat = s.quat.slice(); state.groupYaw = s.groupYaw; state.pan = s.pan.slice();
+  state.axes = s.axes; state.edges = s.edges; state.striations = s.striations;
   state.locAmbK = s.locAmbK; state.matrixCol = s.matrixCol; state.locTransp = s.locTransp; state.locRig = s.locRig;
   state.turntable = false;                 // 转台是标本页的展柜开关，回晶体台即关
   rebuildGeometry();               // 矿物/外形/掩码可能整个换了，几何必须重建
@@ -3922,6 +3929,9 @@ function enterMineralPage(mineralId, locId) {
   state.bgPicked = true;
   // 产地可覆盖：灯组（展示灯）+ 环境压暗 + 基岩颜色 + 自然摆放开关（无产地 = 全用默认）
   state.turntable = true;      // 展柜转台默认开：进页即慢转，用户一拖即停
+  // 图解层默认全关：标本照的主角是标本本身，棱线/晶纹/坐标轴都是"图鉴语言"，
+  // 叠在标本照上就是用户看到的"一堆包围线框"。想看去展柜栏打开。
+  state.axes = false; state.edges = false; state.striations = false;
   if (loc) {
     state.locAmbK = loc.setup.ambK != null ? loc.setup.ambK : null;
     state.matrixCol = loc.setup.matrixCol || null;
@@ -4014,6 +4024,14 @@ function renderMuseumRig() {
   }
   const turn = document.getElementById("mrTurn");
   if (turn) { turn.checked = state.turntable; turn.onchange = () => { state.turntable = turn.checked; }; }
+  // 图解层三开关：标本页默认全关（真实标本照上不该有棱线/晶纹/坐标轴），
+  // 想研究的用户可以打开——draw() 全走 state，开关即生效
+  for (const [id, key] of [["mrEdges", "edges"], ["mrStri", "striations"], ["mrAxes", "axes"]]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.checked = state[key];
+    el.onchange = () => { state[key] = el.checked; draw(); };
+  }
   const rest = document.getElementById("mrRest");
   if (rest) {
     rest.checked = state.restPose;

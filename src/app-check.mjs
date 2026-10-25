@@ -1140,6 +1140,29 @@ const glLastOptsOk = (glw, vw, vh) => {
     const o = JSON.parse(r);
     return o.afterExit === false && o.afterBrowse === false && o.afterEnter === true && o.final === false;
   })(), run(`JSON.stringify({ turntable: state.turntable })`));
+  check("标本页图解层默认关（棱线/晶纹/坐标轴），退出还原晶体台的开关；展柜栏三开关可打开", (() => {
+    const r = run(`JSON.stringify((() => {
+      location.hash = "#/studio"; applyRoute();
+      state.axes = true; state.edges = true; state.striations = true;   // 晶体台全开
+      location.hash = "#/m/pyrite/huanzala"; applyRoute();
+      const inMuseum = { a: state.axes, e: state.edges, s: state.striations };
+      const cb = { a: document.getElementById("mrAxes").checked,
+                   e: document.getElementById("mrEdges").checked,
+                   s: document.getElementById("mrStri").checked };
+      // 展柜栏打开棱线 → state 跟随
+      document.getElementById("mrEdges").checked = true;
+      document.getElementById("mrEdges").onchange();
+      const opened = state.edges === true;
+      location.hash = "#/studio"; applyRoute();
+      const back = { a: state.axes, e: state.edges, s: state.striations };
+      return { inMuseum, cb, opened, back };
+    })())`);
+    const o = JSON.parse(r);
+    return o.inMuseum.a === false && o.inMuseum.e === false && o.inMuseum.s === false
+      && o.cb.a === false && o.cb.e === false && o.cb.s === false
+      && o.opened === true
+      && o.back.a === true && o.back.e === true && o.back.s === true;
+  })(), run(`JSON.stringify({ a: state.axes, e: state.edges, s: state.striations })`));
   check("落桌补偿：settle 实例坐在自己的支撑面上（普通台面=主晶体最低点；基质丘=足印处丘面下限）", (() => {
     const r = run(`(() => {
       const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
