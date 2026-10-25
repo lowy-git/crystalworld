@@ -21,3 +21,4 @@ desktop.ini
 # Pages 部署暂存（CI 生成）
 _pages/
 ci-logs.zip
+*.bin
