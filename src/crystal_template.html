@@ -2524,21 +2524,20 @@ function pedParams() {
 function scPedestalMesh(withBack, P) {
   const W = P.W, Dp = P.Dp, TH = P.TH, BH = P.BH, BT = P.BT;
   const arr = [];
-  const quad = (pts, n) => scQuadOut(arr, pts, n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-  quad([[-W, -Dp, 0], [W, -Dp, 0], [W, Dp, 0], [-W, Dp, 0]], [0, 0, 1]);          // 台面顶
-  quad([[-W, Dp, 0], [-W, Dp, -TH], [W, Dp, -TH], [W, Dp, 0]], [0, 1, 0]);       // 前缘
-  quad([[-W, -Dp, 0], [W, -Dp, 0], [W, -Dp, -TH], [-W, -Dp, -TH]], [0, -1, 0]);  // 后缘底
-  quad([[-W, -Dp, 0], [-W, -Dp, -TH], [-W, Dp, -TH], [-W, Dp, 0]], [-1, 0, 0]);   // 左侧
-  quad([[W, -Dp, 0], [W, Dp, 0], [W, Dp, -TH], [W, -Dp, -TH]], [1, 0, 0]);       // 右侧
-  quad([[-W, -Dp, -TH], [W, -Dp, -TH], [W, Dp, -TH], [-W, Dp, -TH]], [0, 0, -1]);// 台底
-  if (withBack) {
-    const bz = -Dp;   // 背板贴台面后缘立起
-    quad([[-W, bz, 0], [W, bz, 0], [W, bz, BH], [-W, bz, BH]], [0, 1, 0]);        // 板面（朝前）
-    quad([[-W, bz - BT, 0], [-W, bz - BT, BH], [W, bz - BT, BH], [W, bz - BT, 0]], [0, -1, 0]); // 板背
-    quad([[-W, bz, 0], [-W, bz, BH], [-W, bz - BT, BH], [-W, bz - BT, 0]], [-1, 0, 0]);        // 左棱
-    quad([[W, bz, 0], [W, bz - BT, BH], [W, bz - BT, 0], [W, bz, BH]].reverse(), [1, 0, 0]);   // 右棱
-    quad([[-W, bz, BH], [W, bz, BH], [W, bz - BT, BH], [-W, bz - BT, BH]], [0, 0, 1]);         // 板顶
-  }
+  const uvq = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  /* 标准长方体（用户："难道不应该做成正常的长方体吗"）：六面全部外法线、
+     从外看逆时针绕序——绕序乱会被背面剔除挖成破面，半透明还会正反面叠加。 */
+  const box = (x0, x1, y0, y1, z0, z1) => {
+    const q = (pts, n) => scQuadOut(arr, pts, n, uvq);
+    q([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1]);    // 顶 +z
+    q([[x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [x0, y0, z0]], [0, 0, -1]);  // 底 -z
+    q([[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], [1, 0, 0]);   // +x
+    q([[x0, y1, z0], [x0, y0, z0], [x0, y0, z1], [x0, y1, z1]], [-1, 0, 0]);  // -x
+    q([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], [0, 1, 0]);   // +y（面向相机的前缘）
+    q([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0]);  // -y
+  };
+  box(-W, W, -Dp, Dp, -TH, 0);                       // 底板：顶面 z=0（接触线），厚 TH
+  if (withBack) box(-W, W, -Dp - 2 * BT, -Dp, 0, BH); // 背板：贴台面后缘立起（也是标准长方体）
   return new Float32Array(arr);
 }
 
@@ -2822,7 +2821,11 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
       scPedBackN = pedBack.length / SC_STRIDE;
     }
     const drawPed = (buf, n) => { bindAttr(buf); gl.drawArrays(gl.TRIANGLES, 0, n); };
+    // 背面剔除：标准长方体外法线绕序后，玻璃半透明只画外面（不叠内面变浑）；
+    // 晶体有 two-sided 面不能全局开，画完展台立刻关
+    if (gl.enable) gl.enable(gl.CULL_FACE);
     drawPed(state.backboard ? scPedBackBuf : scPedBuf, state.backboard ? scPedBackN : scPedN);
+    if (gl.disable) gl.disable(gl.CULL_FACE);
     gl.uniform1f(scUni.uAlpha, 1);
   }
   if (paperMode && scPaperN) {
