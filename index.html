@@ -2417,7 +2417,7 @@ function scSceneMeshes() {
    高度中心 ~0.30（晶体半尺寸 1，即埋入约三分之一）、边缘收到台面；
    轮廓与高度用固定种子的伪随机扰动，同一块标本每次渲染一致。
    法线逐面平直（flat）：低多边形的碎面感正是粗糙基质该有的样子。 */
-function scMatrixMesh() {
+function scMatrixMesh(noRim) {
   const rnd = mulberry32(20261025);
   const R = SC_MOUND.R, SEG = 48, RINGS = 4, H = SC_MOUND.H;
   const arr = [];
@@ -2456,7 +2456,10 @@ function scMatrixMesh() {
       scQuadPush(arr, [A[si], A[sj], B[sj], B[si]], n);
     }
   }
-  // 外缘一圈"垂边"包住底部（侧看有厚度，不露纸面穿帮）
+  // 外缘一圈"垂边"包住底部（侧看有厚度，不露纸面穿帮）——纸面场景专用；
+  // 黑底标本照（noRim）不画：垂边几乎竖直、暗灯下全黑，在黑底上围出"一圈黑框"，
+  // 而黑底下丘外缘融进背景，不存在"露出纸面"的穿帮要防。
+  if (noRim) return new Float32Array(arr);
   const rim = rings[rings.length - 1];
   for (let si = 0; si < SEG; si++) {
     const sj = (si + 1) % SEG;
@@ -2476,7 +2479,8 @@ function scQuadPush(arr, quad, n) {
 }
 
 let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShadowBuf = null;
-let scTableN = 0, scPaperN = 0, scMatrixN = 0, scTex = null, scTexImg = null;
+let scTableN = 0, scPaperN = 0, scMatrixN = 0, scMatrixNRN = 0, scTex = null, scTexImg = null;
+let scMatrixNRBuf = null;
 const scUni = {}, scAttr = {};
 function glSceneInit() {
   if (scReady) return !!scProg;
@@ -2513,6 +2517,11 @@ function glSceneInit() {
   gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixBuf);
   gl.bufferData(gl.ARRAY_BUFFER, matrixMesh, gl.STATIC_DRAW);
   scMatrixN = matrixMesh.length / SC_STRIDE;
+  const matrixNR = scMatrixMesh(true);            // 黑底标本照用（无垂边）
+  scMatrixNRBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixNRBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, matrixNR, gl.STATIC_DRAW);
+  scMatrixNRN = matrixNR.length / SC_STRIDE;
   return true;
 }
 /* 纸面贴图：复用背景照片的 Image。桩环境没有纹理入口（createTexture 不存在），
@@ -2647,12 +2656,13 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   // 泥灰岩基岩：产地组合 setup.base = "matrix" 时，画在纸面上方，
   // 晶体底部（台面平面）正好埋进丘里约 0.30——"从基质里长出来"的观感
   if (state.base === "matrix" && scMatrixN) {
+    const nr = voidSpecimen();                    // 黑底标本照：无垂边版本
     gl.uniform1f(scUni.uHasTex, 0);
     const mc = state.matrixCol || [0.45, 0.50, 0.44];
     gl.uniform3fv(scUni.uColor, new Float32Array(mc));
     gl.uniform1f(scUni.uSpec, 0.03); gl.uniform1f(scUni.uShin, 4);
-    bindAttr(scMatrixBuf);
-    gl.drawArrays(gl.TRIANGLES, 0, scMatrixN);
+    bindAttr(nr ? scMatrixNRBuf : scMatrixBuf);
+    gl.drawArrays(gl.TRIANGLES, 0, nr ? scMatrixNRN : scMatrixN);
   }
   // 接触阴影：扇面顶点已是世界坐标 → uRot 单位阵、uShift 归零，直接画
   const fan = (state.base === "matrix" || !paperMode) ? null : scShadowFan(contact, project, insts);
@@ -2749,6 +2759,9 @@ function paintFaces(g, opts, project, M) {
   g.restore();
 }
 
+/* 深底（黑底标本照 / dark 场景）上深墨棱线会黑成"一圈框"——换浅墨 */
+function edgeInkDark() { return voidSpecimen() || !!(BACKGROUNDS[state.bg] && BACKGROUNDS[state.bg].dark); }
+
 /* 只画叠在晶面上的部分：同色补缝描边、晶纹、真棱。填充归 GL。
    补缝描边按「棱的三维中点」着色，而不是按面心：GL 是逐像素着色的，
    面心色和逐像素填充会差几个百分点，1px 的缝看起来就像一圈描边。 */
@@ -2793,7 +2806,7 @@ function paintOverlay(g, opts, project, M, inst) {
     }
     if (any) {
       g.lineWidth = 1.15;
-      g.strokeStyle = "rgba(12,22,34,.6)";
+      g.strokeStyle = edgeInkDark() ? "rgba(226,236,248,.42)" : "rgba(12,22,34,.6)";
       g.stroke();
     }
   }
@@ -2867,7 +2880,9 @@ function paintFaces2D(g, opts, project, M, inst) {
     }
     if (any) {
       g.lineWidth = it.front ? 1.15 : 0.8;
-      g.strokeStyle = it.front ? "rgba(12,22,34,.6)" : "rgba(12,22,34,.26)";
+      g.strokeStyle = edgeInkDark()
+        ? (it.front ? "rgba(226,236,248,.42)" : "rgba(226,236,248,.18)")
+        : (it.front ? "rgba(12,22,34,.6)" : "rgba(12,22,34,.26)");
       g.stroke();
     }
   }
