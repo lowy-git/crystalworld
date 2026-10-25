@@ -145,7 +145,7 @@ export const MINERALS = [
         setup: {
           // 黑底标本照 + 浅灰白围岩（Huanzala 标本多产自石英-白云石脉）：展示灯的
           // 暗面在黑底上自然吸收——亮纸面下金属背光面会黑成"一圈黑矿"（用户反馈）
-          base: "matrix", bg: "void", zoom: 0.52,
+          base: "matrix", bg: "black", zoom: 0.52,
           rig: "showcase", ambK: 0.55, matrixCol: [0.72, 0.70, 0.66],
           extras: [
             { mineralId: "pyrite", habitId: "combo", pos: [0.82, 0, -0.25], scale: 0.75, yaw: 28 },
@@ -315,7 +315,7 @@ export const MINERALS = [
         style: "parallel", styleZh: "直立并生",
         habitId: "prismatic-long",
         setup: {
-          base: "matrix", bg: "void", zoom: 0.46,      // 黑底标本照：白色石英长石基质 + 蓝绿柱体
+          base: "matrix", bg: "black", zoom: 0.46,      // 黑底标本照：白色石英长石基质 + 蓝绿柱体
           restPose: false,                              // 直立并生（实拍里柱体全部站姿）
           transp: "transl",                             // 半透明：蓝绿体色在黑场上"发光"
           ambK: 1.7,                                    // 背光辉光：环境抬亮，柱体像从内部透出蓝绿

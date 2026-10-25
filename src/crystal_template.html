@@ -485,6 +485,7 @@
         <div class="mrow">
           <label class="ck"><input type="checkbox" id="mrTurn"> 转台 Turntable</label>
           <label class="ck"><input type="checkbox" id="mrRest"> 自然摆放 Rest</label>
+          <label class="ck"><input type="checkbox" id="mrBack"> 背板 Backboard</label>
         </div>
         <div class="mrow">
           <label class="ck"><input type="checkbox" id="mrEdges"> 棱线 Edges</label>
@@ -906,8 +907,17 @@ const BACKGROUNDS = {
   /* 木质桌面 / 白色工作台（标本照场景，程序化画法）：上半环境色、下半台面 + 台面线。
      2D 照片式场景——没有 3D 桌面网格，也就没有纸面的投影阴影扇面（用户点名
      "木桌白台上不该出现黑图案"）。 */
+  black: {
+    /* 全黑悬浮（通用标本照底）：纯黑、无台、无纸——围岩丘是标本的一部分照画 */
+    zh: "全黑悬浮", dark: true, amb: 1.00, ambT: [1.00, 1.00, 1.00],
+    draw(g, w, h) {
+      const grd = g.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.75);
+      grd.addColorStop(0, "#08090b"); grd.addColorStop(0.55, "#030405"); grd.addColorStop(1, "#000000");
+      g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    },
+  },
   wood: {
-    zh: "木质桌面", dark: false, amb: 1.06, ambT: [1.00, 0.96, 0.90], table: { y: 0.62 },
+    zh: "木质展台", dark: false, amb: 1.06, ambT: [1.00, 0.96, 0.90], table: { y: 0.62 },
     draw(g, w, h) {
       const ty = h * this.table.y;
       const sky = g.createLinearGradient(0, 0, 0, ty);          // 上半：暖暗室内
@@ -928,8 +938,20 @@ const BACKGROUNDS = {
       g.beginPath(); g.moveTo(0, ty + 0.5); g.lineTo(w, ty + 0.5); g.stroke();
     },
   },
-  bench: {
-    zh: "白色工作台", dark: false, amb: 1.12, ambT: [1.00, 1.00, 1.01], table: { y: 0.60 },
+  glass: {
+    zh: "玻璃展台", dark: false, amb: 1.04, ambT: [0.99, 1.00, 1.02], table: { y: 0.61 },
+    draw(g, w, h) {
+      const ty = h * this.table.y;
+      const sky = g.createLinearGradient(0, 0, 0, ty);          // 上半：中性灰渐变（影棚）
+      sky.addColorStop(0, "#3c4148"); sky.addColorStop(1, "#2b3036");
+      g.fillStyle = sky; g.fillRect(0, 0, w, ty);
+      const fl = g.createLinearGradient(0, ty, 0, h);           // 下半：更深（玻璃台透出的地面）
+      fl.addColorStop(0, "#22262b"); fl.addColorStop(1, "#15181c");
+      g.fillStyle = fl; g.fillRect(0, ty, w, h - ty);
+    },
+  },
+  white: {
+    zh: "白色展台", dark: false, amb: 1.12, ambT: [1.00, 1.00, 1.01], table: { y: 0.60 },
     draw(g, w, h) {
       const ty = h * this.table.y;
       const sky = g.createLinearGradient(0, 0, 0, ty);          // 上半：浅灰白
@@ -1085,7 +1107,13 @@ const SCENE_RIGS = {
              {dir:[0.04,1.00,0.06],  col:[1.00,0.95,0.86], inten:0.62, spec:0.6},
              {dir:[-0.20,-0.95,0.20], col:[0.52,0.40,0.28], inten:0.28, spec:0.2},
              {dir:[-0.58,0.30,-0.76], col:[0.92,0.84,0.72], inten:0.20, spec:0.5} ],
-  bench:   [ {dir:null, col:[1.00,1.00,1.00], inten:1.24, spec:0.8},
+  glass:  [ {dir:null, col:[1.00,1.00,1.02], inten:1.20, spec:1.0},
+             {dir:[0.60,0.48,-0.62], col:[0.94,0.97,1.04], inten:0.42, spec:0.8},
+             {dir:[-0.78,-0.32,0.54], col:[0.96,0.99,1.03], inten:0.36, spec:0.5},
+             {dir:[0.03,1.00,0.05],  col:[1.00,1.00,1.02], inten:0.66, spec:0.6},
+             {dir:[-0.20,-0.95,0.22], col:[0.80,0.84,0.90], inten:0.24, spec:0.2},
+             {dir:[-0.58,0.30,-0.76], col:[0.92,0.96,1.02], inten:0.20, spec:0.5} ],
+  white:  [ {dir:null, col:[1.00,1.00,1.00], inten:1.24, spec:0.8},
              {dir:[0.60,0.48,-0.62], col:[0.96,0.97,1.02], inten:0.46, spec:0.6},
              {dir:[-0.78,-0.32,0.54], col:[0.98,0.99,1.02], inten:0.38, spec:0.4},
              {dir:[0.03,1.00,0.05],  col:[1.00,1.00,1.00], inten:0.72, spec:0.5},
@@ -1143,6 +1171,7 @@ const state = {
   lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
   turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
   locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
+  backboard: false,    // 展台背板（L 形展托；wood/white/glass 有台时可用）
   twinTint: false,
   twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
   twinShow: "both",    // both / A / B：只显示其中一个个体
@@ -1361,7 +1390,7 @@ function sceneList(bgId) {
     const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
     let hRef = 1e9;
     for (const v of GEO.P) hRef = Math.min(hRef, dot(v, u));   // 主晶体已含自然摆放旋转
-    const onMound = state.base === "matrix" && (state.bg === "paper" || state.bg === "void" || state.bg === "wood" || state.bg === "bench");   // 丘面跟随：丘只在 3D 台面场景画
+    const onMound = state.base === "matrix" && (state.bg === "black" || state.bg === "void" || state.bg === "wood" || state.bg === "white" || state.bg === "glass");   // 丘面跟随：丘在 3D 场景画
     for (const it of out) {
       if (it.main || !(it.e && it.e.settle) || !it.geo) { it.dropOff = null; continue; }
       const k0 = it.scale == null ? 1 : it.scale;
@@ -2307,16 +2336,16 @@ const SC_PRE_INV = [[SC_PRE[0][0], SC_PRE[1][0], SC_PRE[2][0]],
    + GL 可用。GL 不可用时回落到照片背景 + 屏幕空间贴合的老路径，一行不缺。 */
 function scene3dActive(opts) {
   // paper = 台面+纸的目录照模式；void = 标本照模式（无台面无纸，只有基岩/晶体）
-  return (state.bg === "paper" || state.bg === "void" || state.bg === "wood" || state.bg === "bench") && state.onTable
+  return (state.bg === "black" || state.bg === "void" || state.bg === "wood" || state.bg === "white" || state.bg === "glass") && state.onTable
     && !(opts && opts.noTable) && glInit();
 }
 /* 黑底标本照：void 场景 + matrix 基岩——深色背景让标本自己发光（克什米尔之王实拍同款布光） */
-function voidSpecimen() {
-  return state.bg === "void" && state.base === "matrix" && state.onTable;
+function voidSpecimen() {   // "全黑悬浮"标本照：纯黑底、无台无纸（围岩丘是标本的一部分，照画）
+  return (state.bg === "black" || state.bg === "void") && state.base === "matrix" && state.onTable;
 }
 /* 自然摆放何时生效：3D 场景 + 用户没关掉。翻动几何要在 rebuildGeometry 里做
    （要把旋转烤进顶点），所以开关变化必须触发一次 rebuildGeometry。 */
-const restActive = () => state.bg === "paper" && state.onTable && state.restPose;
+const restActive = () => (state.bg === "wood" || state.bg === "white" || state.bg === "glass" || state.bg === "paper") && state.onTable && state.restPose;   // 有台才谈"摆放"；全黑悬浮无台恒直立
 
 /* ── 稳定摆放求解（静态，无物理引擎）──────────────────────────────
    刚体"自然躺倒"的判据来自静力学：以面 F 为支撑时，刚体站得住 ⟺ 重心在 F 上的
@@ -2467,6 +2496,30 @@ function scQuadOut(arr, quad, n, uv) {
   push(a, uv[0]); push(b, uv[1]); push(c, uv[2]);
   push(a, uv[0]); push(c, uv[2]); push(d, uv[3]);
 }
+/* 博物馆式展台（wood/white/glass 场景）：小方台 + 可选背板 = 标准矿物展托。
+   台面顶=局部 z0（接触求解把整组放到这条线上），向下有厚度；背板立在台面
+   后缘。大英博物馆风：深色哑光、干净直角、无花哨纹理（用户反馈）。 */
+function scPedestalMesh(withBack) {
+  const W = 1.38, Dp = 0.95, TH = 0.15, BH = 1.15, BT = 0.05;   // 半宽/半深/台厚/背板高/背板厚
+  const arr = [];
+  const quad = (pts, n) => scQuadOut(arr, pts, n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+  quad([[-W, -Dp, 0], [W, -Dp, 0], [W, Dp, 0], [-W, Dp, 0]], [0, 0, 1]);          // 台面顶
+  quad([[-W, Dp, 0], [-W, Dp, -TH], [W, Dp, -TH], [W, Dp, 0]], [0, 1, 0]);       // 前缘
+  quad([[-W, -Dp, 0], [W, -Dp, 0], [W, -Dp, -TH], [-W, -Dp, -TH]], [0, -1, 0]);  // 后缘底
+  quad([[-W, -Dp, 0], [-W, -Dp, -TH], [-W, Dp, -TH], [-W, Dp, 0]], [-1, 0, 0]);   // 左侧
+  quad([[W, -Dp, 0], [W, Dp, 0], [W, Dp, -TH], [W, -Dp, -TH]], [1, 0, 0]);       // 右侧
+  quad([[-W, -Dp, -TH], [W, -Dp, -TH], [W, Dp, -TH], [-W, Dp, -TH]], [0, 0, -1]);// 台底
+  if (withBack) {
+    const bz = -Dp;   // 背板贴台面后缘立起
+    quad([[-W, bz, 0], [W, bz, 0], [W, bz, BH], [-W, bz, BH]], [0, 1, 0]);        // 板面（朝前）
+    quad([[-W, bz - BT, 0], [-W, bz - BT, BH], [W, bz - BT, BH], [W, bz - BT, 0]], [0, -1, 0]); // 板背
+    quad([[-W, bz, 0], [-W, bz, BH], [-W, bz - BT, BH], [-W, bz - BT, 0]], [-1, 0, 0]);        // 左棱
+    quad([[W, bz, 0], [W, bz - BT, BH], [W, bz - BT, 0], [W, bz, BH]].reverse(), [1, 0, 0]);   // 右棱
+    quad([[-W, bz, BH], [W, bz, BH], [W, bz - BT, BH], [-W, bz - BT, BH]], [0, 0, 1]);         // 板顶
+  }
+  return new Float32Array(arr);
+}
+
 function scSceneMeshes() {
   const T = 4.6, D = 1.5;             // 桌面半宽 / 裙板深（模型单位；晶体范围约 ±1）
   const P = 3.3, Q = 1.9, pz = 0.004; // 纸半宽（照片是横构图）/ 台面上方抬高
@@ -2552,6 +2605,7 @@ function scQuadPush(arr, quad, n) {
 let scReady = false, scProg = null, scTableBuf = null, scPaperBuf = null, scShadowBuf = null;
 let scTableN = 0, scPaperN = 0, scMatrixN = 0, scMatrixNRN = 0, scTex = null, scTexImg = null;
 let scMatrixNRBuf = null;
+let scPedBuf = null, scPedBackBuf = null, scPedN = 0, scPedBackN = 0;
 const scUni = {}, scAttr = {};
 function glSceneInit() {
   if (scReady) return !!scProg;
@@ -2588,6 +2642,15 @@ function glSceneInit() {
   gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixBuf);
   gl.bufferData(gl.ARRAY_BUFFER, matrixMesh, gl.STATIC_DRAW);
   scMatrixN = matrixMesh.length / SC_STRIDE;
+  const ped = scPedestalMesh(false), pedBack = scPedestalMesh(true);
+  scPedBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scPedBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, ped, gl.STATIC_DRAW);
+  scPedN = ped.length / SC_STRIDE;
+  scPedBackBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, scPedBackBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, pedBack, gl.STATIC_DRAW);
+  scPedBackN = pedBack.length / SC_STRIDE;
   const matrixNR = scMatrixMesh(true);            // 黑底标本照用（无垂边）
   scMatrixNRBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, scMatrixNRBuf);
@@ -2682,10 +2745,9 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   if (!glSceneInit()) return false;
   const contact = scContact(project, insts);
   const B = BACKGROUNDS[state.bg] || BACKGROUNDS.paper;
-  const paperMode = state.bg === "paper";               // void = 黑底标本照：无台面无纸
-  // 3D 台面场景：纸面/木质桌面/白色工作台——真桌面网格，随晶体一起转（用户：
-  // 台面就该是"和标本一起转动的平台"，不是贴死的背景画）
-  const TABLE3D = { paper: 1, wood: 1, bench: 1 };
+  const paperMode = state.bg === "paper";               // paper 大桌面已退役（2D 兜底保留）
+  // 3D 展台场景（wood/white/glass）：博物馆式小方台随晶体一起转；black=全黑悬浮无台
+  const TABLE3D = { wood: 1, white: 1, glass: 1 };
   gl.useProgram(scProg);
   gl.uniform1f(scUni.uDist, GL_DIST);
   gl.uniform1f(scUni.uFoc, 3.05 * opts.scale * Math.min(opts.vw, opts.vh) * 0.5);
@@ -2713,21 +2775,22 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   gl.uniformMatrix3fv(scUni.uRot, false, colMajor(Rsc));
   gl.uniform3fv(scUni.uShift, new Float32Array(contact.P0));
   gl.uniform1f(scUni.uAlpha, 1); gl.uniform1f(scUni.uHasTex, 0);
-  if (TABLE3D[state.bg]) {
-    const looks = {   // 台面质感按场景：暖浅灰 / 漆面木（高光锐） / 哑光白
-      paper: { c: [0.80, 0.78, 0.74], spec: 0.10, shin: 8, wood: 0 },
-      wood:  { c: [0.47, 0.33, 0.19], spec: 0.18, shin: 22, wood: 1 },
-      bench: { c: [0.93, 0.94, 0.96], spec: 0.05, shin: 6, wood: 0 },
+  gl.uniform1f(scUni.uWood, 0);
+  if (TABLE3D[state.bg] && (scPedN || scPedBackN)) {
+    // 展台质感（大英博物馆风：深色哑光实木 / 哑光白 / 亚克力玻璃半透明）
+    const looks = {
+      wood:  { c: [0.16, 0.11, 0.07], spec: 0.10, shin: 12, alpha: 1 },
+      white: { c: [0.90, 0.91, 0.93], spec: 0.05, shin: 6,  alpha: 1 },
+      glass: { c: [0.72, 0.78, 0.82], spec: 0.55, shin: 64, alpha: 0.45 },
     }[state.bg];
     gl.uniform3fv(scUni.uColor, new Float32Array(looks.c));
     gl.uniform1f(scUni.uSpec, looks.spec); gl.uniform1f(scUni.uShin, looks.shin);
-    gl.uniform1f(scUni.uWood, looks.wood);
-    bindAttr(scTableBuf);
-    gl.drawArrays(gl.TRIANGLES, 0, scTableN);
-  } else {
-    gl.uniform1f(scUni.uWood, 0);
+    gl.uniform1f(scUni.uAlpha, looks.alpha);
+    const drawPed = (buf, n) => { bindAttr(buf); gl.drawArrays(gl.TRIANGLES, 0, n); };
+    drawPed(state.backboard ? scPedBackBuf : scPedBuf, state.backboard ? scPedBackN : scPedN);
+    gl.uniform1f(scUni.uAlpha, 1);
   }
-  if (paperMode) {
+  if (paperMode && scPaperN) {
     const tex = scTexture();
     gl.uniform1f(scUni.uHasTex, tex ? 1 : 0);
     gl.uniform3fv(scUni.uColor, new Float32Array(tex ? [1, 1, 1] : [0.95, 0.93, 0.88]));
@@ -3213,9 +3276,10 @@ function paint(g, opts) {
     } else if (s3d) {
       // 3D 模式的底子（台面 GL 网格浮在它上面；台面盖不满的地方读作"地面的阴影
       // 过渡"，不会露馅）。纸面=影棚暖灰；木桌=暖棕暗室；白台=浅灰白房间。
-      const base3d = { paper: ["#f7f4ee", "#e9e4da", "#cfc8bb", "120,110,95"],
+      const base3d = { black: ["#08090b", "#030405", "#000000", "0,0,0"],          // 全黑悬浮（无丘也纯黑）
                        wood:  ["#33261a", "#2b2015", "#1c130c", "70,50,30"],
-                       bench: ["#eef0f2", "#dfe3e7", "#c6ccd2", "130,140,150"] }[state.bg]
+                       white: ["#eef0f2", "#dfe3e7", "#c6ccd2", "130,140,150"],
+                       glass: ["#3c4148", "#31363c", "#20242a", "20,24,30"] }[state.bg]
                       || ["#f7f4ee", "#e9e4da", "#cfc8bb", "120,110,95"];
       const grd = g.createRadialGradient(opts.vw * 0.5, opts.vh * 0.36, 0, opts.vw * 0.5, opts.vh * 0.42, Math.max(opts.vw, opts.vh) * 0.8);
       grd.addColorStop(0, base3d[0]); grd.addColorStop(0.55, base3d[1]); grd.addColorStop(1, base3d[2]);
@@ -4076,7 +4140,7 @@ function renderMuseumRig() {
   if (!scenes) return;
   scenes.innerHTML = "";
   // 场景全家搬来标本页：黑底标本照/纸面 3D + 三套照片场景（晶体台固定 void 摄影棚底）
-  for (const [id, zh] of [["void", "黑底标本照"], ["paper", "纸面"], ["wood", "木质桌面"], ["bench", "白色工作台"], ["lab", "实验室"], ["cabinet", "藏品柜"]]) {
+  for (const [id, zh] of [["black", "全黑悬浮"], ["wood", "木质展台"], ["white", "白色展台"], ["glass", "玻璃展台"]]) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "btn" + (state.bg === id ? " on" : "");
@@ -4117,8 +4181,14 @@ function renderMuseumRig() {
   const rest = document.getElementById("mrRest");
   if (rest) {
     rest.checked = state.restPose;
-    rest.disabled = state.bg !== "paper";         // 黑底标本照 = 产地姿态（直立并生等），不给躺
+    rest.disabled = !(state.bg === "wood" || state.bg === "white" || state.bg === "glass" || state.bg === "paper");   // 有台才谈自然摆放；全黑悬浮恒直立
     rest.onchange = () => { state.restPose = rest.checked; rebuildGeometry(); draw(); };
+  }
+  const back = document.getElementById("mrBack");
+  if (back) {
+    back.checked = state.backboard;
+    back.disabled = !(state.bg === "wood" || state.bg === "white" || state.bg === "glass");   // 背板 = 展台配件
+    back.onchange = () => { state.backboard = back.checked; draw(); };
   }
   const al = document.getElementById("mrAlpha");
   if (al) {

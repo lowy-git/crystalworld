@@ -432,20 +432,29 @@ check("晶体卡：无产地矿物页仍走图鉴版式（字段勾选在，矿�
   const o = JSON.parse(r);
   return o.n === 9 && o.w === 1400 && o.file.indexOf("晶形") >= 0;
 })(), "");
-check("3D 台面场景：纸面/木桌/白台都有随标本转动的桌面网格，照片场景与黑底没有", (() => {
+check("展台场景体系：black 全黑悬浮 + wood/white/glass 三材质展台都走 3D；照片场景不走", (() => {
   const r = run(`JSON.stringify((() => {
     const out = {};
-    for (const b of ["paper", "wood", "bench", "void", "lab", "cabinet"]) {
+    for (const b of ["black", "wood", "white", "glass", "paper", "lab", "cabinet"]) {
       const keep = state.bg;
       state.bg = b; state.onTable = true; state.base = "none";
       out[b] = scene3dActive();
       state.bg = keep;
     }
-    return out;
+    // 自然摆放：有台场景生效、全黑悬浮恒直立
+    const restOK = {};
+    for (const b of ["black", "wood", "white", "glass"]) {
+      state.bg = b; state.onTable = true; state.restPose = true;
+      restOK[b] = restActive();
+    }
+    state.bg = "black";
+    return { out, restOK, ped: scPedN >= 30 && scPedBackN > scPedN };
   })())`);
   const o = JSON.parse(r);
-  return o.paper === true && o.wood === true && o.bench === true
-    && o.void === true && o.lab === false && o.cabinet === false;   // void=黑底标本照也走 3D（丘），lab/cabinet 照片场景不走
+  return o.out.black === true && o.out.wood === true && o.out.white === true && o.out.glass === true
+    && o.out.paper === false && o.out.lab === false && o.out.cabinet === false
+    && o.restOK.black === false && o.restOK.wood === true && o.restOK.white === true && o.restOK.glass === true
+    && o.ped === true;
 })(), "");
 check("导出对话框全部控件逐个真实点击不报错（未定义函数/绑定遗漏直接炸出来）", (() => {
   // 画幅切换曾调用不存在的 drawExportPreview——桩里 onclick 执行到未定义名会抛
@@ -968,12 +977,12 @@ const glLastOptsOk = (glw, vw, vh) => {
 
   // ── S1：3D 场景（纸面）——接触求解 / 投影阴影 / 深度范围 / 场景着色器纪律 ──
   run(`state.bg = "paper"; state.onTable = true; state.base = "none"; draw();`);
-  check("scene3dActive：paper=目录照模式、void=黑底标本照模式（导出 noTable 时必须关）", (() => {
-    const onPaper = run(`scene3dActive({})`);
-    const onVoid = run(`(state.bg = "void", scene3dActive({}))`);
+  check("scene3dActive：black=全黑悬浮、wood=展台模式（导出 noTable 时必须关）", (() => {
+    const onBlack = run(`(state.bg = "black", scene3dActive({}))`);
+    const onWood = run(`(state.bg = "wood", scene3dActive({}))`);
     const off = run(`scene3dActive({ noTable: true })`);
-    run(`state.bg = "paper";`);
-    return onPaper === true && onVoid === true && off === false;
+    run(`state.bg = "black";`);
+    return onBlack === true && onWood === true && off === false;
   })());
   check("接触求解：台面托住所有晶体（每个顶点都在台面之上，最低点恰好接触）", (() => {
     const r = run(`(() => {
@@ -1169,24 +1178,34 @@ const glLastOptsOk = (glw, vw, vh) => {
       && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
       && o.items === 2 && o.hash === "#/m/pyrite/navajun";
   })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
-  check("展柜控制栏：6 场景按钮（黑底/纸面/木桌/白台/实验室/藏品柜）+ 灯组初值随产地 + 转台默认开 + 切换换 bg", (() => {
+  check("展柜控制栏：4 场景（全黑悬浮/木台/白台/玻璃台）+ 背板开关 + 灯组初值随产地 + 转台默认开", (() => {
     const r = run(`JSON.stringify((() => {
       const scenes = document.getElementById("mrScenes").children.length;
       const rigs = document.getElementById("mrRigs").children.length;
       const turnDef = document.getElementById("mrTurn").checked;
       const locRig = state.locRig;
-      const bgBefore = state.bg;
-      // 点「木质桌面」场景按钮：标本组合换到木桌照片场景
+      const backDef = { disabled: document.getElementById("mrBack").disabled, checked: document.getElementById("mrBack").checked };
+      // 点「木质展台」：换到 3D 展台，背板可用并打开
       const btns = [...document.getElementById("mrScenes").children];
-      const woodBtn = btns.find(b => b.textContent === "木质桌面");
+      const woodBtn = btns.find(b => b.textContent === "木质展台");
       if (woodBtn) woodBtn.onclick();
-      const after = { bg: state.bg, onTable: state.onTable, amb: BACKGROUNDS[state.bg].table ? 1 : 0 };
-      return { scenes, rigs, turnDef, locRig, bgBefore, after };
+      const afterWood = { bg: state.bg, backDis: document.getElementById("mrBack").disabled };
+      document.getElementById("mrBack").checked = true;
+      document.getElementById("mrBack").onchange();
+      const backOn = state.backboard === true;
+      // 回全黑悬浮：背板禁用
+      const blackBtn = btns.find(b => b.textContent === "全黑悬浮");
+      if (blackBtn) blackBtn.onclick();
+      const afterBlack = { bg: state.bg, backDis: document.getElementById("mrBack").disabled, restDis: document.getElementById("mrRest").disabled };
+      return { scenes, rigs, turnDef, locRig, backDef, afterWood, backOn, afterBlack };
     })())`);
     const o = JSON.parse(r);
-    return o.scenes === 6 && o.rigs === 2 && o.turnDef === true && o.locRig === "showcase"
-      && o.bgBefore === "paper" && o.after.bg === "wood" && o.after.onTable === true && o.after.amb === 1;
-  })(), run(`JSON.stringify({ locRig: state.locRig, turntable: state.turntable, bg: state.bg })`));
+    return o.scenes === 4 && o.rigs === 2 && o.turnDef === true && o.locRig === "showcase"
+      && o.backDef.disabled === true
+      && o.afterWood.bg === "wood" && o.afterWood.backDis === false
+      && o.backOn === true
+      && o.afterBlack.bg === "black" && o.afterBlack.backDis === true && o.afterBlack.restDis === true;
+  })(), run(`JSON.stringify({ bg: state.bg, backboard: state.backboard })`));
   check("转台生命周期：进标本页默认开，退出到晶体台/卡片墙即关（loop 只在标本页转）", (() => {
     const r = run(`JSON.stringify((() => {
       location.hash = "#/studio"; applyRoute();
@@ -1340,12 +1359,12 @@ const glLastOptsOk = (glw, vw, vh) => {
   })());
   check("泥灰岩基岩：matrix 底座在 3D 场景绘制（圆丘网格 + 跳过接触阴影），照片场景回落为无", (() => {
     const r = run(`JSON.stringify((() => {
-      state.bg = "paper"; state.onTable = true; state.base = "matrix";
+      state.bg = "black"; state.onTable = true; state.base = "matrix";
       selectMineral("pyrite"); state.habitId = "cube"; state.mask = 1;
       rebuildGeometry(); draw();
       const in3d = scMatrixN > 200 && scene3dActive({});
       state.bg = "lab"; draw();
-      state.bg = "paper"; state.base = "none"; rebuildGeometry(); draw();
+      state.bg = "black"; state.base = "none"; rebuildGeometry(); draw();
       return { in3d, n: scMatrixN };
     })())`);
     const o = JSON.parse(r);
