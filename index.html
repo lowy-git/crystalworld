@@ -2517,7 +2517,7 @@ function specHalfW() {          // 组合的世界渲染半宽（主晶 + extras
   }
   return hw || 1;
 }
-const PED_PHYS = { W: 30, D: 22.5, TH: 3, BH: 50, BT: 1.5 };   // 物理半宽/半深/半厚/背板高/背板半厚（cm）
+const PED_PHYS = { W: 100, D: 50, TH: 4, BH: 70, BT: 2 };   // 物理半宽/半深/半厚/背板高/背板半厚（cm）——1m×2m 大桌面，标本置中央
 function pedParams() {
   const cmPerUnit = specSizeCM() / (2 * specHalfW());
   const f = (cm) => cm / cmPerUnit;   // 厘米 → 世界单位
@@ -2803,7 +2803,7 @@ function glSceneDraw(project, opts, insts, zn, zf, litArrays) {
   if (TABLE3D[state.bg] && (scPedN || scPedBackN)) {
     // 展台质感（大英博物馆风：深色哑光实木 / 哑光白 / 亚克力玻璃半透明）
     const looks = {
-      wood:  { c: [0.16, 0.11, 0.07], spec: 0.10, shin: 12, alpha: 1 },
+      wood:  { c: [0.24, 0.16, 0.10], spec: 0.10, shin: 12, alpha: 1 },
       white: { c: [0.90, 0.91, 0.93], spec: 0.05, shin: 6,  alpha: 1 },
       glass: { c: [0.72, 0.78, 0.82], spec: 0.55, shin: 64, alpha: 0.45 },
     }[state.bg];
@@ -3556,7 +3556,7 @@ cv.addEventListener("pointercancel", () => { drag = null; });
 cv.addEventListener("contextmenu", (e) => e.preventDefault());
 cv.addEventListener("wheel", (e) => {
   e.preventDefault();
-  state.zoom = clamp(state.zoom * Math.exp(-e.deltaY * 0.0012), 0.45, 3.2);
+  state.zoom = clamp(state.zoom * Math.exp(-e.deltaY * 0.0012), 0.03, 3.2);
   draw();
 }, { passive: false });
 
@@ -3569,7 +3569,7 @@ cv.addEventListener("pointermove", (e) => {
   if (touches.size === 2) {
     const [a, b] = [...touches.values()];
     const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-    if (pinch) state.zoom = clamp(state.zoom * d / pinch, 0.45, 3.2);
+    if (pinch) state.zoom = clamp(state.zoom * d / pinch, 0.03, 3.2);
     pinch = d;
     draw();
   }
@@ -4061,47 +4061,24 @@ function museumLoc() {
   const m = museumMineral();
   return m && state.museum.locId && m.localities ? m.localities.find(l => l.id === state.museum.locId) : null;
 }
-/* 矿物页（标本）与工作区共用同一个 state：进标本页会被大改（extras 组合、黑底、
-   灯组、通透度……），退出时必须整体还原，否则标本组合"残留"在工作区，直到刷新。
-   进页前快照、出页时还原；「带当前组合去造型台」(mLoad) 是唯一例外——故意保留。 */
-let STUDIO_SNAP = null, CARRY_COMBO = false;
-function snapStudio() {
-  STUDIO_SNAP = {
-    mineralId: state.mineralId, habitId: state.habitId, mask: state.mask,
-    twinShow: state.twinShow, twinSplit: state.twinSplit,
-    colorMode: state.colorMode, uniform: state.uniform,
-    luster: state.luster, transp: state.transp, alpha: state.alpha,
-    extras: state.extras.map(e => ({ ...e, pos: e.pos.slice() })),
-    bg: state.bg, base: state.base, zoom: state.zoom,
-    onTable: state.onTable, bgPicked: state.bgPicked, restPose: state.restPose,
-    axes: state.axes, edges: state.edges, striations: state.striations,
-    quat: state.quat.slice(), groupYaw: state.groupYaw, pan: state.pan.slice(),
-    locAmbK: state.locAmbK, matrixCol: state.matrixCol, locTransp: state.locTransp, locRig: state.locRig,
-  };
+/* 两页共用 state：进出页面一律重置默认——离开标本页 = 晶体台回到该矿物标准态
+   （第一外形+默认色/光泽+空组合+浅灰影棚底），不带任何标本残留（用户裁定，
+   快照/还原机制退役）。唯一例外：mLoad「带组合去造型台」显式携带。 */
+let CARRY_COMBO = false;
+function resetStudio() {
+  state.bg = "void"; state.onTable = false; state.base = "none"; state.restPose = true;
+  state.axes = true; state.edges = true; state.striations = true; state.turntable = false;
+  state.locAmbK = null; state.matrixCol = null; state.locTransp = null; state.locRig = null; state.backboard = false;
+  state.extras = []; state.extraSel = -1; state.groupYaw = 0; state.twinSplit = 0; state.twinShow = "both";
+  selectMineral(state.mineralId);   // 第一外形 + 默认颜色/光泽/通透 + zoom=1 + 视角复位
+  applySceneLights("void");
+  rebuildGeometry();
 }
-function restoreStudio() {
-  if (!STUDIO_SNAP) return;
-  const s = STUDIO_SNAP; STUDIO_SNAP = null;
-  state.mineralId = s.mineralId; state.habitId = s.habitId; state.mask = s.mask;
-  state.twinShow = s.twinShow; state.twinSplit = s.twinSplit;
-  state.colorMode = s.colorMode; state.uniform = s.uniform;
-  state.luster = s.luster; state.transp = s.transp; state.alpha = s.alpha;
-  state.extras = s.extras;
-  state.bg = s.bg; state.base = s.base; state.zoom = s.zoom;
-  state.onTable = s.onTable; state.bgPicked = s.bgPicked; state.restPose = s.restPose;
-  state.quat = s.quat.slice(); state.groupYaw = s.groupYaw; state.pan = s.pan.slice();
-  state.axes = s.axes; state.edges = s.edges; state.striations = s.striations;
-  state.locAmbK = s.locAmbK; state.matrixCol = s.matrixCol; state.locTransp = s.locTransp; state.locRig = s.locRig;
-  state.turntable = false;                 // 转台是标本页的展柜开关，回晶体台即关
-  rebuildGeometry();               // 矿物/外形/掩码可能整个换了，几何必须重建
-  applySceneLights(state.bg);      // 灯组按还原后的场景重挂
-}
+
 /* 矿物页（附属窗体）：默认显示代表晶体，选产地载入组合 */
 function enterMineralPage(mineralId, locId) {
   const m = DATA.minerals.find(x => x.id === mineralId);
   if (!m) { location.hash = "#/studio"; return; }
-  if (!document.body.classList.contains("museum-mode")) snapStudio();
-  // （标本页之间互跳不重新快照——否则后一个标本页会把前一个的状态当成"工作区"记下来）
   state.museum = { mineralId: m.id, locId: locId || null };
   document.body.classList.add("museum-mode");
   document.body.classList.remove("browse-mode");
@@ -4131,11 +4108,11 @@ function enterMineralPage(mineralId, locId) {
     state.bg = loc.setup.bg || "black";
     if (state.bg !== "black") state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);
   } else {
-    // 默认视图：代表晶体站在 3D 桌面上
+    // 默认视图：代表晶体全黑悬浮（任何矿物零配置可用——未来 50 种矿物不改一处）
     state.extras = [];
-    state.zoom = 1;
+    state.zoom = 1; state.zoomBase = 1;
     state.base = "none";
-    state.bg = "paper";
+    state.bg = "black";
   }
   state.onTable = true;
   state.bgPicked = true;
@@ -4367,7 +4344,7 @@ function enterBrowse() {
   state.museum = null;
   state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
   applySceneLights(state.bg);
-  if (fromMuseum) restoreStudio();   // 标本组合不带到卡片墙后面去
+  if (fromMuseum) resetStudio();     // 卡片墙后面永远是干净的默认晶体台
   state.turntable = false;
   document.getElementById("museum").style.display = "none";
   document.getElementById("browse").style.display = "";
@@ -4384,11 +4361,10 @@ function enterStudio() {
     state.museum = null;
     state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
     applySceneLights(state.bg);
-    // 从标本页回来：还原快照的工作区（组合/场景/视角全部回到进页前的样子）；
-    // 「带当前组合去造型台」(mLoad) 设了 CARRY_COMBO——组合是特意带来的，不还原
-    if (fromMuseum && CARRY_COMBO) { CARRY_COMBO = false; STUDIO_SNAP = null; }
-    else if (fromMuseum) restoreStudio();
-    state.turntable = false;          // 转台只在标本页转
+    // 从标本页回来：重置为该矿物的默认晶体台（第一外形+空组合+浅灰影棚底）。
+    // 例外：mLoad「带当前组合去造型台」显式携带（CARRY_COMBO）
+    if (fromMuseum && CARRY_COMBO) CARRY_COMBO = false;
+    else if (fromMuseum) resetStudio();
     resize(); syncPanels(); renderExtras(); draw();
   }
   markPtab("studio");
