@@ -405,6 +405,33 @@ for (const b of [...bgKeys, "none"]) {
   const ok = (() => { try { run(`state.exp.bg = "${b}"; buildExportCanvas();`); return true; } catch (e) { return false; } })();
   check(`导出背景可用：${b}`, ok);
 }
+// —— 分享信息卡：晶体卡（图鉴版式）与标本卡（标本照+标本信息）——
+check("标本卡：矿物页产地导出走标本版式（尺寸 4:3 + 副标题 + 固定版式说明 + 文件名带标本名）", (() => {
+  const r = run(`JSON.stringify((() => {
+    location.hash = "#/m/beryl/kashmir"; applyRoute();
+    document.getElementById("openExport").onclick();
+    const cvn = buildExportCanvas();
+    return { w: cvn.width, h: cvn.height,
+             sub: document.getElementById("expSub").textContent,
+             note: document.getElementById("expFields").children[0].textContent,
+             file: fileName("png"), museum: !!state.museum };
+  })())`);
+  const o = JSON.parse(r);
+  return o.w === 1400 && o.h === 1050 && o.sub.indexOf("标本卡") >= 0
+    && o.note.indexOf("固定版式") >= 0 && o.file.indexOf("克什米尔之王") >= 0 && o.museum === true;
+})(), run(`JSON.stringify({ w: (buildExportCanvas() || {}).width, file: fileName("png") })`));
+check("晶体卡：无产地矿物页仍走图鉴版式（字段勾选在，矿物学信息齐）", (() => {
+  const r = run(`JSON.stringify((() => {
+    location.hash = "#/m/beryl"; applyRoute();
+    document.getElementById("openExport").onclick();
+    const n = document.getElementById("expFields").children.length;   // FIELDS 勾选数
+    const cvn = buildExportCanvas();
+    location.hash = "#/studio"; applyRoute();
+    return { n, w: cvn.width, file: fileName("png") };
+  })())`);
+  const o = JSON.parse(r);
+  return o.n === 9 && o.w === 1400 && o.file.indexOf("晶形") >= 0;
+})(), "");
 check("光照方位/高度 → 主光方向", (() => {
   run(`setLight(90, 0);`);
   const v = run(`LIGHT_V`);

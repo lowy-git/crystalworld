@@ -624,7 +624,7 @@
 <div class="modal" id="modal">
   <div class="sheet">
     <h2>导出图片</h2>
-    <p class="sub">画面所见即所得；勾选需要叠加的文字，尺寸与背景可选。</p>
+    <p class="sub" id="expSub">画面所见即所得；勾选需要叠加的文字，尺寸与背景可选。</p>
     <div class="grid2">
       <div>
         <h4>尺寸 Size</h4>
@@ -4376,6 +4376,13 @@ const FIELDS = [
 function initExportFields() {
   const box = document.getElementById("expFields");
   box.innerHTML = "";
+  if (state.museum && museumLoc()) {   // 标本卡：固定版式（标本名/产地/特征/故事），无字段可勾
+    const p = document.createElement("div");
+    p.className = "swarning";
+    p.textContent = "标本卡：当前标本照 + 标本名 / 产地 / 特征 / 故事第一句（固定版式）。单形、晶胞参数、特征面角等矿物学明细请回晶体台导出。";
+    box.appendChild(p);
+    return;
+  }
   for (const [k, label, on] of FIELDS) {
     state.exp.fields[k] = state.exp.fields[k] ?? on;
     const l = document.createElement("label");
@@ -4406,7 +4413,93 @@ function exportSize() {
   return [1400, 1050];
 }
 
+/* ── 标本卡（矿物页导出）── 与晶体卡的图鉴版式相对：主角是标本。
+   画面 = 抓主画布当前帧（黑底标本照完整场景：围岩+组合+展示灯，所见即所得）；
+   文字 = 标本名 / 产地 / 矿物与化学式 / 特征标签 / 故事第一句。
+   不给单形、晶胞参数、特征面角——两页分工在导出上同样成立。 */
+function buildSpecimenCanvas() {
+  const m = museumMineral(), loc = museumLoc();
+  const [w, h] = exportSize();
+  const landscape = (state.exp.aspect || "4:3") === "16:9";
+  const u = (landscape ? h / 1000 : Math.min(w, h) / 1000) * (state.exp.scale || 1);
+  const off = document.createElement("canvas");
+  off.width = w; off.height = h;
+  const g = off.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 0, h);          // 影棚黑渐变（与标本页同款）
+  grd.addColorStop(0, "#20262d"); grd.addColorStop(0.55, "#141a20"); grd.addColorStop(1, "#0a0e13");
+  g.fillStyle = grd; g.fillRect(0, 0, w, h);
+
+  let imgX = 0, imgY = 0, imgW, imgH, textX, textY, textW;
+  if (landscape) {
+    imgW = w * 0.52; imgH = h;
+    textX = w * 0.575; textY = h * 0.10; textW = w - textX - w * 0.045;
+  } else {
+    imgW = w; imgH = h * ((state.exp.aspect === "9:16") ? 0.52 : 0.58);
+    textX = w * 0.075; textW = w - textX * 2; textY = imgH + h * 0.045;
+  }
+  const src = document.getElementById("cv");
+  if (src && src.width && src.height) {
+    const k = Math.max(imgW / src.width, imgH / src.height);   // cover 裁剪，居中
+    const dw = src.width * k, dh = src.height * k;
+    try { g.drawImage(src, imgX + (imgW - dw) / 2, imgY + (imgH - dh) / 2, dw, dh); } catch (err) {}
+  }
+  // 标本照与文字区的接缝：一道细高光
+  g.strokeStyle = "rgba(160,190,220,.18)"; g.lineWidth = 1.4 * u;
+  g.beginPath();
+  if (landscape) { g.moveTo(imgW + w * 0.028, h * 0.08); g.lineTo(imgW + w * 0.028, h * 0.92); }
+  else { g.moveTo(w * 0.06, imgH + h * 0.022); g.lineTo(w * 0.94, imgH + h * 0.022); }
+  g.stroke();
+
+  const inkL = "#eaf2fb", ink2 = "#9fb3c9";
+  const F = {
+    title: `600 ${Math.round(56 * u)}px "Noto Serif SC","Songti SC",serif`,
+    sub: `400 ${Math.round(24 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+    body: `400 ${Math.round(22 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+    small: `400 ${Math.round(18 * u)}px "Noto Sans SC",system-ui,sans-serif`,
+  };
+  g.textAlign = "left"; g.textBaseline = "top";
+  let y = textY;
+  g.font = F.title; g.fillStyle = inkL;
+  const nameText = loc.title ? `「${loc.title}」` : `${m.zh}标本`;
+  for (const ln of wrapText(g, nameText, textW)) { g.fillText(ln, textX, y); y += 68 * u; }
+  y += 8 * u;
+  g.font = F.sub; g.fillStyle = ink2;
+  for (const ln of wrapText(g, `${loc.zh}`, textW)) { g.fillText(ln, textX, y); y += 32 * u; }
+  g.font = F.small; g.fillStyle = ink2;
+  g.fillText(`${m.zh} ${m.formula} · ${loc.styleZh || loc.style || ""}`, textX, y);
+  y += 34 * u;
+
+  // 特征标签：pill 一排（放不下换行）
+  y += 10 * u;
+  g.font = F.small;
+  let px = textX, py = y;
+  const ph = 30 * u;
+  for (const f of (loc.features || [])) {
+    const tw = g.measureText(f).width + 26 * u;
+    if (px + tw > textX + textW) { px = textX; py += ph + 10 * u; }
+    g.strokeStyle = "rgba(160,190,220,.35)"; g.lineWidth = 1;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(px, py, tw, ph, ph / 2); else g.rect(px, py, tw, ph);
+    g.stroke();
+    g.fillStyle = ink2; g.fillText(f, px + 13 * u, py + 5 * u);
+    px += tw + 10 * u;
+  }
+  y = py + ph + 22 * u;
+
+  // 故事第一句（中文句号断句；截 90 字防爆版）
+  const full = (loc.text && loc.text.zh) || "";
+  const cut = full.indexOf("。");
+  const story = ((cut > 0 ? full.slice(0, cut + 1) : full.split("\n")[0]) || "").slice(0, 90);
+  g.font = F.body; g.fillStyle = inkL;
+  for (const ln of wrapText(g, story, textW).slice(0, 4)) { g.fillText(ln, textX, y); y += 34 * u; }
+
+  g.font = F.small; g.fillStyle = "rgba(159,179,201,.55)";
+  g.fillText("CrystalWorld · 晶体世界", textX, h - 46 * u);
+  return off;
+}
+
 function buildExportCanvas() {
+  if (state.museum && museumLoc()) return buildSpecimenCanvas();
   const { bg, scale, fields } = state.exp;
   const [w, h] = exportSize();
   const landscape = (state.exp.aspect || "4:3") === "16:9";
@@ -4557,6 +4650,10 @@ function downloadCanvas(canvas, name) {
 }
 
 document.getElementById("openExport").onclick = () => {
+  const subEl = document.getElementById("expSub");
+  if (subEl) subEl.textContent = (state.museum && museumLoc())
+    ? "标本卡：画面为当前标本照，文字为标本名 / 产地 / 特征 / 故事。"
+    : "画面所见即所得；勾选需要叠加的文字，尺寸与背景可选。";
   // 导出背景默认跟随当前场景背景（"所见即所得"）
   if (BACKGROUNDS[state.bg]) {
     state.exp.bg = state.bg;
@@ -4590,7 +4687,9 @@ for (const [boxId, key, attr] of [["expSize", "w", "w"], ["expBg", "bg", "bg"], 
   });
 }
 
-const fileName = (ext) => `${mineral().zh}_${habit().zh}_晶形.${ext}`;
+const fileName = (ext) => (state.museum && museumLoc())
+  ? `${museumLoc().title || mineral().zh}_标本卡.${ext}`
+  : `${mineral().zh}_${habit().zh}_晶形.${ext}`;
 const flash = (msg) => {
   const p = document.getElementById("expProgress");
   p.textContent = msg;
