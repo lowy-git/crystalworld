@@ -309,6 +309,13 @@
   }
   #museum .mhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
   #museum .mhead b{font-size:15px}
+  /* 展柜控制栏：一行一个功能组，紧凑（它不是"参数面板"，是展柜的几个开关） */
+  #museum .mrig{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 12px;display:flex;flex-direction:column;gap:8px}
+  #museum .mrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #museum .mlab{font-size:11.5px;opacity:.62;flex:0 0 34px}
+  #museum .btns{display:flex;gap:6px;flex-wrap:wrap}
+  #museum .srow{display:flex;align-items:center;gap:8px;font-size:12px}
+  #museum .srow .val{font-weight:600}
   #museum .mlist{display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
   #museum .mitem{
     all:unset;cursor:pointer;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
@@ -456,18 +463,8 @@
         </div>
         <div class="swarning" id="exHint">最多 6 个（含主晶体）。拖动只改位置，不改变结晶学参数。<br>摆放：逐颗拖动位置；锁定：整组作为刚体一起转。</div>      </div>
     </div>
-    <div class="sec" data-sec="scene">
-      <h3><button class="fold" type="button" aria-expanded="true">场景 <span style="text-transform:none;letter-spacing:0">Scene</span></button></h3>
-      <div class="secbody">
-        <div class="row wrap" id="bgs"></div>
-        <div class="row" style="margin-top:6px">
-          <label style="flex:1"><input type="checkbox" id="onTable"> 放在桌面上（贴合 + 接触阴影）</label>
-        </div>
-        <div class="row wrap" id="bases" style="margin-top:6px"></div>
-        <div class="swarning" id="tableHint">贴合台面高度并加一圈接触阴影；关掉则晶体悬在场景中央。</div>
-        <div class="swarning" id="bgHint"></div>
-      </div>
-    </div>
+    <!-- 场景节已随「两页分工」移除：晶体台固定 void 摄影棚底、悬浮展示；
+         场景/贴台/基岩/自然摆放是标本页的表现力功能（展柜控制栏）。 -->
   </aside>
 
   <main class="stage" id="stage">
@@ -479,6 +476,17 @@
       <div class="mhead">
         <button class="btn" id="mBack" type="button">← 返回晶体一览</button>
         <b id="mTitle">矿物志</b>
+      </div>
+      <!-- 展柜控制栏：标本页专属的表现力操作（场景/灯组/姿态/转台/透明度微调）。
+           晶体台只研究外形，这些都在这里——两页分工的另一半。 -->
+      <div class="mrig" id="mRig">
+        <div class="mrow"><span class="mlab">场景</span><span class="btns" id="mrScenes"></span></div>
+        <div class="mrow"><span class="mlab">灯组</span><span class="btns" id="mrRigs"></span></div>
+        <div class="mrow">
+          <label class="ck"><input type="checkbox" id="mrTurn"> 转台 Turntable</label>
+          <label class="ck"><input type="checkbox" id="mrRest"> 自然摆放 Rest</label>
+        </div>
+        <div class="srow"><span>透明度 <b id="mrAlphaVal" class="val"></b></span><input type="range" id="mrAlpha" min="0" max="100" step="1"></div>
       </div>
       <div class="mlist" id="mList"></div>
       <div class="mtext" id="mText"></div>
@@ -543,7 +551,6 @@
           <label class="ck"><input type="checkbox" id="optAxes" checked> 坐标轴 Axes</label>
           <label class="ck"><input type="checkbox" id="optSpin"> 自动旋转 Auto-spin</label>
           <label class="ck"><input type="checkbox" id="optLMove"> 光源绕行 Light orbit</label>
-          <label class="ck"><input type="checkbox" id="optRest" checked> 自然摆放（3D 桌面）Rest pose</label>
           <label class="ck" id="twinRow" style="display:none"><input type="checkbox" id="optTwin"> 两个体不同色 Twin tint</label>
         </div>
         <!-- 双晶拆解：只在双晶习惯出现。0＝合在一起；>0＝个体 B 沿拆解方向平移 -->
@@ -1060,16 +1067,18 @@ const state = {
   luster: null,
   transp: null,        // 通透度档位：opaque / transl / clear / custom
   alpha: null,         // 实际通透度 0–1
-  bg: "paper",         // 启动时按当地时间定（见 daytimeBg），用户一选就钉住
-  bgPicked: false,     // 用户手动选过场景没有
-  onTable: true,       // 把晶体放到场景的桌面/地面上（贴合 + 接触阴影）
-  restPose: true,      // 3D 桌面上「自然摆放」：晶体躺倒在稳定支撑面上（静态求解，非物理）
+  bg: "void",          // 晶体台固定中性摄影棚底（场景选择已移到标本页）；标本页会按产地覆盖
+  bgPicked: true,      // 晶体台无场景可选，永远"钉住"在 void
+  onTable: false,      // 贴台/落桌是标本页的表现力功能，晶体台悬浮展示
+  restPose: true,      // 3D 桌面上「自然摆放」（标本页纸面场景用；晶体台无桌面恒直立）
   base: "none",        // 基岩/底座：none / slab / geode / wood
   inclusion: "none",   // 默认无：内含物由用户主动开启
   incDensity: 0.6,     // 只控制「出现多少个」
   incSize: 1,          // 只控制「每个多大」（1 = 表中标称尺寸）
   lightAz: -25, lightEl: 38,
   lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
+  turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
+  locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
   twinTint: false,
   twinSplit: 0,        // 双晶拆解：0 = 合在一起，>0 = 个体 B 沿拆解方向平移
   twinShow: "both",    // both / A / B：只显示其中一个个体
@@ -3251,8 +3260,10 @@ function stepLightOrbit() {
   return az;
 }
 function loop() {
-  if (state.spin) {
-    state.quat = qNorm(qMul(qAxis(0, 1, 0, 0.0075), state.quat));
+  // 标本页转台：比自动旋转慢一半（约 30 秒/圈），展柜的"呼吸感"；用户一拖就停
+  const turn = state.turntable && state.museum;
+  if (state.spin || turn) {
+    state.quat = qNorm(qMul(qAxis(0, 1, 0, turn && !state.spin ? 0.0035 : 0.0075), state.quat));
     draw();
   }
   // 光源移动：晶体不动、光绕着它转。比自动旋转更能看清"面与面之间的明暗差"，
@@ -3270,6 +3281,12 @@ requestAnimationFrame(loop);
 let drag = null;
 cv.addEventListener("pointerdown", (e) => {
   cv.setPointerCapture(e.pointerId);
+  // 转台拖动即停：用户接管视角，转台不再抢（想再转去展柜栏重新打开）
+  if (state.turntable) {
+    state.turntable = false;
+    const t = document.getElementById("mrTurn");
+    if (t) t.checked = false;
+  }
   // 「拖动位置」模式：左键拖着选中的附加晶体在世界里走（不旋转视角）
   const ex = state.extras[state.extraSel];
   const moving = state.moveMode && !state.groupLock && e.button === 0 && !e.shiftKey && !!ex;
@@ -3431,20 +3448,9 @@ function renderForms() {
       : "该外形只有一种单形。");
 }
 
-/* 基岩/底座按钮 */
-function renderBases() {
-  const box = document.getElementById("bases");
-  if (!box) return;
-  box.innerHTML = "";
-  for (const [id, B] of Object.entries(BASES)) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "btn" + (state.base === id ? " on" : "");
-    b.textContent = B.zh;
-    b.onclick = () => { state.base = id; renderBases(); draw(); };
-    box.appendChild(b);
-  }
-}
+/* 基岩/底座与场景选择的 UI 已随「两页分工」移到标本页展柜栏（renderMuseumRig）；
+   晶体台固定 void 摄影棚底、悬浮展示，这两个渲染函数随之退役。
+   BASES/BACKGROUNDS 数据与 applySceneLights 灯组保留——标本页仍要用。 */
 
 function renderLusters() {
   const box = document.getElementById("lusters");
@@ -3467,46 +3473,6 @@ function renderLusters() {
   }
   document.getElementById("lusterHint").innerHTML =
     `该矿物典型光泽：<b>${LUSTERS[def].zh}</b>。玻璃/金刚＝高光锐利；金属＝带色高光；蜡状＝柔和高光。透不透光看下面的「通透度」。`;
-}
-
-/* 背景：程序化场景。除画面外还带环境光修正（藏品柜更暗、自然光更亮） */
-/* 默认场景按当地时间挑：白天纸面（亮、像在桌上摆一张纸），夜里空白（净、晶体自己当主角）。
-   只在用户没手动选过场景时生效（state.bgPicked），一旦点过就钉住。 */
-function daytimeBg() {
-  const h = new Date().getHours();
-  return (h >= 7 && h < 19) ? "paper" : "void";
-}
-function renderBackgrounds() {
-  const box = document.getElementById("bgs");
-  if (!box) return;
-  box.innerHTML = "";
-  for (const [id, B] of Object.entries(BACKGROUNDS)) {
-    const b = document.createElement("button");
-    b.className = "btn" + (state.bg === id ? " on" : "");
-    b.textContent = B.zh;
-    b.onclick = () => { state.bg = id; state.bgPicked = true; applySceneLights(id); rebuildGeometry(); renderBackgrounds(); draw(); };
-    box.appendChild(b);
-  }
-  const B = BACKGROUNDS[state.bg] || BACKGROUNDS.void;
-  const cb = document.getElementById("onTable");
-  if (cb) {
-    cb.checked = state.onTable;
-    cb.disabled = !B.table;
-    cb.onchange = () => { state.onTable = cb.checked; rebuildGeometry(); draw(); };
-  }
-  // "放在桌面上"只在有桌面的场景有意义（空白没有桌面），给一句说明
-  const tblHint = document.getElementById("tableHint");
-  if (tblHint) tblHint.style.display = (B.table && state.onTable) ? "" : "none";
-  const hints = {
-    void: "影棚灰渐变，什么都没有：看几何、出素材专用（无桌面）。",
-    lab: "实拍感实验台照片。勾选「放在桌面上」会贴合台面并加接触阴影。",
-    nature: "雾林巨石，环境光偏绿偏暗。勾选后晶体坐在岩石上。",
-    cabinet: "暖光木展台照片：最暗，反差最大。",
-    paper: "3D 桌面 + 一张纸（与晶体同深度缓冲，真实透视与投影阴影）。导出图鉴卡仍用照片底。",
-  };
-  document.getElementById("bgHint").textContent = hints[state.bg] || "";
-  const th = document.getElementById("tableHint");
-  if (th) th.textContent = (state.onTable ? "已贴合台面并加接触阴影；关掉则晶体悬在场景中央。" : "勾选后贴合台面高度，并加一圈接触阴影。");
 }
 
 /* 通透度：与光泽完全独立的两个栏位。金属光泽天然不透明，滑条会禁用 */
@@ -3879,7 +3845,7 @@ function snapStudio() {
     bg: state.bg, base: state.base, zoom: state.zoom,
     onTable: state.onTable, bgPicked: state.bgPicked, restPose: state.restPose,
     quat: state.quat.slice(), groupYaw: state.groupYaw, pan: state.pan.slice(),
-    locAmbK: state.locAmbK, matrixCol: state.matrixCol, locTransp: state.locTransp,
+    locAmbK: state.locAmbK, matrixCol: state.matrixCol, locTransp: state.locTransp, locRig: state.locRig,
   };
 }
 function restoreStudio() {
@@ -3893,7 +3859,8 @@ function restoreStudio() {
   state.bg = s.bg; state.base = s.base; state.zoom = s.zoom;
   state.onTable = s.onTable; state.bgPicked = s.bgPicked; state.restPose = s.restPose;
   state.quat = s.quat.slice(); state.groupYaw = s.groupYaw; state.pan = s.pan.slice();
-  state.locAmbK = s.locAmbK; state.matrixCol = s.matrixCol; state.locTransp = s.locTransp;
+  state.locAmbK = s.locAmbK; state.matrixCol = s.matrixCol; state.locTransp = s.locTransp; state.locRig = s.locRig;
+  state.turntable = false;                 // 转台是标本页的展柜开关，回晶体台即关
   rebuildGeometry();               // 矿物/外形/掩码可能整个换了，几何必须重建
   applySceneLights(state.bg);      // 灯组按还原后的场景重挂
 }
@@ -3939,10 +3906,12 @@ function enterMineralPage(mineralId, locId) {
   state.onTable = true;
   state.bgPicked = true;
   // 产地可覆盖：灯组（展示灯）+ 环境压暗 + 基岩颜色 + 自然摆放开关（无产地 = 全用默认）
+  state.turntable = true;      // 展柜转台默认开：进页即慢转，用户一拖即停
   if (loc) {
     state.locAmbK = loc.setup.ambK != null ? loc.setup.ambK : null;
     state.matrixCol = loc.setup.matrixCol || null;
     state.locTransp = loc.setup.transp || null;
+    state.locRig = loc.setup.rig === "showcase" ? "showcase" : null;   // 展柜栏灯组初值
     if (loc.setup.restPose !== undefined) state.restPose = !!loc.setup.restPose;
     if (loc.setup.transp && transpById(loc.setup.transp)) {
       state.transp = loc.setup.transp;
@@ -3950,11 +3919,11 @@ function enterMineralPage(mineralId, locId) {
     }
     applySceneLights(loc.setup.rig || state.bg);
   } else {
-    state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
+    state.locAmbK = null; state.matrixCol = null; state.locTransp = null; state.locRig = null;
     applySceneLights(state.bg);
   }
   rebuildGeometry();
-  syncPanels(); renderBackgrounds(); renderExtras(); renderMuseum(); draw();
+  syncPanels(); renderExtras(); renderMuseum(); draw();
 }
 function renderMuseum() {
   const m = museumMineral();
@@ -3983,10 +3952,71 @@ function renderMuseum() {
       feat.appendChild(i);
     }
     src.textContent = "来源：" + (loc.source || "—") + "（置信度 " + (loc.confidence || "—") + "）";
+    // 标本名（如「克什米尔之王」）：有就顶在讲解前面——标本页的主角是标本不是矿物
+    if (loc.title) text.textContent = "「" + loc.title + "」\n\n" + text.textContent;
   } else {
     text.textContent = (m.intro || {}).zh || "";
     feat.innerHTML = "";
     src.textContent = (m.localities && m.localities.length) ? "左侧选择产地，载入该产地的典型晶习组合。" : "产地条目筹备中。";
+  }
+  renderMuseumRig();
+}
+/* 展柜控制栏：标本页专属——场景/灯组/姿态/转台/透明度微调。
+   初值 = 产地预设（bg/base/rig/restPose/transp 都来自 setup），用户可在此覆盖；
+   透明度滑杆与晶体台右面板同一语义（滑杆=透明度，state.alpha=不透明度）。 */
+function renderMuseumRig() {
+  const scenes = document.getElementById("mrScenes");
+  if (!scenes) return;
+  scenes.innerHTML = "";
+  // 场景全家搬来标本页：黑底标本照/纸面 3D + 三套照片场景（晶体台固定 void 摄影棚底）
+  for (const [id, zh] of [["void", "黑底标本照"], ["paper", "纸面"], ["lab", "实验室"], ["nature", "自然界"], ["cabinet", "藏品柜"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn" + (state.bg === id ? " on" : "");
+    b.textContent = zh;
+    b.onclick = () => {
+      state.bg = id;
+      state.onTable = true;                       // 展柜场景恒贴台（黑底=标本照、纸面=桌面）
+      applySceneLights(state.locRig || id);       // 灯组保持用户选择，没选就随场景
+      rebuildGeometry();                          // 场景换桌面/黑底，自然摆放与贴台都要重烤
+      renderMuseumRig(); draw();
+    };
+    scenes.appendChild(b);
+  }
+  const rigs = document.getElementById("mrRigs");
+  rigs.innerHTML = "";
+  for (const [id, zh] of [[null, "标准"], ["showcase", "展示灯"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn" + ((state.locRig || null) === id ? " on" : "");
+    b.textContent = zh;
+    b.onclick = () => {
+      state.locRig = id;
+      applySceneLights(id || state.bg);
+      renderMuseumRig(); draw();
+    };
+    rigs.appendChild(b);
+  }
+  const turn = document.getElementById("mrTurn");
+  if (turn) { turn.checked = state.turntable; turn.onchange = () => { state.turntable = turn.checked; }; }
+  const rest = document.getElementById("mrRest");
+  if (rest) {
+    rest.checked = state.restPose;
+    rest.disabled = state.bg !== "paper";         // 黑底标本照 = 产地姿态（直立并生等），不给躺
+    rest.onchange = () => { state.restPose = rest.checked; rebuildGeometry(); draw(); };
+  }
+  const al = document.getElementById("mrAlpha");
+  if (al) {
+    al.value = String(Math.round((1 - (state.alpha != null ? state.alpha : 1)) * 100));
+    const lab = document.getElementById("mrAlphaVal");
+    if (lab) lab.textContent = al.value + "%";
+    al.oninput = () => {
+      state.alpha = 1 - Number(al.value) / 100;
+      state.transp = "custom";
+      const l2 = document.getElementById("mrAlphaVal");
+      if (l2) l2.textContent = al.value + "%";
+      draw();
+    };
   }
 }
 /* ── 浏览模式（晶体一览卡片墙）：主页的一层选单，不是独立页面 ──
@@ -4082,6 +4112,7 @@ function enterBrowse() {
   state.locAmbK = null; state.matrixCol = null; state.locTransp = null;
   applySceneLights(state.bg);
   if (fromMuseum) restoreStudio();   // 标本组合不带到卡片墙后面去
+  state.turntable = false;
   document.getElementById("museum").style.display = "none";
   document.getElementById("browse").style.display = "";
   if (!wasBrowse) resize();
@@ -4101,6 +4132,7 @@ function enterStudio() {
     // 「带当前组合去造型台」(mLoad) 设了 CARRY_COMBO——组合是特意带来的，不还原
     if (fromMuseum && CARRY_COMBO) { CARRY_COMBO = false; STUDIO_SNAP = null; }
     else if (fromMuseum) restoreStudio();
+    state.turntable = false;          // 转台只在标本页转
     resize(); syncPanels(); renderExtras(); draw();
   }
   markPtab("studio");
@@ -4175,7 +4207,6 @@ function syncPanels() {
   document.getElementById("optStri").checked = state.striations;
   document.getElementById("optSpin").checked = state.spin;
   document.getElementById("optLMove").checked = state.lightMove;
-  document.getElementById("optRest").checked = state.restPose;
   const twinRow = document.getElementById("twinRow");
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
@@ -4199,8 +4230,6 @@ function syncPanels() {
   document.getElementById("spA").classList.toggle("on", state.twinShow === "A");
   document.getElementById("spB").classList.toggle("on", state.twinShow === "B");
   renderLusters();
-  renderBackgrounds();
-  renderBases();
   renderTransp();
   renderInclusions();
   renderForms();      // 曾经漏掉这一行：初始化与换矿物后单形列表都是空的，点了也没反应
@@ -4247,7 +4276,6 @@ document.getElementById("optEdges").onchange = (e) => { state.edges = e.target.c
   document.getElementById("optStri").onchange = (e) => { state.striations = e.target.checked; draw(); };
 document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.checked; };
 document.getElementById("optLMove").onchange = (e) => { state.lightMove = e.target.checked; };
-document.getElementById("optRest").onchange = (e) => { state.restPose = e.target.checked; rebuildGeometry(); draw(); };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
 document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 
@@ -4630,16 +4658,10 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePop(); });
 closePop();
 
-/* 启动时按当地时间定默认场景（白天纸面、夜里空白）。
-   放在最后：上面所有 UI 都已就绪，改完再统一重画一次。 */
-if (!state.bgPicked) {
-  state.bg = daytimeBg();
-  state.exp.bg = state.bg;
-  applySceneLights(state.bg);
-  renderBackgrounds();
-  renderBases();
-  draw();
-}
+/* 启动默认：晶体台固定 void 摄影棚底（场景选择已移到标本页），
+   灯组挂默认；上面所有 UI 都已就绪，最后统一重画一次。 */
+applySceneLights(state.bg);
+draw();
 /* 页面路由：放在所有 UI 就绪之后（hash 为唯一页面事实来源） */
 applyRoute();
 </script>

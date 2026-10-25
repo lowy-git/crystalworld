@@ -308,6 +308,7 @@ export const MINERALS = [
       {
         id: "kashmir",
         zh: "巴基斯坦 · 斯卡都（克什米尔）", en: "Skardu, Gilgit-Baltistan, Pakistan",
+        title: "克什米尔之王",                     // 标本名（标本页与分享卡的主角）
         style: "parallel", styleZh: "直立并生",
         habitId: "prismatic-long",
         setup: {

@@ -340,11 +340,6 @@ check("萤石尖晶石律 <100> 夹角 109°28′（arccos(−1/3)）", Math.abs
   const cabY = run(`BACKGROUNDS.cabinet.table.y`) * 860;
   const cab = boxOf(`fitToTable(${base}, BACKGROUNDS.cabinet.table)`);
   check("藏品柜展台也能贴合", Math.abs(cab.ymax - cabY) < 2, `ymax=${cab.ymax.toFixed(1)} table=${cabY.toFixed(1)}`);
-  // 勾选状态由 UI 开关驱动：面板同步 + 场景禁用判断
-  run(`state.bg = "void"; renderBackgrounds();`);
-  check("空白场景下勾选框被禁用", run(`document.getElementById("onTable").disabled`) === true);
-  run(`state.bg = "lab"; renderBackgrounds();`);
-  check("实验台场景下勾选框可用", run(`document.getElementById("onTable").disabled`) === false);
   run(`state.onTable = true; state.bg = "lab"; draw();`);
   check("画布仍能绘制（贴合路径不报错）", counts.fill > 0, `fill=${counts.fill}`);
 }
@@ -1113,6 +1108,38 @@ const glLastOptsOk = (glw, vw, vh) => {
       && o.museum && o.museum.mineralId === "pyrite" && o.museum.locId === "navajun"
       && o.items === 2 && o.hash === "#/m/pyrite/navajun";
   })(), run(`JSON.stringify({ n: state.extras.length, items: document.getElementById("mList").children.length, museum: state.museum, hash: location.hash })`));
+  check("展柜控制栏：5 场景按钮 + 灯组初值随产地（navajun=showcase）+ 转台默认开 + 场景切换换 bg", (() => {
+    const r = run(`JSON.stringify((() => {
+      const scenes = document.getElementById("mrScenes").children.length;
+      const rigs = document.getElementById("mrRigs").children.length;
+      const turnDef = document.getElementById("mrTurn").checked;
+      const locRig = state.locRig;
+      const bgBefore = state.bg;
+      // 点「纸面」场景按钮：标本组合换到纸面 3D 桌面
+      const btns = [...document.getElementById("mrScenes").children];
+      const paperBtn = btns.find(b => b.textContent === "纸面");
+      if (paperBtn) paperBtn.onclick();
+      const after = { bg: state.bg, onTable: state.onTable };
+      return { scenes, rigs, turnDef, locRig, bgBefore, after };
+    })())`);
+    const o = JSON.parse(r);
+    return o.scenes === 5 && o.rigs === 2 && o.turnDef === true && o.locRig === "showcase"
+      && o.bgBefore === "paper" && o.after.bg === "paper" && o.after.onTable === true;
+  })(), run(`JSON.stringify({ locRig: state.locRig, turntable: state.turntable, bg: state.bg })`));
+  check("转台生命周期：进标本页默认开，退出到晶体台/卡片墙即关（loop 只在标本页转）", (() => {
+    const r = run(`JSON.stringify((() => {
+      location.hash = "#/studio"; applyRoute();
+      const afterExit = state.turntable;
+      location.hash = "#/browse"; applyRoute();
+      const afterBrowse = state.turntable;
+      location.hash = "#/m/beryl/kashmir"; applyRoute();
+      const afterEnter = state.turntable;
+      location.hash = "#/studio"; applyRoute();
+      return { afterExit, afterBrowse, afterEnter, final: state.turntable };
+    })())`);
+    const o = JSON.parse(r);
+    return o.afterExit === false && o.afterBrowse === false && o.afterEnter === true && o.final === false;
+  })(), run(`JSON.stringify({ turntable: state.turntable })`));
   check("落桌补偿：settle 实例坐在自己的支撑面上（普通台面=主晶体最低点；基质丘=足印处丘面下限）", (() => {
     const r = run(`(() => {
       const gy = state.groupYaw || 0, u = rotYv(SC_PRE_N, -gy);
@@ -1401,20 +1428,22 @@ const secsIn = (panel) => {
 };
 const popFors = [...html.matchAll(/<div class="pop" data-for="([a-z]+)"/g)].map(x => x[1]);
 check("顶部图标按钮共 4 个：视角 / 操作 / 导出 / 数据", popFors.length === 4 && ["view", "input", "export", "data"].every(k => popFors.includes(k)), `pops=${popFors.join(",")}`);
-check("左侧是「选择」（晶系/矿物/认识它/外形/单形/组/场景），右侧是「微调」（颜色/质感/内含物/光照/显示）", (() => {
+check("左侧是「选择」（晶系/矿物/认识它/外形/单形/组），右侧是「微调」（颜色/质感/内含物/光照/显示）——场景节已随两页分工移到标本页", (() => {
   const left = secsIn("left"), right = secsIn("right");
-  const wantL = ["sys", "min", "about", "hab", "frm", "group", "scene"];
+  const wantL = ["sys", "min", "about", "hab", "frm", "group"];
   const wantR = ["color", "luster", "incl", "light", "display"];
-  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k)) && left.length === 7 && right.length === 5;
+  return wantL.every(k => left.includes(k)) && wantR.every(k => right.includes(k))
+    && left.length === 6 && right.length === 5 && !left.includes("scene");
 })(), `L=${secsIn("left").join(",")} R=${secsIn("right").join(",")}`);
 check("视角/操作/导出/数据已从两侧面板搬到顶部浮出（不重复）", (() => {
   const inPanels = [...secsIn("left"), ...secsIn("right")];
   return !["view", "input", "export", "data"].some(k => inPanels.includes(k));
 })());
-check("场景选择器只有一个（#bgs 未因搬家而重复）", (() => {
-  const a = html.split(/id="bgs"/).length - 1;
-  return a === 1 && document.getElementById("bgs") !== null;
-})(), `html=${html.split(/id="bgs"/).length - 1}`);
+check("两页分工：晶体台无场景选择（场景节/optRest 从 HTML 退役），标本页展柜栏承载场景/灯组/转台", (() => {
+  const gone = ["bgs", "bases", "onTable", "tableHint", "bgHint", "optRest"].every(id => html.indexOf(`id="${id}"`) < 0);
+  const rig = ["mRig", "mrScenes", "mrRigs", "mrTurn", "mrRest", "mrAlpha"].every(id => html.indexOf(`id="${id}"`) > 0);
+  return gone && rig;
+})(), `残留=${["bgs","bases","onTable","tableHint","bgHint","optRest"].filter(id => html.indexOf(`id="${id}"`) >= 0).join(",")}`);
 check("顶栏是细条（42px 行高，不抢戏）", /grid-template-rows:\s*42px\s+1fr/.test(html) && /\.topbar\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/.test(html));
 check("三套主题变量都定义（dark / light / auto）", (() => {
   const has = (sel) => new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{").test(html);
