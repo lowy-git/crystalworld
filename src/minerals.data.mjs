@@ -618,15 +618,41 @@ export const MINERALS = [
       en: "The flagship orthorhombic mineral: {110} prism with {101} and {011} truncations, a standard pegmatite giant. Nothing to do with jade.",
     },
     habits: [
-      {   // Three Amigos 参考修正（用户："晶型完全错误"）：柱体长、端部楔形锥收拢——
-          // {110} 主柱面 + {010} 让横截面呈菱形，{011} 是终端大楔面（托帕石的招牌），
-          // {111} 双锥锐化棱角；旧版 {001} 平底截头是错的（天然托帕石端部收尖不截平）
-        id: "prismatic", zh: "柱状", en: "Prismatic",
+      /* 晶型数据取自 SMORF（www.smorf.nl，Goldschmidt《晶体形态图谱》数字化库）：
+         下载 Topaz_188/208/215.smorf.bin（BE float32 流：视角×3 + 零×3 + 面参数三元组流
+         + int32 三角索引流，0xFFFF 分面），反推每面法线 → hkl（n ∝ (h/a, k/b, l/c)）
+         + 相对面距 d。三个 SMORF 晶型的单形组与相对 d：
+           215（Miask 型，29 面）: {110}d1.07 {011}d1.15-1.20 {021}d1.20 {121}d1.17
+           188（Brazil 型，29 面）: {110}d0.95 {021}d1.12-1.20 {011}d0.82 {121}d0.83-0.97 {123}d0.79
+           208（Minas 型，29 面）: {110}d0.93 {021}d1.12-1.16 {011}d0.85 {121}d0.88-0.96 {013}d0.82 {130}d1.19
+         k 值 = d/基准（SMORF 的唐奈-哈克距离）；面数合计 16-29 与原库一致。 */
+      {
+        id: "prismatic", zh: "柱状（Miask 型）", en: "Prismatic (Miask)",
         forms: [
-          { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [0, 1, 0], k: 1.24, idx: "{010}", zh: "轴面 b", en: "Pinacoid b" },
-          { hkl: [0, 1, 1], k: 1.04, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
-          { hkl: [1, 1, 1], k: 1.18, idx: "{111}", zh: "斜方双锥", en: "Bipyramid" },
+          { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
+          { hkl: [0, 1, 1], k: 1.08, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.12, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [1, 2, 1], k: 1.09, idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
+        ],
+      },
+      {
+        id: "tabular", zh: "板状（Brazil 型）", en: "Tabular (Brazil)",
+        forms: [
+          { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
+          { hkl: [0, 1, 1], k: 0.88, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.2,  idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [1, 2, 1], k: 0.9,  idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
+          { hkl: [0, 2, 3], k: 0.85, idx: "{023}", zh: "斜方柱（底缘楔面）", en: "Dome" },
+        ],
+      },
+      {
+        id: "dipyramidal", zh: "复锥柱状（Minas 型）", en: "Dipyramidal (Minas)",
+        forms: [
+          { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
+          { hkl: [0, 1, 1], k: 0.9,  idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.18, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [1, 2, 1], k: 0.95, idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
+          { hkl: [1, 3, 0], k: 1.28, idx: "{130}", zh: "斜方柱（侧棱面）", en: "Prism" },
         ],
       },
     ],

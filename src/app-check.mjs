@@ -406,7 +406,7 @@ for (const b of [...bgKeys, "none"]) {
   check(`导出背景可用：${b}`, ok);
 }
 // —— 分享信息卡：晶体卡（图鉴版式）与标本卡（标本照+标本信息）——
-check("第三十二轮标本库扩充：托帕石晶型修正（{110}{010}{011}{111} 无平底）+ 芒果渐变染色 + 三新产地装载", (() => {
+check("第三十二轮标本库扩充：托帕石晶型（SMORF Miask {110}{011}{021}{121} 无平底）+ 芒果渐变 + 三新产地装载", (() => {
   const r = run(`JSON.stringify((() => {
     const tz = DATA.minerals.find(x => x.id === "topaz").habits[0];
     const tzForms = tz.forms.map(f => f.idx).join(",");
@@ -438,7 +438,7 @@ check("第三十二轮标本库扩充：托帕石晶型修正（{110}{010}{011}{
     return { tzForms, has001, mangoMode, mangoDiff, mangoLoc, red, lilac };
   })())`);
   const o = JSON.parse(r);
-  return o.tzForms === "{110},{010},{011},{111}" && o.has001 === false
+  return o.tzForms === "{110},{011},{021},{121}" && o.has001 === false   // SMORF Topaz_215（Miask）单形组
     && o.mangoMode === true && o.mangoDiff === true && o.mangoLoc === true
     && o.red === true && o.lilac === true;
 })(), "");
