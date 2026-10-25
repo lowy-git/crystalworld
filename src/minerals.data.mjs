@@ -619,40 +619,38 @@ export const MINERALS = [
     },
     habits: [
       /* 晶型数据取自 SMORF（www.smorf.nl，Goldschmidt《晶体形态图谱》数字化库）：
-         下载 Topaz_188/208/215.smorf.bin（BE float32 流：视角×3 + 零×3 + 面参数三元组流
-         + int32 三角索引流，0xFFFF 分面），反推每面法线 → hkl（n ∝ (h/a, k/b, l/c)）
-         + 相对面距 d。三个 SMORF 晶型的单形组与相对 d：
-           215（Miask 型，29 面）: {110}d1.07 {011}d1.15-1.20 {021}d1.20 {121}d1.17
-           188（Brazil 型，29 面）: {110}d0.95 {021}d1.12-1.20 {011}d0.82 {121}d0.83-0.97 {123}d0.79
-           208（Minas 型，29 面）: {110}d0.93 {021}d1.12-1.16 {011}d0.85 {121}d0.88-0.96 {013}d0.82 {130}d1.19
-         k 值 = d/基准（SMORF 的唐奈-哈克距离）；面数合计 16-29 与原库一致。 */
+         下载 Topaz_188/208/215.smorf.bin（BE float32 顶点流 + int32 三角扇索引，0xFFFF 分面），
+         由三角扇还原每个面的法线与面距，法线 n ∝ (h/a, k/b, l/c) 匹配 hkl。
+         关键换算：内核的 k 是"×该单形自身 d_hkl"的倍率，故 k = d_SMORF / d_hkl（各单形
+         d_hkl 不同——{110}=4.09、{011}=6.46——直接把距离比当 k 会渲染成尖刺，已踩坑）。 */
       {
         id: "prismatic", zh: "柱状（Miask 型）", en: "Prismatic (Miask)",
         forms: [
           { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [0, 1, 1], k: 1.08, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
-          { hkl: [0, 2, 1], k: 1.12, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
-          { hkl: [1, 2, 1], k: 1.09, idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
+          { hkl: [0, 1, 1], k: 0.73, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.22, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [1, 2, 1], k: 1.51, idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
         ],
       },
       {
-        id: "tabular", zh: "板状（Brazil 型）", en: "Tabular (Brazil)",
+        id: "tabular", zh: "桶状（Brazil 型）", en: "Tabular (Brazil)",
         forms: [
           { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [0, 1, 1], k: 0.88, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
-          { hkl: [0, 2, 1], k: 1.2,  idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
-          { hkl: [1, 2, 1], k: 0.9,  idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
-          { hkl: [0, 2, 3], k: 0.85, idx: "{023}", zh: "斜方柱（底缘楔面）", en: "Dome" },
+          { hkl: [0, 1, 1], k: 0.67, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.24, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [0, 2, 3], k: 1.44, idx: "{023}", zh: "斜方柱（底缘楔面）", en: "Dome" },
+          { hkl: [1, 3, 2], k: 1.96, idx: "{132}", zh: "斜方双锥", en: "Bipyramid" },
         ],
       },
       {
         id: "dipyramidal", zh: "复锥柱状（Minas 型）", en: "Dipyramidal (Minas)",
         forms: [
           { hkl: [1, 1, 0], k: 1,    idx: "{110}", zh: "斜方柱", en: "Prism" },
-          { hkl: [0, 1, 1], k: 0.9,  idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
-          { hkl: [0, 2, 1], k: 1.18, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
-          { hkl: [1, 2, 1], k: 0.95, idx: "{121}", zh: "斜方双锥", en: "Bipyramid" },
-          { hkl: [1, 3, 0], k: 1.28, idx: "{130}", zh: "斜方柱（侧棱面）", en: "Prism" },
+          { hkl: [0, 1, 1], k: 0.62, idx: "{011}", zh: "斜方柱（终端楔面）", en: "Dome" },
+          { hkl: [0, 2, 1], k: 1.33, idx: "{021}", zh: "斜方柱（端面）", en: "Dome" },
+          { hkl: [0, 2, 3], k: 1.54, idx: "{023}", zh: "斜方柱（底缘楔面）", en: "Dome" },
+          { hkl: [1, 3, 2], k: 2.11, idx: "{132}", zh: "斜方双锥", en: "Bipyramid" },
+          { hkl: [1, 3, 0], k: 2.12, idx: "{130}", zh: "斜方柱（侧棱面）", en: "Prism" },
         ],
       },
     ],

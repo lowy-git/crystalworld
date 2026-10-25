@@ -4172,10 +4172,9 @@ function enterMineralPage(mineralId, locId) {
       state.extras.push(e);
     }
     state.zoom = loc.setup.zoom || 0.62;
-    state.zoomBase = state.zoom;                  // 展台场景的拉远以此为基准
+    state.zoomBase = state.zoom;                  // 展台场景同样对焦标本
     state.base = loc.setup.base || "none";
     state.bg = loc.setup.bg || "black";
-    if (state.bg !== "black") state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);
   } else {
     // 默认视图：代表晶体全黑悬浮（任何矿物零配置可用——未来 50 种矿物不改一处）
     state.extras = [];
@@ -4265,10 +4264,9 @@ function renderMuseumRig() {
       state.onTable = true;                       // 展柜场景恒贴台（黑底=标本照、纸面=桌面）
       applySceneLights(state.locRig || id);       // 灯组保持用户选择，没选就随场景
       rebuildGeometry();                          // 场景换桌面/黑底，自然摆放与贴台都要重烤
-      // 展台远大于标本：拉远视野让台+标本全入镜（标本回到真实比例的小）；
-      // 切回全黑悬浮恢复产地原始 zoom（近景标本照）
-      if (id === "black") state.zoom = state.zoomBase;
-      else state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);
+      // 视野始终对焦标本（zoomBase）：展台比标本大一个量级，延伸出画框——
+      // 标本摄影的构图（对焦标本、桌面.crop 出框），不把整张桌子缩进画面
+      state.zoom = state.zoomBase;
       renderMuseumRig(); draw();
     };
     scenes.appendChild(b);
@@ -4326,7 +4324,6 @@ function renderMuseumRig() {
       state.pedScale = Number(ped.value) / 100;
       const l2 = document.getElementById("mrPedVal");
       if (l2) l2.textContent = ped.value + "%";
-      state.zoom = Math.max(0.05, state.zoomBase * specHalfW() / pedParams().W);   // 台变了视野重配
       draw();
     };
   }
