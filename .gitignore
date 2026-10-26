@@ -22,3 +22,4 @@ desktop.ini
 _pages/
 ci-logs.zip
 *.bin
+tools/_*.json
