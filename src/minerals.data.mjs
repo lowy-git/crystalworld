@@ -550,7 +550,7 @@ export const MINERALS = [
       { zh: "玫瑰", en: "Rose", hex: "#d59a9a" },
     ],
     intro: {
-      zh: "菱面体 {10-14} 的三组解理面互成 74°55′，是整个结晶学最常用的面角锚点；偏三角面体 {21-31} 就是「犬牙石」。",
+      zh: "菱面体 {10-14} 的三组解理面互成 74°55′，是整个结晶学最常用的面角锚点；偏三角面体 {21-32} 就是「犬牙石」。",
       en: "The rhombohedron {10-14} cleaves at 74°55′ — the most-quoted interfacial angle in crystallography; the scalenohedron {21-31} is the \"dog-tooth spar\".",
     },
     about: {
@@ -562,36 +562,24 @@ export const MINERALS = [
     habits: [
       {
         id: "rhombohedron", zh: "菱面体", en: "Rhombohedron",
-        forms: [{ hkl: [1, 0, 4], k: 1, idx: "{10-14}", zh: "菱面体", en: "Rhombohedron" }],
+        forms: [{ hkl: [1, 0, 4], k: 1, idx: "{10-14}", zh: "菱面体（解理菱面体）", en: "Rhombohedron" }],
       },
       {
-        id: "scalenohedron", zh: "犬牙石（偏三角面体 + 菱面体）", en: "Dog-tooth spar",
-        note: "单形 {21-31} 在方解石的晶胞里长宽比 10:1，真实犬牙石还得靠 {10-14} 菱面体把两端截平",
+        id: "dogtooth", zh: "犬牙石（偏三角面体）", en: "Dog-tooth spar",
+        note: "SMORF Calcite_1719 对照（{2131} 老记号 → 现代 {21-32}，老晶胞 c 减半）：12 个偏三角面绕腰部，{10-14} 菱面体截出平头与尖角——经典犬牙石。",
         forms: [
-          { hkl: [2, 1, 1], k: 1.4, idx: "{21-31}", zh: "偏三角面体", en: "Scalenohedron" },
-          { hkl: [1, 0, 4], k: 1.2, idx: "{10-14}", zh: "菱面体", en: "Rhombohedron" },
+          { hkl: [2, 1, 2], k: 1, idx: "{21-32}", zh: "偏三角面体", en: "Scalenohedron" },
+          { hkl: [1, 0, 4], k: 0.55, idx: "{10-14}", zh: "菱面体（端部截切）", en: "Rhombohedron" },
         ],
       },
       {
-        id: "ditrigonal", zh: "复三方双锥", en: "Ditrigonal dipyramid",
-        note: "单形 {11-23} 在 -3m 里给 12 个三角面，上下各 6 面 —— 中文习惯叫「复三方双锥」，因为它是由两个三方锥错开 60° 叠出来的",
+        id: "nailhead", zh: "钉头石（板状）", en: "Nailhead spar",
+        note: "SMORF Calcite_0010 对照（{021}+{101} 老记号 → {01-12}+{10-14}）：扁平菱面体沿底面拉宽，像一排钉子头。",
         forms: [
-          { hkl: [1, 1, 3], k: 1.0, idx: "{11-23}", zh: "复三方双锥", en: "Ditrigonal dipyramid" },
-          { hkl: [1, 0, 0], k: 1.0, idx: "{10-10}", zh: "六方柱", en: "Prism" },
-          { hkl: [0, 0, 1], k: 0.2, idx: "{0001}", zh: "底轴面", en: "Basal pinacoid" },
+          { hkl: [0, 1, 1], k: 1, idx: "{01-12}", zh: "扁平菱面体", en: "Flat rhombohedron" },
+          { hkl: [1, 0, 4], k: 0.8, idx: "{10-14}", zh: "菱面体（边缘截切）", en: "Rhombohedron" },
         ],
-      },
-      {
-        id: "shuriken-twin", zh: "双晶：两个复三方双锥横连（忍者镖）", en: "Ditrigonal twin",
-        note: "两个复三方双锥沿 {10-10} 柱面接合，四个尖端横向张开，正面看像忍者镖。这不是方解石最著名的双晶律（那是 {01-12} 蝴蝶双晶），是按你描述的形态建模的",
-        forms: [
-          { hkl: [1, 1, 3], k: 1.0, idx: "{11-23}", zh: "复三方双锥", en: "Ditrigonal dipyramid" },
-          { hkl: [1, 0, 0], k: 1.0, idx: "{10-10}", zh: "六方柱", en: "Prism" },
-          { hkl: [0, 0, 1], k: 0.2, idx: "{0001}", zh: "底轴面", en: "Basal pinacoid" },
-        ],
-        twin: { mode: "contact", plane: [1, 0, -1, 0], angle: 0 },
-      },
-    ],
+      },    ],
   },
   {
     id: "topaz",
