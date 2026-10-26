@@ -156,6 +156,24 @@ export function pointGroup(name, L) {
       const inv = [[-1,0,0],[0,-1,0],[0,0,-1]];
       return closure([C6, C2x, inv]);
     }
+    case '4/mmm': {          // 四方 holohedral（鱼眼石/白钨矿）：C4 ＋ 水平二次轴 ＋ 反演 = 16 阶
+      const C4 = opFromImages([L.B, mulS(L.A, -1), L.C], L);
+      const C2x = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+      const inv = [[-1, 0, 0], [0, -1, 0], [0, 0, -1]];
+      return closure([C4, C2x, inv]);
+    }
+    case '6/m': {            // 六方（磷灰石）：C6 ＋ 反演 = 12 阶
+      const C6  = opFromImages([add(L.A, L.B), mulS(L.A, -1), L.C], L);
+      const inv = [[-1,0,0],[0,-1,0],[0,0,-1]];
+      return closure([C6, inv]);
+    }
+    case '3m': {             // 三方极形（电气石）：C3 + 3 个纵镜面 = 6 阶
+      const C3 = opFromImages([L.B, mulS(add(L.A, L.B), -1), L.C], L);
+      // 镜面含 C 轴并垂直于一个 a 轴方向：A→A、-(A+B)→B... 取「垂直于 A 的镜面」：
+      // 它把 B 映到 -(A+B)、保持 A 与 C（电气石 {100} 柱面正对观察者时的对称）
+      const my = opFromImages([L.A, mulS(add(L.A, L.B), -1), L.C], L);
+      return closure([C3, my]);
+    }
     default:
       throw new Error('point group not implemented in spike: ' + name);
   }

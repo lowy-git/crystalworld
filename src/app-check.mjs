@@ -1344,7 +1344,7 @@ const glLastOptsOk = (glw, vw, vh) => {
                shown: document.getElementById("browse").style.display !== "none" };
     })())`);
     const o = JSON.parse(r);
-    return o.mode === true && o.shown === true && o.heads === 12
+    return o.mode === true && o.shown === true && o.heads === 16
       && o.cards === o.habitTotal && o.thumbs === o.habitTotal;
   })(), run(`JSON.stringify((() => { let h = 0, c = 0; for (const x of document.getElementById("browseGrid").children) { if (x.className === "bhead") h++; if (x.className === "bcard") c++; } return { h, c }; })())`));
   check("晶体卡点击：载入该晶体并回工作区（#/studio），矿物名进矿物页", (() => {
@@ -1651,9 +1651,9 @@ check("「认识它」面板存在且放在矿物旁（左栏，与「数据」�
   const secs = [...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]);
   return secs.includes("about") && secs.indexOf("about") === secs.indexOf("min") + 1;
 })(), `左栏顺序=${[...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]).slice(0, 7).join(",")}`);
-check("12 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
+check("16 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
   const bad = run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id)`);
-  return bad.length === 0 && run(`DATA.minerals.length`) === 12;
+  return bad.length === 0 && run(`DATA.minerals.length`) === 16;
 })(), `缺=${run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id).join(",")`)}`);
 check("renderAbout() 被 syncPanels() 调用（换矿物时刷新）", /renderAbout\(\);\s*\/\/[^\n]*认识它/.test(html) && /function renderAbout\(\)/.test(html));
 check("导出默认带「认识它」，且换矿物后内容跟着变", (() => {

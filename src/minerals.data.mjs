@@ -760,4 +760,168 @@ export const MINERALS = [
       },
     ],
   },
+  {
+    id: "rhodochrosite",
+  defColor: "#e0899c",
+  luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；完整晶体常半透明
+    zh: "菱锰矿", en: "Rhodochrosite", formula: "MnCO₃",
+    system: "trigonal", pointGroup: "-3m",
+    confidence: "high", source: "a = 4.7774、c = 15.6694 Å（Dana）",
+    cell: { a: 4.7774, b: 4.7774, c: 15.6694, alpha: 90, beta: 90, gamma: 120 },
+    cellText: "a = 4.7774 Å，c = 15.6694 Å，α = β = 90°，γ = 120°（方解石族）",
+    colors: [
+      { zh: "粉红", en: "Rose", hex: "#e0899c" },
+      { zh: "深红", en: "Deep red", hex: "#c05a6e" },
+      { zh: "褐", en: "Brownish", hex: "#b08a72" },
+    ],
+    intro: {
+      zh: "方解石族的锰成员：碳酸锰结晶成三方晶系，菱面体习性。阿根廷印卡废矿的层状红纹石切片最有名；完整粉红菱面体则以美国科罗拉多 Sweet Home 矿为至尊。",
+      en: "The manganese member of the calcite group: MnCO₃ in the trigonal rhombohedral class. Banded Argentina material is famous, but pristine pink rhombohedra from Colorado's Sweet Home mine are the pinnacle.",
+    },
+    about: {
+      zh: "「玫瑰」这个名字不是白叫的——好的菱锰矿粉红得像花瓣。质软（4）又怕酸，是收藏柜里的娇客。阿根廷的层状品种常切做成饰面。",
+      where: "阿根廷 Capillitas（层状红纹石）、美国科罗拉多 Sweet Home Mine（世界最佳菱面体）、南非卡拉哈里锰田。",
+      hard: "4（与萤石同档，怕磕碰也怕酸）",
+      spot: "菱面体解理三组 + 粉红色 + 遇酸起泡（碳酸盐）。",
+    },
+    habits: [
+      {
+        id: "rhombohedron", zh: "菱面体", en: "Rhombohedron",
+        forms: [{ hkl: [1, 0, -2], k: 1, idx: "{10-12}", zh: "菱面体", en: "Rhombohedron" }],
+      },
+      {
+        id: "scalenohedron", zh: "偏三角面体", en: "Scalenohedron",
+        forms: [
+          { hkl: [2, 1, -4], k: 1, idx: "{21-34}", zh: "偏三角面体", en: "Scalenohedron" },
+          { hkl: [1, 0, -1], k: 0.75, idx: "{10-11}", zh: "菱面体（端部截切）", en: "Rhombohedron" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "tourmaline",
+  defColor: "#2f9e77",
+  luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；宝石级透明但多色带
+    zh: "电气石", en: "Tourmaline", formula: "Na(Li,Al)₃Al₆(BO₃)₃Si₆O₁₈(OH)₄",
+    system: "trigonal", pointGroup: "3m",
+    confidence: "high", source: "a = 15.849、c = 7.103 Å（elbaite，Dana）",
+    cell: { a: 15.849, b: 15.849, c: 7.103, alpha: 90, beta: 90, gamma: 120 },
+    cellText: "a = 15.849 Å，c = 7.103 Å，α = β = 90°，γ = 120°（锂电气石）",
+    colors: [
+      { zh: "绿", en: "Green", hex: "#2f9e77" },
+      { zh: "粉红", en: "Rubellite", hex: "#d4526e" },
+      { zh: "蓝", en: "Indicolite", hex: "#3a6fb0" },
+      { zh: "西瓜", en: "Watermelon", hex: "#d46a8a" },
+    ],
+    intro: {
+      zh: "三方晶系 3m 点群的矿物代表：柱面纵纹、横截面球面三角形，加热或摩擦会带静电（「电气」之名由此而来）。锂电气石的色彩从绿到粉红到蓝，一块晶体上还能分段变色。",
+      en: "The flagship 3m mineral: striated prisms with rounded-triangular cross-sections, pyroelectric and piezoelectric (hence the name). Elbaite runs from green to pink to blue, often zoned along the prism.",
+    },
+    about: {
+      zh: "宝石界配色最全的矿物：绿电气石、红电气石（Rubellite）、蓝电气石（Indicolite）、西瓜电气石（外粉内绿）都是同一个矿物的不同成分环带。柱面纵纹是肉眼鉴定的关键。",
+      where: "巴西 Minas Gerais、阿富汗 Nuristan、美国加州 Pala 与缅因州；国内新疆、云南也有。",
+      hard: "7–7.5（可以做首饰）",
+      spot: "柱面强纵纹 + 球面三角形横截面 + 二色性。",
+    },
+    habits: [
+      {
+        id: "prismatic", zh: "柱状（强纵纹）", en: "Prismatic",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "三方柱（主柱面）", en: "Prism" },
+          { hkl: [1, 1, 0], k: 1.05, idx: "{11-20}", zh: "三方柱（棱柱面）", en: "Prism" },
+          { hkl: [1, 0, 1], k: 1.45, idx: "{10-11}", zh: "三方双锥（终端）", en: "Pyramid" },
+          { hkl: [0, 1, 1], k: 1.5, idx: "{01-11}", zh: "三方双锥（终端）", en: "Pyramid" },
+          { hkl: [0, 0, 1], k: 0.55, idx: "{0001}", zh: "底面", en: "Pedion" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "apophyllite",
+  defColor: "#dcebe4",
+  luster: "glass", transp: "clear", inclusion: "none",      // 玻璃光泽（珍珠光泽底面）；宝石级透明
+    zh: "鱼眼石", en: "Apophyllite", formula: "KCa₄Si₈O₂₀(F,OH)·8H₂O",
+    system: "tetragonal", pointGroup: "4/mmm",
+    confidence: "high", source: "a = 8.988、c = 15.796 Å（Dana）",
+    cell: { a: 8.988, b: 8.988, c: 15.796, alpha: 90, beta: 90, gamma: 90 },
+    cellText: "a = 8.988 Å，c = 15.796 Å，α = β = γ = 90°",
+    colors: [
+      { zh: "无色", en: "Colorless", hex: "#dcebe4" },
+      { zh: "绿", en: "Green", hex: "#8fce9e" },
+      { zh: "白", en: "White", hex: "#eceae2" },
+    ],
+    intro: {
+      zh: "四方晶系的沸石伴生矿物：{100} 方柱 + {001} 底面 + {111} 锥面，正方外形一眼可认。印度浦那玄武岩的晶洞产出世界最佳的鱼眼石——大、透、还带柔和的绿。",
+      en: "The classic zeolite-companion tetragonal mineral: square {100} prism, {001} pinacoid and {111} pyramid. Pune, India produces the world's finest — big, clear, softly green.",
+    },
+    about: {
+      zh: "名字来自希腊语「叶子剥落」——加热时会一片片剥开。含结构水，火烤会变浑。印度德干玄武岩的晶洞里，鱼眼石与沸石、葡萄石共生，是标本市场最常见的精品来源。",
+      where: "印度浦那（Deccan 玄武岩晶洞，世界最佳）、巴西、墨西哥；国内也有产出。",
+      hard: "4.5–5（质脆怕热）",
+      spot: "正方形横截面 + 一组完全解理 + 玻璃光泽偏珍珠。",
+    },
+    habits: [
+      {
+        id: "tabular", zh: "方柱板状", en: "Tabular",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "四方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.55, idx: "{001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 1, 1], k: 1.3, idx: "{111}", zh: "四方双锥", en: "Bipyramid" },
+        ],
+      },
+      {
+        id: "bipyramidal", zh: "锥柱状", en: "Bipyramidal",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "四方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 1.1, idx: "{001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 1, 1], k: 1.15, idx: "{111}", zh: "四方双锥", en: "Bipyramid" },
+          { hkl: [1, 0, 2], k: 1.6, idx: "{102}", zh: "四方双锥（缓锥面）", en: "Bipyramid" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "apatite",
+  defColor: "#8fbf9f",
+  luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；宝石级透明少见
+    zh: "磷灰石", en: "Apatite", formula: "Ca₅(PO₄)₃F",
+    system: "hexagonal", pointGroup: "6/m",
+    confidence: "high", source: "a = 9.367、c = 6.884 Å（fluorapatite，Dana）",
+    cell: { a: 9.367, b: 9.367, c: 6.884, alpha: 90, beta: 90, gamma: 120 },
+    cellText: "a = 9.367 Å，c = 6.884 Å，α = β = 90°，γ = 120°（氟磷灰石）",
+    colors: [
+      { zh: "绿", en: "Green", hex: "#8fbf9f" },
+      { zh: "蓝", en: "Blue", hex: "#7fa8c8" },
+      { zh: "紫", en: "Purple", hex: "#a58cc0" },
+    ],
+    intro: {
+      zh: "六方晶系 6/m 点群：六方柱 + 平坦底面 + 缓双锥，组合出来的晶体像一颗颗「糖果」。名字来自希腊语「欺骗」——它长得像好几种更贵的宝石。",
+      en: "Hexagonal 6/m: hexagonal prisms with flat pinacoids and gentle pyramids — crystals like little candies. The name is Greek for 'deceit': it mimics several pricier gems.",
+    },
+    about: {
+      zh: "你的牙釉质就是羟基磷灰石——这矿物和人体缘分不浅。莫氏 5 恰好在「指甲与小刀之间」，是硬度计的中坚。墨西哥杜兰戈的无色双锥晶体与巴伐利亚的糖果绿柱体都是收藏经典。",
+      where: "墨西哥 Durango（大双锥）、德国 Bavaria（糖果绿柱状）、加拿大 Ontario；国内湖北、河南也有。",
+      hard: "5（硬度计 4 与 6 之间的标尺）",
+      spot: "六方柱 + 平坦底面 + 玻璃光泽；晶体常像被拉长的糖果。",
+    },
+    habits: [
+      {
+        id: "prismatic", zh: "柱状（糖果型）", en: "Prismatic",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.55, idx: "{0001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 0, 1], k: 1.35, idx: "{10-11}", zh: "六方双锥", en: "Pyramid" },
+        ],
+      },
+      {
+        id: "bipyramidal", zh: "双锥状（Durango 型）", en: "Bipyramidal",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱（短）", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.35, idx: "{0001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 0, 1], k: 1.15, idx: "{10-11}", zh: "六方双锥（主锥面）", en: "Pyramid" },
+          { hkl: [1, 0, 2], k: 1.5, idx: "{10-12}", zh: "六方双锥（缓锥面）", en: "Pyramid" },
+        ],
+      },
+    ],
+  },
 ];

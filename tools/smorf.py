@@ -6,9 +6,17 @@ import struct, math, re, sys, json, urllib.request
 
 BASE = "https://www.smorf.nl"
 
-def http(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Chrome/120"})
-    return urllib.request.urlopen(req, timeout=30).read()
+def http(url, tries=4):
+    import time
+    for k in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Chrome/120"})
+            return urllib.request.urlopen(req, timeout=30).read()
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and k < tries - 1:
+                time.sleep(6 * (k + 1)); continue
+            raise
+    raise RuntimeError("unreachable")
 
 def crystal_names(mineral):
     html = http(BASE + "/index.php").decode("utf-8", "ignore")
@@ -73,7 +81,7 @@ def parse_bin(d):
             if m == 0: continue
             n = (nx / m, ny / m, nz / m)
             dist = abs(n[0] * vts[a][0] + n[1] * vts[a][1] + n[2] * vts[a][2])
-            sig = (round(abs(n[0]), 3), round(abs(n[1]), 3), round(abs(n[2]), 3))
+            sig = tuple(sorted((round(abs(n[0]), 3), round(abs(n[1]), 3), round(abs(n[2]), 3)), reverse=True))
             planes.setdefault(sig, set()).add(round(dist, 4))
         return [(sig, dist) for sig, ds in planes.items() for dist in sorted(ds)]
     return vts, faces_of()
@@ -120,7 +128,10 @@ def enumerate_hkl(system, lim=5):
                 out.append((h, k, l))
     return out
 
+HIL = False
 def analyze(name, cell, system, hex4=False, lim=5):
+    global HIL
+    HIL = hex4
     cands = enumerate_hkl(system, lim)
     normals = {h: unit_normal(h, cell) for h in cands}
     dh = {h: d_hkl(h, cell) for h in cands}
@@ -137,9 +148,11 @@ def analyze(name, cell, system, hex4=False, lim=5):
             nn = tuple(x / m for x in sig)
             best, bd = None, 9
             for h in cands:
+                if max(abs(x) for x in h) > 3: continue          # 低指数优先
                 dd = sum((a - b) ** 2 for a, b in zip(nn, normals[h]))
+                dd += 0.0012 * (abs(h[0]) + abs(h[1]) + abs(h[2]))  # 指数惩罚
                 if dd < bd: bd, best = dd, h
-            if bd > 0.02: continue          # 只收高置信匹配
+            if bd > 0.015: continue          # 只收高置信匹配
             forms.append({"hkl": best, "k": round(dist / dh[best], 4), "faces": 1,
                           "d": round(dist, 4), "err": round(bd, 4)})
         # 同 hkl 多晶面 → 合并取平均 k
@@ -147,7 +160,15 @@ def analyze(name, cell, system, hex4=False, lim=5):
         for f in forms:
             key = f["hkl"]
             merged.setdefault(key, []).append(f["k"])
-        forms = [{"hkl": h, "k": round(sum(ks) / len(ks), 4), "faces": len(ks)} for h, ks in merged.items()]
+        def canon_hex(h, k):
+            eqs = [(h, k), (k, -h - k), (-h - k, h), (-h, -k), (-k, h + k), (h + k, -k)]
+            good = [e for e in eqs if e[0] >= 0 and e[1] >= 0 and e[0] >= e[1]]
+            if good: return max(good, key=lambda e: (e[1], e[0]))
+            good = [e for e in eqs if e[0] > 0 and e[1] < 0 and e[0] + e[1] >= 0]
+            if good: return good[0]
+            return (h, k)
+        forms = [{"hkl": (canon_hex(h[0], h[1]) + (h[2],) if HIL else h),
+                  "k": round(sum(ks) / len(ks), 4), "faces": len(ks)} for h, ks in merged.items()]
         forms.sort(key=lambda f: -f["faces"])
         report["crystals"].append({"name": cname, "verts": len(vts), "faces": len(faces), "forms": forms})
     return report

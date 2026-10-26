@@ -1,0 +1,1044 @@
+{
+ "Quartz": {
+  "name": "Quartz",
+  "crystals": [
+   {
+    "name": "Quartz_005",
+    "verts": 8,
+    "faces": 4,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.0,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       0,
+       1
+      ],
+      "k": 0.2509,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6864,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_007",
+    "verts": 14,
+    "faces": 8,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0579,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1168,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.3019,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_009",
+    "verts": 50,
+    "faces": 12,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.229,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6864,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1158,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.34,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       0,
+       1
+      ],
+      "k": 0.2509,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_010",
+    "verts": 50,
+    "faces": 23,
+    "forms": [
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.3817,
+      "faces": 7
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.161,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.3254,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6863,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1041,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 2
+     }
+    ]
+   },
+   {
+    "name": "Quartz_012",
+    "verts": 74,
+    "faces": 16,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1617,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1323,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.4159,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6864,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       0,
+       1
+      ],
+      "k": 0.3452,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.3548,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_023",
+    "verts": 32,
+    "faces": 8,
+    "forms": [
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.78,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.8511,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.2644,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.4579,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       3
+      ],
+      "k": 1.0963,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_035b",
+    "verts": 32,
+    "faces": 13,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.2046,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1695,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6864,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.629,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       0,
+       1
+      ],
+      "k": 0.2509,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.2119,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_046",
+    "verts": 36,
+    "faces": 19,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.112,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1378,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.6519,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       2,
+       0,
+       1
+      ],
+      "k": 0.3072,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.4799,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       3
+      ],
+      "k": 0.1659,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Quartz_047",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Quartz_096",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Quartz_121",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "quartz_MH1",
+    "verts": 32,
+    "faces": 0,
+    "forms": []
+   }
+  ]
+ }
+}
+{"Calcite": {"error": "HTTP Error 429: Too Many Requests"}}
+{"Fluorite": {"error": "HTTP Error 429: Too Many Requests"}}
+{
+ "Pyrite": {
+  "name": "Pyrite",
+  "crystals": [
+   {
+    "name": "Pyrite_001",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_002",
+    "verts": 6,
+    "faces": 2,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       1,
+       1
+      ],
+      "k": 0.2215,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Pyrite_003",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_007",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_008",
+    "verts": 24,
+    "faces": 6,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       1,
+       0
+      ],
+      "k": 0.3925,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       0
+      ],
+      "k": 0.1794,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       1
+      ],
+      "k": 0.2568,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Pyrite_014",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_059",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_086",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_092",
+    "verts": 120,
+    "faces": 9,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       1,
+       0
+      ],
+      "k": 0.2844,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       2,
+       1,
+       1
+      ],
+      "k": 0.5167,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       1
+      ],
+      "k": 0.3814,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       2,
+       1,
+       0
+      ],
+      "k": 0.423,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1641,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       3,
+       2
+      ],
+      "k": 0.2535,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Pyrite_251",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_565",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Pyrite_MH_714",
+    "verts": 48,
+    "faces": 0,
+    "forms": []
+   }
+  ]
+ }
+}
+{"Garnet": {"error": "HTTP Error 429: Too Many Requests"}}
+{"Rhodochrosite": {"error": "HTTP Error 429: Too Many Requests"}}
+{"Tourmaline": {"error": "HTTP Error 429: Too Many Requests"}}
+{
+ "Beryl": {
+  "name": "Beryl",
+  "crystals": [
+   {
+    "name": "Beryl_012",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Beryl_023",
+    "verts": 12,
+    "faces": 4,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.168,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0614,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Beryl_024",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Beryl_032",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Beryl_098",
+    "verts": 204,
+    "faces": 45,
+    "forms": [
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.3634,
+      "faces": 12
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.1818,
+      "faces": 5
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0796,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.3425,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       2
+      ],
+      "k": 0.4139,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1516,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       3
+      ],
+      "k": 0.5052,
+      "faces": 3
+     }
+    ]
+   },
+   {
+    "name": "Beryl_MH217",
+    "error": "HTTP Error 429: Too Many Requests"
+   }
+  ]
+ }
+}
+{"Scheelite": {"error": "HTTP Error 429: Too Many Requests"}}
+{"Apophyllite": {"error": "HTTP Error 429: Too Many Requests"}}
+{
+ "Diamond": {
+  "name": "Diamond",
+  "crystals": [
+   {
+    "name": "Diamond_015",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Diamond_107",
+    "verts": 8,
+    "faces": 2,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1942,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       1
+      ],
+      "k": 0.1942,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Diamond_108",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Diamond_124",
+    "error": "HTTP Error 429: Too Many Requests"
+   }
+  ]
+ }
+}
+{
+ "Apatite": {
+  "name": "Apatite",
+  "crystals": [
+   {
+    "name": "Apatite_001",
+    "verts": 12,
+    "faces": 4,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.147,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1209,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Apatite_005",
+    "verts": 14,
+    "faces": 6,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1368,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.0656,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.4069,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Apatite_007",
+    "verts": 24,
+    "faces": 10,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1663,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.4858,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.101,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.2684,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Apatite_008",
+    "verts": 60,
+    "faces": 12,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1313,
+      "faces": 4
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.1876,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.5031,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Apatite_009",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Apatite_012",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Apatite_025",
+    "verts": 192,
+    "faces": 35,
+    "forms": [
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1394,
+      "faces": 6
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       1
+      ],
+      "k": 0.5322,
+      "faces": 5
+     },
+     {
+      "hkl": [
+       2,
+       -1,
+       0
+      ],
+      "k": 0.2266,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.507,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       0,
+       1
+      ],
+      "k": 0.4538,
+      "faces": 3
+     },
+     {
+      "hkl": [
+       3,
+       -1,
+       0
+      ],
+      "k": 0.3574,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Apatite_068",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Apatite_129",
+    "error": "HTTP Error 429: Too Many Requests"
+   },
+   {
+    "name": "Apatite_146",
+    "error": "HTTP Error 429: Too Many Requests"
+   }
+  ]
+ }
+}

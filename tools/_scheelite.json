@@ -1,0 +1,113 @@
+{
+ "Scheelite": {
+  "name": "Scheelite",
+  "crystals": [
+   {
+    "name": "Scheelite_07",
+    "verts": 42,
+    "faces": 13,
+    "forms": [
+     {
+      "hkl": [
+       2,
+       1,
+       1
+      ],
+      "k": 0.3198,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       3,
+       1,
+       0
+      ],
+      "k": 0.2936,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       0
+      ],
+      "k": 0.1162,
+      "faces": 2
+     },
+     {
+      "hkl": [
+       1,
+       1,
+       2
+      ],
+      "k": 0.2109,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       1,
+       0,
+       0
+      ],
+      "k": 0.1463,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       2,
+       3
+      ],
+      "k": 0.5205,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       1,
+       0
+      ],
+      "k": 0.3288,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       2,
+       1,
+       2
+      ],
+      "k": 0.3265,
+      "faces": 1
+     },
+     {
+      "hkl": [
+       3,
+       2,
+       1
+      ],
+      "k": 0.4815,
+      "faces": 1
+     }
+    ]
+   },
+   {
+    "name": "Scheelite_D1",
+    "verts": 50,
+    "faces": 0,
+    "forms": []
+   },
+   {
+    "name": "Scheelite_D2",
+    "verts": 62,
+    "faces": 0,
+    "forms": []
+   },
+   {
+    "name": "Scheelite_D3",
+    "verts": 14,
+    "faces": 0,
+    "forms": []
+   }
+  ]
+ }
+}
