@@ -23,3 +23,5 @@ _pages/
 ci-logs.zip
 *.bin
 tools/_*.json
+tools/_*.txt
+tools/_index.html
