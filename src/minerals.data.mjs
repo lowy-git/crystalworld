@@ -52,9 +52,9 @@ export const MINERALS = [
       { id: "octahedron", zh: "八面体", en: "Octahedron", forms: [{ hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" }] },
       {
         id: "cuboctahedron", zh: "立方-八面体聚形", en: "Cube + octahedron",
-        forms: [
+        forms: [   // SMORF Fluorite_001：{100}/{111} 等面距（k 都 = 0.127，即 {111} k=1.0）
           { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" },
-          { hkl: [1, 1, 1], k: 1.45, idx: "{111}", zh: "八面体", en: "Octahedron" },
+          { hkl: [1, 1, 1], k: 1.0, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
       {
@@ -143,6 +143,15 @@ export const MINERALS = [
       {
         id: "pyritohedron", zh: "五角十二面体", en: "Pyritohedron",
         forms: [{ hkl: [2, 1, 0], k: 1, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" }],
+      },
+      {   // SMORF Pyrite_008：{210}:{110}:{111} 面距比 1.372:1:1.18（k=d_SMORF/d_hkl）
+        id: "smorf-combo", zh: "三形聚晶（SMORF）", en: "Triform (SMORF)",
+        note: "五角十二面体为主，八面体与立方体截棱——Goldschmidt 图谱 Pyrite_008 的实测比例。",
+        forms: [
+          { hkl: [2, 1, 0], k: 0.566, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" },
+          { hkl: [1, 1, 1], k: 0.377, idx: "{111}", zh: "八面体", en: "Octahedron" },
+          { hkl: [1, 1, 0], k: 0.261, idx: "{110}", zh: "菱形十二面体", en: "Dodecahedron" },
+        ],
       },
       {
         id: "combo", zh: "立方体 + 五角十二面体", en: "Cube + pyritohedron",
@@ -244,6 +253,13 @@ export const MINERALS = [
         id: "dodecahedron", zh: "菱形十二面体", en: "Rhombic dodecahedron",
         forms: [{ hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Rhombic dodecahedron" }],
       },
+      {   // SMORF Diamond_107：{111}+{100} 等面距（经典钻石晶体轮廓）
+        id: "smorf-cubeoct", zh: "八面体 + 立方体（SMORF）", en: "Octahedron + cube (SMORF)",
+        forms: [
+          { hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" },
+          { hkl: [1, 0, 0], k: 0.578, idx: "{100}", zh: "立方体", en: "Cube" },
+        ],
+      },
       {
         id: "combo", zh: "八面体 + 菱形十二面体", en: "Octahedron + dodecahedron",
         forms: [
@@ -279,6 +295,15 @@ export const MINERALS = [
     habits: [
       { id: "dodecahedron", zh: "菱形十二面体", en: "Dodecahedron", forms: [{ hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Dodecahedron" }] },
       { id: "trapezohedron", zh: "四角三八面体", en: "Trapezohedron", forms: [{ hkl: [2, 1, 1], k: 1, idx: "{211}", zh: "四角三八面体", en: "Trapezohedron" }] },
+      {   // SMORF Garnet_02：{110} 主 + {100} 微截 + {211}/{111} —— 面距比 1:1.01:2.39:1.56
+        id: "smorf-modified", zh: "四形聚晶（SMORF）", en: "Modified (SMORF)",
+        forms: [
+          { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Dodecahedron" },
+          { hkl: [1, 0, 0], k: 0.716, idx: "{100}", zh: "立方体", en: "Cube" },
+          { hkl: [2, 1, 1], k: 1.9, idx: "{211}", zh: "四角三八面体", en: "Trapezohedron" },
+          { hkl: [1, 1, 1], k: 1.55, idx: "{111}", zh: "八面体", en: "Octahedron" },
+        ],
+      },
       {
         id: "combined", zh: "两者聚形", en: "Dodecahedron + trapezohedron",
         forms: [

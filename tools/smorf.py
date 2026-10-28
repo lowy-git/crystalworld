@@ -36,7 +36,7 @@ def parse_bin(d):
         m = math.sqrt(sum(t * t for t in f))
         if m < 0.05 or m > 3.0: break
         if max(abs(t) for t in f) > 2.5: break
-        vts.append(tuple(f)); i += 3
+        vts.append((f[0], f[2], f[1])); i += 3   # SMORF 坐标系 y=晶轴 c，换到我们的 z-up
     # 索引流：从顶点流结束后扫到第一个"像索引"的 int（hi16 < 4096），并含 0xFFFF 分面符
     start = None
     for j in range(i, min(i + 6, n4)):
