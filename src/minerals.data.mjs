@@ -357,6 +357,13 @@ export const MINERALS = [
     },
     habits: [
       { id: "bipyramid", zh: "四方双锥", en: "Tetragonal bipyramid", forms: [{ hkl: [1, 0, 1], k: 1, idx: "{101}", zh: "四方双锥", en: "Bipyramid" }] },
+      {   // 经典白钨矿聚形：{101} 双锥为主，{112} 偏方面截棱（SMORF 白钨矿晶体多为 {101}+{112} 组合）
+        id: "modified", zh: "双锥 + 截棱", en: "Bipyramid modified",
+        forms: [
+          { hkl: [1, 0, 1], k: 1, idx: "{101}", zh: "四方双锥", en: "Bipyramid" },
+          { hkl: [1, 1, 2], k: 1.5, idx: "{112}", zh: "斜方偏方面（截棱）", en: "Trapezohedron" },
+        ],
+      },
     ],
   },
   {
