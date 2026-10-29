@@ -304,6 +304,25 @@ export const MINERALS = [
           { hkl: [1, 1, 1], k: 1.55, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
+      {   // SMORF Garnet_01（{110}）：铁铝榴石的经典菱形十二面体
+        id: "almandine", zh: "铁铝榴石型", en: "Almandine-type",
+        forms: [{ hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Dodecahedron" }],
+      },
+      {   // SMORF Garnet_02（{211}）：翠榴石（钙铁榴石变种）的招牌四角三八面体
+        id: "demantoid", zh: "翠榴石型", en: "Demantoid-type",
+        forms: [
+          { hkl: [2, 1, 1], k: 1, idx: "{211}", zh: "四角三八面体", en: "Trapezohedron" },
+          { hkl: [1, 1, 0], k: 0.72, idx: "{110}", zh: "菱形十二面体（微截）", en: "Dodecahedron" },
+        ],
+      },
+      {   // SMORF Garnet_03（{110}+{211}）：锰铝榴石常见的两者聚形
+        id: "spessartine", zh: "锰铝榴石型", en: "Spessartine-type",
+        forms: [
+          { hkl: [1, 1, 0], k: 1, idx: "{110}", zh: "菱形十二面体", en: "Dodecahedron" },
+          { hkl: [2, 1, 1], k: 1.7, idx: "{211}", zh: "四角三八面体", en: "Trapezohedron" },
+          { hkl: [1, 0, 0], k: 0.85, idx: "{100}", zh: "立方体", en: "Cube" },
+        ],
+      },
       {
         id: "combined", zh: "两者聚形", en: "Dodecahedron + trapezohedron",
         forms: [
@@ -378,6 +397,31 @@ export const MINERALS = [
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱", en: "Prism" },
           { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
+        ],
+      },
+      {   // SMORF Beryl_012（Santa Fé de Bogota——祖母绿产地）：a+m 双柱 + 终端
+        id: "emerald", zh: "祖母绿型", en: "Emerald-type",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱 m", en: "Prism" },
+          { hkl: [1, 1, 0], k: 2.0, idx: "{11-20}", zh: "六方柱 a", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.6, idx: "{0001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 0, 1], k: 1.35, idx: "{10-11}", zh: "六方双锥", en: "Pyramid" },
+        ],
+      },
+      {   // SMORF Beryl_023（Ural）：m 柱为主 + 平坦底面——海蓝宝石常见习性
+        id: "aquamarine", zh: "海蓝宝石型", en: "Aquamarine-type",
+        forms: [
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱 m", en: "Prism" },
+          { hkl: [1, 1, 0], k: 1.2, idx: "{11-20}", zh: "六方柱 a", en: "Prism" },
+          { hkl: [0, 0, 1], k: 1.0, idx: "{0001}", zh: "底面", en: "Pinacoid" },
+        ],
+      },
+      {   // SMORF Beryl_MH217（Pingwu, China——摩根石产地）：Tabular {001} 板状
+        id: "morganite", zh: "摩根石型（板状）", en: "Morganite-type (tabular)",
+        forms: [
+          { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面（主板面）", en: "Pinacoid" },
+          { hkl: [1, 0, 0], k: 0.5, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [1, 1, 0], k: 0.6, idx: "{11-20}", zh: "六方柱", en: "Prism" },
         ],
       },
     ],
@@ -592,17 +636,22 @@ export const MINERALS = [
       {
         id: "dogtooth", zh: "犬牙石（偏三角面体）", en: "Dog-tooth spar",
         note: "SMORF Calcite_1719 对照（{2131} 老记号 → 现代 {21-32}，老晶胞 c 减半）：12 个偏三角面绕腰部，{10-14} 菱面体截出平头与尖角——经典犬牙石。",
+        note: "SMORF Calcite_1719（{2131} modified）实测面族：柱面 + 偏三角面体 + 菱面体复合——老记号 {2131} 的真实形态。",
         forms: [
-          { hkl: [2, 1, 2], k: 1, idx: "{21-32}", zh: "偏三角面体", en: "Scalenohedron" },
-          { hkl: [1, 0, 4], k: 0.55, idx: "{10-14}", zh: "菱面体（端部截切）", en: "Rhombohedron" },
+          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "三方柱 m", en: "Prism" },
+          { hkl: [1, 1, 0], k: 2.38, idx: "{11-20}", zh: "三方柱 a", en: "Prism" },
+          { hkl: [1, 0, 1], k: 0.75, idx: "{10-11}", zh: "三方双锥（斜面）", en: "Scalenohedron" },
+          { hkl: [3, 0, 2], k: 1.75, idx: "{30-32}", zh: "偏三角面体", en: "Scalenohedron" },
         ],
       },
       {
         id: "nailhead", zh: "钉头石（板状）", en: "Nailhead spar",
         note: "SMORF Calcite_0010 对照（{021}+{101} 老记号 → {01-12}+{10-14}）：扁平菱面体沿底面拉宽，像一排钉子头。",
+        note: "SMORF Calcite_0010（{021}+{101}）实测面族：扁平菱面体 {10-12} 为主。",
         forms: [
-          { hkl: [0, 1, 1], k: 1, idx: "{01-12}", zh: "扁平菱面体", en: "Flat rhombohedron" },
-          { hkl: [1, 0, 4], k: 0.8, idx: "{10-14}", zh: "菱面体（边缘截切）", en: "Rhombohedron" },
+          { hkl: [1, 0, -2], k: 1, idx: "{10-12}", zh: "扁平菱面体", en: "Flat rhombohedron" },
+          { hkl: [1, 0, 0], k: 0.93, idx: "{10-10}", zh: "三方柱", en: "Prism" },
+          { hkl: [2, 0, 3], k: 1.87, idx: "{20-23}", zh: "偏三角面体（边缘）", en: "Scalenohedron" },
         ],
       },    ],
   },
