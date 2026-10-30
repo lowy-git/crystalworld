@@ -25,3 +25,4 @@ ci-logs.zip
 tools/_*.json
 tools/_*.txt
 tools/_index.html
+tools/ref/
