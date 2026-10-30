@@ -438,7 +438,7 @@ check("第三十二轮标本库扩充：托帕石晶型（SMORF Miask {110}{011}
     return { tzForms, has001, mangoMode, mangoDiff, mangoLoc, red, lilac };
   })())`);
   const o = JSON.parse(r);
-  return o.tzForms === "{110},{011},{021},{121}" && o.has001 === false   // SMORF Topaz_215（Miask）单形组
+  return o.tzForms === "{120},{001},{011}" && o.has001 === true   // SMORF Topaz_215 描述字段单形组（{001} 底面在列）
     && o.mangoMode === true && o.mangoDiff === true && o.mangoLoc === true
     && o.red === true && o.lilac === true;
 })(), "");
