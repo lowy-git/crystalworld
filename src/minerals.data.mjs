@@ -57,6 +57,12 @@ export const MINERALS = [
           { hkl: [1, 1, 1], k: 1.0, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
+      {   // 铁十字双晶：两个五角十二面体以 {110} 为双晶面穿插，{210} 面互相垂直
+        id: "iron-cross", zh: "铁十字双晶", en: "Iron-cross twin",
+        note: "反射 {110}（= 90° 绕 [001]，非 m-3 对称操作）。两个五角十二面体的 {210} 面互相垂直，形成马耳他十字或铁十字图案。",
+        twin: { mode: "mirror", plane: [1, 1, 0] },
+        forms: [{ hkl: [2, 1, 0], k: 1, idx: "{210}", zh: "五角十二面体", en: "Pyritohedron" }],
+      },
       {
         id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
         note: "尖晶石律：两个立方体沿共有的 [111] 体对角线互相穿插。Handbook of Mineralogy：「Twinning: common on {111}, interpenetrant, flattened」。双晶操作是绕 [111] 的 180° 二次轴；因立方体自身绕该轴有 120° 对称，等价于两个体相对转动 60°。萤石是 centrosymmetric（m-3m），所以「{111} 镜面」与「[111] 二次轴」两种说法是同一个双晶（σ·C₂ = 反演，反演是 m-3m 的对称操作）。两个体的 <100> 棱方向夹角 arccos(−1/3) = 109°28′",

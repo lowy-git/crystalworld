@@ -488,6 +488,10 @@
           <label class="ck"><input type="checkbox" id="mrLamp2"> 补灯</label>
         </div>
         <div class="srow"><span>台面尺寸 <b id="mrPedVal" class="val"></b></span><input type="range" id="mrPedSize" min="50" max="200" step="5"></div>
+        <div id="twinDemoBox" style="display:none">
+          <div class="mrow"><span class="mlab">双晶</span><span class="btns" id="twinStepBtns"></span></div>
+          <div class="swarning" id="twinCaption" style="font-size:12.5px;line-height:1.6"></div>
+        </div>
         <div class="mrow">
           <label class="ck"><input type="checkbox" id="mrTurn"> 转台 Turntable</label>
           <label class="ck"><input type="checkbox" id="mrRest"> 自然摆放 Rest</label>
@@ -1179,7 +1183,8 @@ const state = {
   lightVis: true,      // 灯具可见：3D 射灯模型画在光位（用户要求；太阳符号退役）
   lampOn: [true, true, true],   // 三盏可控灯：主光/轮廓光/补光（关=置零强度+不画模型）
   lampKeep: [0, 0, 0],          // 关灯前的强度存档
-  pedScale: 1,         // 台面尺寸倍率（0.5–2；0.5m×1m 基准）
+  pedScale: 1,
+  twinStep: null,      // 双晶演示步骤（null=关闭，0-3=四步）         // 台面尺寸倍率（0.5–2；0.5m×1m 基准）
   turntable: false,    // 标本页转台：慢速自转展示，用户一拖即停（展柜感）
   locRig: null,        // 标本页灯组选择（null=随场景标准 / "showcase"=展示灯）
   backboard: false,    // 展台背板（L 形展托；wood/white/glass 有台时可用）
@@ -2278,7 +2283,7 @@ function glRender(project, M, opts, list) {
     gl.uniform1f(glUni.uMetal, Mi.metal ? 1 : 0);
     gl.uniform1f(glUni.uTintSpec, Mi.tintSpec ? 1 : 0);
     gl.uniform1f(glUni.uTwoSided, it.geo.faces.some(f => f.clip === 1) ? 1 : 0);
-    gl.uniform1f(glUni.uAlpha, Mi.alpha == null ? 1 : Mi.alpha);
+    gl.uniform1f(glUni.uAlpha, state.twinStep === 2 ? 0.45 : (Mi.alpha == null ? 1 : Mi.alpha));
     gl.uniform1f(glUni.uDisp, Mi.disp == null ? 0 : Mi.disp);
     gl.uniform1f(glUni.uAmbK, Mi.ambK == null ? 1 : Mi.ambK);
     gl.uniform3fv(glUni.uAmbT, Mi.ambT || [1, 1, 1]);
@@ -4249,6 +4254,15 @@ function renderMuseum() {
 /* 展柜控制栏：标本页专属——场景/灯组/姿态/转台/透明度微调。
    初值 = 产地预设（bg/base/rig/restPose/transp 都来自 setup），用户可在此覆盖；
    透明度滑杆与晶体台右面板同一语义（滑杆=透明度，state.alpha=不透明度）。 */
+function applyTwinStep() {
+  const s = state.twinStep;
+  if (s == null) return;
+  if (s === 0) { state.twinShow = "A"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
+  else if (s === 1) { state.twinShow = "B"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
+  else if (s === 2) { state.twinShow = "both"; state.twinTint = true; state.alpha = 0.5; state.transp = "custom"; }
+  else { state.twinShow = "both"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
+  draw();
+}
 function renderMuseumRig() {
   const scenes = document.getElementById("mrScenes");
   if (!scenes) return;
@@ -4326,6 +4340,33 @@ function renderMuseumRig() {
       if (l2) l2.textContent = ped.value + "%";
       draw();
     };
+  }
+  // 双晶演示：habit.twin 存在时显示四步按钮 + 字幕
+  const demoBox = document.getElementById("twinDemoBox");
+  if (demoBox) {
+    const hasTw = !!(habit().twin);
+    demoBox.style.display = hasTw ? "" : "none";
+    if (hasTw) {
+      if (state.twinStep == null) state.twinStep = 0;
+      const CAPTIONS = [
+        "单体 A：黄铁矿五角十二面体 {210}——铁十字双晶的第一个个体",
+        "单体 B：同一晶形，反射 {110} 后旋转到双晶位置（与 A 穿插 90°）",
+        "两晶体穿插结合——半透明视图显示穿插关系（{210} 面互相垂直）",
+        "铁十字双晶：两个五角十二面体 {210} 以 90° 穿插形成十字",
+      ];
+      const NAMES = ["单体 A", "单体 B", "穿插视图", "铁十字"];
+      const btnBox = document.getElementById("twinStepBtns");
+      btnBox.innerHTML = "";
+      for (let i = 0; i < 4; i++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn" + (state.twinStep === i ? " on" : "");
+        b.textContent = NAMES[i];
+        b.onclick = () => { state.twinStep = i; applyTwinStep(); renderMuseumRig(); };
+        btnBox.appendChild(b);
+      }
+      document.getElementById("twinCaption").textContent = CAPTIONS[state.twinStep];
+    }
   }
   const back = document.getElementById("mrBack");
   if (back) {
