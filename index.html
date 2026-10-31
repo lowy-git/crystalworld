@@ -480,6 +480,7 @@
       <!-- 展柜控制栏：标本页专属的表现力操作（场景/灯组/姿态/转台/透明度微调）。
            晶体台只研究外形，这些都在这里——两页分工的另一半。 -->
       <div class="mrig" id="mRig">
+        <div class="mrow"><span class="mlab">晶形</span><span class="btns" id="mrHabits"></span></div>
         <div class="mrow"><span class="mlab">场景</span><span class="btns" id="mrScenes"></span></div>
         <div class="mrow"><span class="mlab">灯组</span><span class="btns" id="mrRigs"></span></div>
         <div class="mrow">
@@ -4340,6 +4341,27 @@ function renderMuseumRig() {
       if (l2) l2.textContent = ped.value + "%";
       draw();
     };
+  }
+  // 习性选择器：当前矿物的全部外形
+  const habBox = document.getElementById("mrHabits");
+  if (habBox) {
+    habBox.innerHTML = "";
+    const m = museumMineral();
+    if (m) {
+      for (const h of m.habits) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn" + (state.habitId === h.id ? " on" : "");
+        b.textContent = h.zh;
+        b.onclick = () => {
+          state.habitId = h.id;
+          state.mask = (1 << h.forms.length) - 1;
+          state.twinStep = null;
+          rebuildGeometry(); syncPanels(); renderMuseumRig(); draw();
+        };
+        habBox.appendChild(b);
+      }
+    }
   }
   // 双晶演示：habit.twin 存在时显示四步按钮 + 字幕
   const demoBox = document.getElementById("twinDemoBox");
