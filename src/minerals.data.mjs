@@ -519,6 +519,14 @@ export const MINERALS = [
           { hkl: [0, 1, 1], k: 0.95, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
         ],
       },
+      {   // SMORF Quartz_005（{101}+{011} 老记号 = 现代 r+z）：无柱面的双锥状——
+        id: "bipyramidal", zh: "双锥状", en: "Bipyramidal",
+        note: "SMORF Quartz_005 对照：只有 r、z 两套菱面体，柱面完全不发育——晶体像一颗「钻石」。柱面是开形， absence 才让双锥闭合。",
+        forms: [
+          { hkl: [1, 0, 1], k: 1, idx: "{10-11}", zh: "菱面体 r", en: "Rhombohedron r" },
+          { hkl: [0, 1, 1], k: 0.72, idx: "{01-11}", zh: "菱面体 z", en: "Rhombohedron z" },
+        ],
+      },
       {
         id: "japan-twin", zh: "日本律双晶", en: "Japan twin",
         note: "双晶面（结合面）{11-22}；两个体 c 轴夹角 84°33′＝84.55°（按 α-石英 a=4.9134、c=5.4052 Å 反算得 84.52°，文献实测 84°33′）。注意：绕 c 轴的双晶是道芬律 <0001>，不是日本律。s 面必须真的长出来（r/z 收到 k=0.80 给它让位），否则两块只在一个棱上相接。自然界里日本律几乎总是长在基质上，下方的晶头不发育——所以这里把底部切平（cutBottom），只露出 V 形的两支晶头",
