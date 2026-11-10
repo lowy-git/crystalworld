@@ -540,6 +540,40 @@ check("主柔光箱与主光同向（高光与环境反射不错位）", (() => 
   run(`setLight(-25, 38);`);
   return same === true || same === "true";
 })());
+check("灯组独立调整：切到副灯拖滑杆只动那盏灯，换场景重放不被灯组默认覆盖", (() => {
+  const r = run(`JSON.stringify((() => {
+    const out = {};
+    renderLight();
+    out.tabs = [...document.getElementById("lampTabs").children].map(b => b.textContent);
+    // 切到轮廓灯，拖方位角滑杆到 80°
+    [...document.getElementById("lampTabs").children][1].onclick();
+    document.getElementById("lightAz").oninput({ target: { value: "80" } });
+    out.saved = state.lampAzEl[1];
+    out.rim1 = LIGHTS[1].dir.map(x => +x.toFixed(4));
+    // 主光不受副灯滑杆影响
+    out.mainAz = state.lightAz;
+    // 换场景：副灯方向重放（不被灯组默认覆盖）
+    applySceneLights("showcase");
+    out.rim2 = LIGHTS[1].dir.map(x => +x.toFixed(4));
+    // 切回主光：滑杆读数回到主光方位角
+    [...document.getElementById("lampTabs").children][0].onclick();
+    out.azAfter = document.getElementById("lightAz").value;
+    // 补灯高度角独立可调
+    [...document.getElementById("lampTabs").children][2].onclick();
+    document.getElementById("lightEl").oninput({ target: { value: "10" } });
+    out.fillEl = state.lampAzEl[2] && state.lampAzEl[2].el;
+    out.fillDirY = +LIGHTS[2].dir[1].toFixed(4);
+    return out;
+  })())`);
+  const o = JSON.parse(r);
+  const sin = (d) => Math.sin(d * Math.PI / 180), cos = (d) => Math.cos(d * Math.PI / 180);
+  return o.tabs.join() === "主光,轮廓灯,补灯"
+    && o.saved && o.saved.az === 80
+    && Math.abs(o.rim1[0] - sin(80) * cos(o.saved.el)) < 0.01
+    && o.rim2.join() === o.rim1.join()
+    && Number(o.azAfter) === o.mainAz
+    && o.fillEl === 10 && Math.abs(o.fillDirY - sin(10)) < 0.01;
+})(), `o=${run("JSON.stringify({ saved: state.lampAzEl[1], sel: state.lightSel, tabs: document.getElementById('lampTabs') ? document.getElementById('lampTabs').children.length : -1 })")}`);
 // 光泽与通透度是两件事：金属光泽强制不透明并禁用滑杆，其余可自由组合
 run(`state.luster = "metallic"; state.alpha = 0.3; state.transp = "clear"; renderTransp();`);
 check("金属光泽天然不透明（滑杆禁用）",

@@ -553,9 +553,10 @@
     <div class="sec" data-sec="light">
       <h3><button class="fold" type="button" aria-expanded="true">光照 <span style="text-transform:none;letter-spacing:0">Light</span></button></h3>
       <div class="secbody">
+        <div class="srow"><span>调灯</span><span class="btns" id="lampTabs"></span></div>
         <div class="srow"><span>方位角 <b id="lightAzVal" class="val"></b></span><input type="range" id="lightAz" min="-180" max="180" step="1"></div>
         <div class="srow"><span>高度角 <b id="lightElVal" class="val"></b></span><input type="range" id="lightEl" min="-30" max="88" step="1"></div>
-        <div class="swarning">光源固定在世界坐标：转动晶体时，反射内容会随之扫过各晶面。真实阴影、环境贴图反射要等 WebGL。</div>
+        <div class="swarning">滑杆调当前选中的灯（主光/轮廓光/补光各自独立，调整后换场景也保留）。光源固定在世界坐标：转动晶体时，反射内容会随之扫过各晶面。</div>
       </div>
     </div>
 
@@ -1152,6 +1153,10 @@ function applySceneLights(id) {
     if (r.dir) LIGHTS[i].dir = unit(r.dir.slice());
   }
   setLight(state.lightAz, state.lightEl);
+  // 用户调整过的副灯（轮廓光/补光）重放存档方向，否则换场景即被灯组默认覆盖
+  for (let i = 1; i < 3; i++) {
+    if (state.lampAzEl[i]) setLampDir(i, state.lampAzEl[i].az, state.lampAzEl[i].el);
+  }
   // 归一化的分母必须跟着换：否则换场景后"单灯 lam=1"这条不变式就断了，整体曝光会漂
   LIGHT_SUM = LIGHTS.reduce((a, L) => a + L.inten, 0);
   LIGHT_SPEC_SUM = LIGHTS.reduce((a, L) => a + L.inten * L.spec, 0);
@@ -1182,6 +1187,8 @@ const state = {
   lightAz: -25, lightEl: 38,
   lightMove: false,    // 光源绕行：晶体不动、主光绕着它转
   lightVis: true,      // 灯具可见：3D 射灯模型画在光位（用户要求；太阳符号退役）
+  lightSel: 0,         // 光照滑杆当前调哪盏灯：0 主光 / 1 轮廓光 / 2 补光
+  lampAzEl: [null, null, null],   // 副灯方位/高度存档 {az,el}：null=从未调整，随灯组默认（换场景重放）
   lampOn: [true, true, true],   // 三盏可控灯：主光/轮廓光/补光（关=置零强度+不画模型）
   lampKeep: [0, 0, 0],          // 关灯前的强度存档
   pedScale: 1,
@@ -1714,6 +1721,17 @@ function setLight(azDeg, elDeg) {
   LIGHT_V = unit([ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)]);
   ENV_LIGHTS[0].dir = LIGHT_V.slice();
   LIGHTS[0].dir = LIGHT_V.slice();
+}
+/* 副灯方位/高度 → 方向（轮廓光/补光独立调整）。灯具模型画在 LIGHTS[i].dir × lampDist，
+   方向一改灯模自然跟着挪。主光不走这里（它还牵动 LIGHT_V/环境柔光箱，走 setLight）。 */
+function setLampDir(i, azDeg, elDeg) {
+  const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180, ce = Math.cos(el);
+  LIGHTS[i].dir = unit([ce * Math.sin(az), Math.sin(el), ce * Math.cos(az)]);
+}
+/* 灯 i 的当前方向 → 球坐标 {az,el}（首次选中副灯时，滑杆从它现在的方向起步） */
+function lampDirToAzEl(d) {
+  return { az: Math.round(Math.atan2(d[0], d[2]) * 180 / Math.PI),
+           el: Math.round(Math.asin(Math.max(-1, Math.min(1, d[1]))) * 180 / Math.PI) };
 }
 function envSample(r) {
   const out = [0, 0, 0];
@@ -3881,13 +3899,39 @@ function renderInclusions() {
     `${spec.note}${typ}<br>包体画在晶体内部，<b>只在半透明/全透明时看得清</b>；数量与大小是两个独立参数。`;
 }
 
+/* 光照滑杆当前值的来源：主光走 lightAz/lightEl，副灯走 lampAzEl 存档（没有存档先从
+   当前方向换算，让滑杆从灯的现场位置起步）。 */
+function lampAzOf(i) {
+  if (i === 0) return state.lightAz;
+  if (!state.lampAzEl[i]) state.lampAzEl[i] = lampDirToAzEl(LIGHTS[i].dir);
+  return state.lampAzEl[i].az;
+}
+function lampElOf(i) {
+  if (i === 0) return state.lightEl;
+  if (!state.lampAzEl[i]) state.lampAzEl[i] = lampDirToAzEl(LIGHTS[i].dir);
+  return state.lampAzEl[i].el;
+}
 function renderLight() {
   const az = document.getElementById("lightAz"), el = document.getElementById("lightEl");
   if (!az || !el) return;
-  az.value = state.lightAz; el.value = state.lightEl;
+  const sel = state.lightSel || 0;
+  az.value = lampAzOf(sel); el.value = lampElOf(sel);
   const av = document.getElementById("lightAzVal"), ev = document.getElementById("lightElVal");
-  if (av) av.textContent = state.lightAz + "°";
-  if (ev) ev.textContent = state.lightEl + "°";
+  if (av) av.textContent = lampAzOf(sel) + "°";
+  if (ev) ev.textContent = lampElOf(sel) + "°";
+  // 调灯三档：滑杆调谁一目了然（主光/轮廓光/补光）
+  const tabs = document.getElementById("lampTabs");
+  if (tabs) {
+    tabs.innerHTML = "";
+    ["主光", "轮廓灯", "补灯"].forEach((name, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn" + (sel === i ? " on" : "");
+      b.textContent = name;
+      b.onclick = () => { state.lightSel = i; renderLight(); };
+      tabs.appendChild(b);
+    });
+  }
 }
 
 document.getElementById("transp").onchange = (e) => {
@@ -3916,12 +3960,26 @@ document.getElementById("incSize").oninput = (e) => {
   buildInclusions(); renderInclusions(); draw();
 };
 document.getElementById("lightAz").oninput = (e) => {
-  state.lightAz = Number(e.target.value);
-  lightBase = state.lightAz;      // 手动拖滑杆时重新取基点，绕行从这里接着转
-  setLight(state.lightAz, state.lightEl); renderLight(); draw();
+  const v = Number(e.target.value);
+  if (state.lightSel === 0) {
+    state.lightAz = v;
+    lightBase = v;      // 手动拖滑杆时重新取基点，绕行从这里接着转
+    setLight(v, state.lightEl);
+  } else {
+    state.lampAzEl[state.lightSel] = { az: v, el: lampElOf(state.lightSel) };
+    setLampDir(state.lightSel, v, state.lampAzEl[state.lightSel].el);
+  }
+  renderLight(); draw();
 };
 document.getElementById("lightEl").oninput = (e) => {
-  state.lightEl = Number(e.target.value); setLight(state.lightAz, state.lightEl); renderLight(); draw();
+  const v = Number(e.target.value);
+  if (state.lightSel === 0) {
+    state.lightEl = v; setLight(state.lightAz, v);
+  } else {
+    state.lampAzEl[state.lightSel] = { az: lampAzOf(state.lightSel), el: v };
+    setLampDir(state.lightSel, state.lampAzEl[state.lightSel].az, v);
+  }
+  renderLight(); draw();
 };
 
 function renderSwatches() {
