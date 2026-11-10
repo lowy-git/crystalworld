@@ -491,6 +491,7 @@ for (const m of MINERALS) {
         // 转变双晶（道芬/巴西律）：两个体同名、只是内部域反向，外部形态与单晶一致，
         // 所以不可拆解、也不能靠外形看出——渲染层用域界截面画一条虚线。
         noSplit: h.twin.mode === "domain",
+        demo: h.twin.demo ?? null,   // 演示文案（每条双晶律自己的 names/steps），丢掉就只剩通用兜底
       } : null,
       forms: h.forms.map((f, i) => ({
         idx: f.idx, zh: f.zh, en: f.en,

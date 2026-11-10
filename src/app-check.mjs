@@ -1388,6 +1388,65 @@ const glLastOptsOk = (glw, vw, vh) => {
       && o.back.base === "none" && o.back.museum === null && o.back.locAmbK === null
       && o.back.gy === 0 && o.habit0 === o.back.habit;   // 重置=第一外形+空组合+影棚底
   })(), `back=${run("JSON.stringify({ e: state.extras.length, bg: state.bg, base: state.base, gy: state.groupYaw })")}`);
+  const twinO = JSON.parse(run(`JSON.stringify((() => {
+      const out = {};
+      // 萤石 · 尖晶石律：进页 → 点习性按钮 → 点第 3 步（穿插视图）
+      location.hash = "#/m/fluorite"; applyRoute();
+      [...document.getElementById("mrHabits").children].find(b => b.textContent === "尖晶石律双晶").onclick();
+      out.fDemo = document.getElementById("twinDemoBox").style.display !== "none";
+      out.fNames = [...document.getElementById("twinStepBtns").children].map(b => b.textContent);
+      const fb = [...document.getElementById("twinStepBtns").children];
+      fb[2].onclick();
+      out.fCap = document.getElementById("twinCaption").textContent;
+      out.fStep = state.twinStep;
+      // 黄铁矿 · 铁十字：字幕是黄铁矿自己的文案
+      location.hash = "#/m/pyrite"; applyRoute();
+      [...document.getElementById("mrHabits").children].find(b => b.textContent === "铁十字双晶").onclick();
+      out.pNames = [...document.getElementById("twinStepBtns").children].map(b => b.textContent);
+      const pb = [...document.getElementById("twinStepBtns").children];
+      pb[3].onclick();
+      out.pCap = document.getElementById("twinCaption").textContent;
+      // 演示中切另一双晶习性：字幕换成新律的（state 不串）
+      [...document.getElementById("mrHabits").children].find(b => b.textContent === "尖晶石律双晶").onclick();
+      out.psCap = document.getElementById("twinCaption").textContent;
+      out.psStep = state.twinStep;
+      // 演示中（alpha=0.5）退出重置：twinStep 复位
+      resetStudio();
+      out.restStep = state.twinStep;
+      // 期望值：数据里各律自己的文案（字幕必须逐字等于它，才是真数据驱动）
+      const dm = id => DATA.minerals.find(m => m.id === id);
+      out.fExp = dm("fluorite").habits.find(h => h.id === "spinel-twin").twin.demo.steps[2];
+      out.pExp = dm("pyrite").habits.find(h => h.id === "iron-cross").twin.demo.steps[3];
+      out.psExp = dm("pyrite").habits.find(h => h.id === "spinel-twin").twin.demo.steps[0];
+      return out;
+    })())`));
+  check("双晶演示：四步按钮逐个真实点击，字幕=该双晶律自己的 demo 文案（数据驱动，非硬编码）",
+    twinO.fDemo === true && twinO.fStep === 2 && twinO.psStep === 0 && twinO.restStep === null
+      && twinO.fNames.join() === "单体 A,单体 B,穿插视图,尖晶石律"
+      && twinO.fCap === twinO.fExp && twinO.fCap.indexOf("黄铁矿") < 0
+      && twinO.pNames.join() === "单体 A,单体 B,穿插视图,铁十字"
+      && twinO.pCap === twinO.pExp
+      && twinO.psCap === twinO.psExp,
+    `o=${JSON.stringify(twinO)}`);
+  check("双晶演示文案数据一致性：每条 twin.demo 的字幕都提到本矿物名（防错矿文案回归）", (() => {
+    const r = run(`JSON.stringify(DATA.minerals.flatMap(m =>
+      m.habits.filter(h => h.twin && h.twin.demo)
+        .filter(h => (h.twin.demo.names.join("") + h.twin.demo.steps.join("")).indexOf(m.zh) < 0)
+        .map(h => m.id + "/" + h.id)))`);
+    return JSON.parse(r).length === 0;
+  })(), `bad=${run("JSON.stringify(DATA.minerals.flatMap(m=>m.habits.filter(h=>h.twin&&h.twin.demo).filter(h=>(h.twin.demo.names.join('')+h.twin.demo.steps.join('')).indexOf(m.zh)<0).map(h=>m.id+'/'+h.id)))")}`);
+  check("双晶律归属：萤石不再有铁十字双晶（黄铁矿专属，曾被错加进萤石段）；黄铁矿有两种双晶演示", (() => {
+    const r = run(`JSON.stringify((() => {
+      const f = DATA.minerals.find(m => m.id === "fluorite");
+      const p = DATA.minerals.find(m => m.id === "pyrite");
+      return { fIron: f.habits.some(h => h.id === "iron-cross"),
+        fTwin: f.habits.filter(h => h.twin).map(h => h.id),
+        pTwin: p.habits.filter(h => h.twin && h.twin.demo).map(h => h.id) };
+    })())`);
+    const o = JSON.parse(r);
+    return o.fIron === false && o.fTwin.join() === "spinel-twin"
+      && o.pTwin.join() === "iron-cross,spinel-twin";
+  })(), `twin=${run("JSON.stringify(DATA.minerals.filter(m=>['fluorite','pyrite'].includes(m.id)).map(m=>m.id+':'+m.habits.filter(h=>h.twin).map(h=>h.id).join(',')))")}`);
   check("「带当前组合去造型台」：mLoad 不还原快照，组合带进工作区", (() => {
     const r = run(`JSON.stringify((() => {
       location.hash = "#/m/pyrite/navajun"; applyRoute();

@@ -4145,6 +4145,7 @@ function resetStudio() {
   state.axes = true; state.edges = true; state.striations = true; state.turntable = false;
   state.locAmbK = null; state.matrixCol = null; state.locTransp = null; state.locRig = null; state.backboard = false;
   state.extras = []; state.extraSel = -1; state.groupYaw = 0; state.twinSplit = 0; state.twinShow = "both";
+  state.twinStep = null; TWIN_DEMO_SAVE = null;   // 双晶演示状态一并复位（alpha 覆盖会泄漏）
   selectMineral(state.mineralId);   // 第一外形 + 默认颜色/光泽/通透 + zoom=1 + 视角复位
   applySceneLights("void");
   rebuildGeometry();
@@ -4255,9 +4256,19 @@ function renderMuseum() {
 /* 展柜控制栏：标本页专属——场景/灯组/姿态/转台/透明度微调。
    初值 = 产地预设（bg/base/rig/restPose/transp 都来自 setup），用户可在此覆盖；
    透明度滑杆与晶体台右面板同一语义（滑杆=透明度，state.alpha=不透明度）。 */
+let TWIN_DEMO_SAVE = null;   // 进演示前的状态存档（alpha/transp/twinTint/twinShow），退出时恢复
 function applyTwinStep() {
   const s = state.twinStep;
-  if (s == null) return;
+  if (s == null) {
+    // 退出演示：恢复进演示前的配色/透明状态（否则半透明会泄漏到普通浏览）
+    if (TWIN_DEMO_SAVE) {
+      state.alpha = TWIN_DEMO_SAVE.alpha; state.transp = TWIN_DEMO_SAVE.transp;
+      state.twinTint = TWIN_DEMO_SAVE.twinTint; state.twinShow = TWIN_DEMO_SAVE.twinShow;
+      TWIN_DEMO_SAVE = null;
+    }
+    draw(); return;
+  }
+  if (!TWIN_DEMO_SAVE) TWIN_DEMO_SAVE = { alpha: state.alpha, transp: state.transp, twinTint: state.twinTint, twinShow: state.twinShow };
   if (s === 0) { state.twinShow = "A"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
   else if (s === 1) { state.twinShow = "B"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
   else if (s === 2) { state.twinShow = "both"; state.twinTint = true; state.alpha = 0.5; state.transp = "custom"; }
@@ -4357,6 +4368,7 @@ function renderMuseumRig() {
           state.habitId = h.id;
           state.mask = (1 << h.forms.length) - 1;
           state.twinStep = null;
+          applyTwinStep();          // 退出演示状态：恢复进演示前的 alpha/twinTint
           rebuildGeometry(); syncPanels(); renderMuseumRig(); draw();
         };
         habBox.appendChild(b);
@@ -4370,24 +4382,22 @@ function renderMuseumRig() {
     demoBox.style.display = hasTw ? "" : "none";
     if (hasTw) {
       if (state.twinStep == null) state.twinStep = 0;
-      const CAPTIONS = [
-        "单体 A：黄铁矿五角十二面体 {210}——铁十字双晶的第一个个体",
-        "单体 B：同一晶形，反射 {110} 后旋转到双晶位置（与 A 穿插 90°）",
-        "两晶体穿插结合——半透明视图显示穿插关系（{210} 面互相垂直）",
-        "铁十字双晶：两个五角十二面体 {210} 以 90° 穿插形成十字",
-      ];
-      const NAMES = ["单体 A", "单体 B", "穿插视图", "铁十字"];
+      // 字幕/按钮名从习性数据读取（每条双晶律自己的演示文案），无 demo 字段时退化为通用文案
+      const DEMO = habit().twin.demo || {
+        names: ["单体 A", "单体 B", "穿插视图", "双晶"],
+        steps: ["单体 A", "单体 B", "两晶体穿插结合", "双晶最终形态"],
+      };
       const btnBox = document.getElementById("twinStepBtns");
       btnBox.innerHTML = "";
       for (let i = 0; i < 4; i++) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "btn" + (state.twinStep === i ? " on" : "");
-        b.textContent = NAMES[i];
+        b.textContent = DEMO.names[i];
         b.onclick = () => { state.twinStep = i; applyTwinStep(); renderMuseumRig(); };
         btnBox.appendChild(b);
       }
-      document.getElementById("twinCaption").textContent = CAPTIONS[state.twinStep];
+      document.getElementById("twinCaption").textContent = DEMO.steps[state.twinStep];
     }
   }
   const back = document.getElementById("mrBack");
@@ -4643,13 +4653,24 @@ function syncPanels() {
   hud.innerHTML = `
     <div class="t1">${m.zh} · ${h.zh}<span>${m.en} / ${h.en}</span></div>
     <div class="t2">${systemName(m.system)} · 点群 ${m.pointGroup} · ${h.forms.length} 种单形${
-      h.twin ? (h.twin.mode === "domain" ? ` · 双晶 ${h.twin.angle}（c 轴平行）` : ` · 双晶 ${h.twin.angle}`) : ""}</div>
+      h.twin ? ` · 双晶 ${twinLawLabel(h.twin)}` : ""}</div>
     <div class="t3">${variant().counts.v} 顶点 · ${variant().counts.e} 棱 · ${variant().counts.f} 面</div>
   `;
 
   document.getElementById("hint").innerHTML = state.inputMode === "mouse"
     ? `<kbd>左键拖拽</kbd> 旋转 · <kbd>滚轮</kbd> 缩放 · <kbd>右键/Shift 拖拽</kbd> 平移`
     : `<kbd>单指</kbd> 旋转 · <kbd>双指</kbd> 缩放`;
+}
+
+/* 双晶律的 HUD 简标：按双晶操作类型给记号（mirror=镜面反射、axis=二次轴、
+   contact=c 轴夹角、domain=转变双晶）。旧版直接打 angle，mirror 律没有
+   angle 字段时会显示「双晶 undefined」。 */
+function twinLawLabel(t) {
+  if (t.mode === "mirror") return `镜面 {${t.plane.join("")}}`;
+  if (t.mode === "axis") return `轴 [${t.axis.join("")}]`;
+  if (t.mode === "contact") return `${t.angle}°`;
+  if (t.mode === "domain") return "（c 轴平行，转变双晶）";
+  return t.angle != null ? `${t.angle}°` : "";
 }
 
 function toast(msg) {
