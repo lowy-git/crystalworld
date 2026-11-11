@@ -434,28 +434,31 @@ export const MINERALS = [
           { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
         ],
       },
-      {
+      {   // SMORF Beryl_024（Mursinka, Ural）实测：m 柱 + a 柱窄条 + 平底，纵横比 2.17
         id: "prismatic", zh: "柱状", en: "Prismatic",
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱", en: "Prism" },
-          { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
+          { hkl: [1, 1, 0], k: 1.87, idx: "{11-20}", zh: "六方柱（窄条）", en: "Prism" },
+          { hkl: [0, 0, 1], k: 1.88, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
         ],
       },
-      {   // SMORF Beryl_012（Santa Fé de Bogota——祖母绿产地）：a+m 双柱 + 终端
+      {   // SMORF Beryl_098（Hidden & Washington，北卡 Hiddenite 祖母绿实体）实测：
+        //     {0001} k=1.17 / {10-10} 0.565 / {11-20} 0.936 / {11-21} 1.94 —— 纵横比 2.4 长柱
         id: "emerald", zh: "祖母绿型", en: "Emerald-type",
+        note: "k 面距语义：k 小 = 面距近 = 面大。{11-21} 二阶锥是祖母绿特征端面（一端平底、一端锥顶）。",
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱 m", en: "Prism" },
-          { hkl: [1, 1, 0], k: 2.0, idx: "{11-20}", zh: "六方柱 a", en: "Prism" },
-          { hkl: [0, 0, 1], k: 0.6, idx: "{0001}", zh: "底面", en: "Pinacoid" },
-          { hkl: [1, 0, 1], k: 1.35, idx: "{10-11}", zh: "六方双锥", en: "Pyramid" },
+          { hkl: [1, 1, 0], k: 1.66, idx: "{11-20}", zh: "六方柱 a（窄条）", en: "Prism" },
+          { hkl: [0, 0, 1], k: 2.07, idx: "{0001}", zh: "底面", en: "Basal pinacoid" },
+          { hkl: [1, 1, 1], k: 3.43, idx: "{11-21}", zh: "二阶锥面", en: "2nd-order pyramid" },
         ],
       },
       {   // SMORF Beryl_023（Ural）：m 柱为主 + 平坦底面——海蓝宝石常见习性
         id: "aquamarine", zh: "海蓝宝石型", en: "Aquamarine-type",
         forms: [
-          { hkl: [1, 0, 0], k: 1, idx: "{10-10}", zh: "六方柱 m", en: "Prism" },
-          { hkl: [1, 1, 0], k: 1.2, idx: "{11-20}", zh: "六方柱 a", en: "Prism" },
-          { hkl: [0, 0, 1], k: 1.0, idx: "{0001}", zh: "底面", en: "Pinacoid" },
+          { hkl: [1, 0, 0], k: 0.45, idx: "{10-10}", zh: "六方柱 m", en: "Prism" },
+          { hkl: [1, 1, 0], k: 0.55, idx: "{11-20}", zh: "六方柱 a（窄条）", en: "Prism" },
+          { hkl: [0, 0, 1], k: 1.55, idx: "{0001}", zh: "底面", en: "Pinacoid" },
         ],
       },
       {   // SMORF Beryl_MH217（Pingwu, China——摩根石产地）：Tabular {001} 板状
