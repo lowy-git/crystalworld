@@ -460,10 +460,11 @@ export const MINERALS = [
       },
       {   // SMORF Beryl_MH217（Pingwu, China——摩根石产地）：Tabular {001} 板状
         id: "morganite", zh: "摩根石型（板状）", en: "Morganite-type (tabular)",
+        note: "c 轴最短：{0001} 底面是绝对主面（k=0.08，面距只有晶宽的 8%），晶体压成六边形薄片；{10-11} 锥面作 45° 边坡收边。比例取自 SMORF Beryl_MH217（中国平武「Tabular {001}」实体：{0001} 面距 0.079 实测）。注意 k 是面距——k 小 = 面距近 = 面大。",
         forms: [
-          { hkl: [0, 0, 1], k: 1, idx: "{0001}", zh: "底面（主板面）", en: "Pinacoid" },
-          { hkl: [1, 0, 0], k: 0.5, idx: "{10-10}", zh: "六方柱", en: "Prism" },
-          { hkl: [1, 1, 0], k: 0.6, idx: "{11-20}", zh: "六方柱", en: "Prism" },
+          { hkl: [0, 0, 1], k: 0.08, idx: "{0001}", zh: "底面（主板面）", en: "Pinacoid" },
+          { hkl: [1, 0, 0], k: 1.02, idx: "{10-10}", zh: "六方柱", en: "Prism" },
+          { hkl: [1, 0, 1], k: 1.05, idx: "{10-11}", zh: "边坡锥面", en: "Edge pyramid" },
         ],
       },
     ],
