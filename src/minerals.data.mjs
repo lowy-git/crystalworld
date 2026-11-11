@@ -895,6 +895,112 @@ export const MINERALS = [
     ],
   },
   {
+    id: "orthoclase",
+  defColor: "#d4886e",
+  luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；完整晶体半透明（透长石才透明）
+    zh: "正长石", en: "Orthoclase", formula: "KAlSi₃O₈",
+    system: "monoclinic", pointGroup: "2/m",
+    confidence: "high", source: "a = 8.562、b = 12.996、c = 7.193 Å，β = 115.93°；晶型 SMORF/Goldschmidt Atlas（Orthoclase_410/058/064/174/165）",
+    cell: { a: 8.562, b: 12.996, c: 7.193, alpha: 90, beta: 115.93, gamma: 90 },
+    cellText: "a = 8.562，b = 12.996，c = 7.193 Å；β = 115.93°（单斜，唯一轴 b）",
+    colors: [
+      { zh: "肉红", en: "Flesh pink", hex: "#d4886e" },
+      { zh: "灰白", en: "Grayish white", hex: "#d9d5cf" },
+      { zh: "无色", en: "Colorless", hex: "#e6e9ee" },
+    ],
+    intro: {
+      zh: "钾长石的代表，长石家族两大主力之一。名字的本意就是「直的裂开」——{001} 与 {010} 两组解理恰好近 90° 相交。单斜晶系，β ≈ 116°：c 轴斜插在 a、b 之间。一对贯穿双晶（卡斯巴）、一对接触双晶（巴温诺、曼尼巴）是结晶学教材的常驻嘉宾。",
+      en: "The classic K-feldspar: its name means \"straight fracture\", for the two cleavages {001}∧{010} meeting at nearly 90°. Monoclinic with β ≈ 116°; home of the Carlsbad, Baveno and Manebach twins.",
+    },
+    about: {
+      zh: "花岗岩、伟晶岩里最常见的矿物之一，肉红色来自微量的铁。与钠长石轮流出溶，长成无数细小的条纹，就是「条纹长石」。冰长石是它的无色透明变种，瑞士阿尔卑斯裂隙里的精品。",
+      where: "挪威 Langesundsfjord（Brögger 的板状晶体）、捷克 Karlovy Vary（卡斯巴双晶类型地）、瑞士 Binntal（巴温诺/曼尼巴双晶）；国内福建、湖南的伟晶岩。",
+      hard: "6（小刀划不动，但明显软于石英）",
+      spot: "{010} 与 {001} 两组近 90° 解理 + 肉红色 + 三种著名双晶（卡斯巴/巴温诺/曼尼巴）。",
+    },
+    habits: [
+      {   // SMORF Orthoclase_410「Tabular {010}」（Brögger 1890, Langesundsfjord, Norway）
+        id: "tabular", zh: "板状", en: "Tabular",
+        note: "SMORF Orthoclase_410（Brögger 1890，挪威 Langesundsfjord）：{010} 板面占绝对优势——面距只有晶宽的 6%，典型薄板；{130} 柱面与 {101} 轴面收边。面间夹角按角度指纹法核对（{130}∧{010} 理论 29.29° / 实测 29.26°）。",
+        forms: [
+          { hkl: [0, 1, 0], k: 0.127, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
+          { hkl: [1, 3, 0], k: 1.848, idx: "{130}", zh: "{130} 柱面", en: "{130} prism" },
+          { hkl: [1, 0, 1], k: 3.141, idx: "{101}", zh: "{101} 轴面", en: "{101} pinacoid" },
+        ],
+      },
+      {   // SMORF Orthoclase_058「{110},{010},{001},{201}, modified」（Rose 1823）
+        id: "classic", zh: "经典组合", en: "Rose combination",
+        note: "SMORF Orthoclase_058（Rose 1823）：{110} m 柱面 + {010}/{001} 轴面 + y{201}——教科书正长石的标准组合，各面面距取自网格实测（角度指纹核对）。",
+        forms: [
+          { hkl: [0, 1, 0], k: 1.025, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
+          { hkl: [1, 1, 0], k: 1.406, idx: "{110}", zh: "m 柱面", en: "m prism" },
+          { hkl: [0, 0, 1], k: 2.4, idx: "{001}", zh: "c 轴面", en: "c pinacoid" },
+          { hkl: [2, 0, 1], k: 3.065, idx: "{201}", zh: "y 轴面", en: "y pinacoid" },
+        ],
+      },
+      {   // SMORF Orthoclase_064「Karlsbad law twin」（Elbogen, Bohemia——卡斯巴双晶类型地）
+        id: "carlsbad-twin", zh: "卡斯巴双晶", en: "Carlsbad twin",
+        note: "卡斯巴律：贯穿双晶，双晶轴 [001]（绕 c 转 180°），结合面 {010}。两个体以 {010} 面相邻、反向穿插，外形像两根并排的槽。正长石最著名的双晶，命名源自捷克 Karlovy Vary 旁的 Elbogen（今 Loket）；SMORF Orthoclase_064 即 Elbogen 的卡斯巴双晶实体。",
+        twin: { mode: "axis", axis: [0, 0, 1], angle: 180,
+          demo: {
+            names: ["单体 A", "单体 B", "穿插视图", "卡斯巴"],
+            steps: [
+              "单体 A：正长石个体——{010} 板面 + {110} 柱面 + {001}/{101} 端面，单斜晶系经典面貌",
+              "单体 B：绕 c 轴 [001] 转 180°——两个体以 (010) 为结合面互相穿插",
+              "两体穿插结合——半透明视图：两套柱面互相咬合，共用一根板体",
+              "卡斯巴双晶：贯穿双晶（双晶轴 [001]，结合面 {010}）——正长石最著名的双晶",
+            ],
+          } },
+        forms: [
+          { hkl: [0, 1, 0], k: 1.025, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
+          { hkl: [1, 1, 0], k: 1.406, idx: "{110}", zh: "m 柱面", en: "m prism" },
+          { hkl: [0, 0, 1], k: 2.4, idx: "{001}", zh: "c 轴面", en: "c pinacoid" },
+          { hkl: [1, 0, 1], k: 3.141, idx: "{101}", zh: "{101} 轴面", en: "{101} pinacoid" },
+        ],
+      },
+      {   // SMORF Orthoclase_174「Baveno law twin」（Slieve Corra, Ireland）
+        id: "baveno-twin", zh: "巴温诺双晶", en: "Baveno twin",
+        note: "巴温诺律：接触双晶，双晶面 {021}（n 轴面）。两个体以 {021} 为镜面反射贴合，常呈肘状并排。命名自意大利 Lago Maggiore 的 Baveno 产地；SMORF Orthoclase_174 为爱尔兰 Slieve Corra 的巴温诺双晶实体。",
+        twin: { mode: "contact", plane: [0, 2, 1],
+          demo: {
+            names: ["单体 A", "单体 B", "接触视图", "巴温诺"],
+            steps: [
+              "单体 A：正长石个体——{021} 面发育，它就是双晶面",
+              "单体 B：以 {021} 面为镜面反射——两体沿结合面并排贴生长",
+              "接触双晶——两体只贴在 {021} 结合面上，不相互穿插",
+              "巴温诺双晶：接触双晶（双晶面 {021}）——命名自意大利 Baveno，正长石常见双晶",
+            ],
+          } },
+        forms: [
+          { hkl: [0, 1, 0], k: 0.30, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
+          { hkl: [1, 1, 0], k: 1.406, idx: "{110}", zh: "m 柱面", en: "m prism" },
+          { hkl: [0, 2, 1], k: 0.936, idx: "{021}", zh: "n 轴面（双晶面）", en: "n pinacoid (twin plane)" },
+          { hkl: [0, 0, 1], k: 1.33, idx: "{001}", zh: "c 轴面", en: "c pinacoid" },
+        ],
+      },
+      {   // SMORF Orthoclase_165「Multiple Manebach- and Baveno law twin」（Binntal, Switzerland）
+        id: "manebach-twin", zh: "曼尼巴双晶", en: "Manebach twin",
+        note: "曼尼巴律：接触双晶，双晶面 {001}（c 轴面）。两个体沿 {001} 镜面反射叠置成板状，c 轴反向平行。命名自德国图林根 Manebach 产地；SMORF Orthoclase_165 为瑞士 Binntal 的曼尼巴-巴温诺复合双晶实体。",
+        twin: { mode: "contact", plane: [0, 0, 1],
+          demo: {
+            names: ["单体 A", "单体 B", "接触视图", "曼尼巴"],
+            steps: [
+              "单体 A：正长石个体——{001} 面发育，它就是双晶面",
+              "单体 B：以 {001} 面为镜面反射——两体沿 {001} 贴合成板状叠置",
+              "接触双晶——结合面 {001}，两体上下叠置（不穿插）",
+              "曼尼巴双晶：接触双晶（双晶面 {001}）——命名自德国 Manebach，常与巴温诺律同体出现",
+            ],
+          } },
+        forms: [
+          { hkl: [0, 1, 0], k: 1.025, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
+          { hkl: [1, 1, 0], k: 1.406, idx: "{110}", zh: "m 柱面", en: "m prism" },
+          { hkl: [0, 0, 1], k: 1.2, idx: "{001}", zh: "c 轴面（双晶面）", en: "c pinacoid (twin plane)" },
+          { hkl: [1, 0, 1], k: 3.141, idx: "{101}", zh: "{101} 轴面", en: "{101} pinacoid" },
+        ],
+      },
+    ],
+  },
+  {
     id: "rhodochrosite",
   defColor: "#e0899c",
   luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；完整晶体常半透明

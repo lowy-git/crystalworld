@@ -676,6 +676,94 @@ check("单晶石英 r/z 交替可见（r 面 form=1 与 z 面 form=2 并存，r 
   const o = JSON.parse(r);
   return o.forms.includes(1) && o.forms.includes(2) && o.f === 18;
 })(), `o=${run("JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })")}`);
+// ── 正长石三双晶（SMORF/Goldschmidt Atlas：Orthoclase_064 卡斯巴 / 174 巴温诺 / 165 曼尼巴）──
+check("正长石卡斯巴双晶：绕 c [001] 转 180° 的贯穿双晶（mode=axis），有 demo 文案", (() => {
+  const r = run(`JSON.stringify((() => {
+    const m = DATA.minerals.find(x => x.id === "orthoclase");
+    const h = m.habits.find(x => x.id === "carlsbad-twin");
+    return { twin: h.twin, demo: !!h.twin.demo, steps: h.twin.demo.steps.join("").includes("正长石") };
+  })())`);
+  const o = JSON.parse(r);
+  return o.twin.mode === "axis" && o.twin.axis.join() === "0,0,1" && o.twin.angle === 180
+    && o.demo === true && o.steps === true;
+})(), `o=${run("JSON.stringify((() => { const h = DATA.minerals.find(x=>x.id==='orthoclase').habits.find(x=>x.id==='carlsbad-twin'); return { mode: h.twin.mode, axis: h.twin.axis, angle: h.twin.angle }; })())")}`);
+check("正长石巴温诺双晶：接触双晶 {021}（双晶面必须是真实晶面，δ=0 严格贴合）", (() => {
+  const r = run(`JSON.stringify((() => {
+    const h = DATA.minerals.find(x => x.id === "orthoclase").habits.find(x => x.id === "baveno-twin");
+    return { mode: h.twin.mode, plane: h.twin.plane, forms: h.forms.map(f => f.idx) };
+  })())`);
+  const o = JSON.parse(r);
+  return o.mode === "contact" && o.plane.join() === "0,2,1" && o.forms.includes("{021}");
+})(), `o=${run("JSON.stringify((() => { const h = DATA.minerals.find(x=>x.id==='orthoclase').habits.find(x=>x.id==='baveno-twin'); return { mode: h.twin.mode, plane: h.twin.plane }; })())")}`);
+check("正长石曼尼巴双晶：接触双晶 {001}，且并集两体贴合（结合面内部面已删）", (() => {
+  const r = run(`JSON.stringify((() => {
+    selectMineral("orthoclase"); state.habitId = "manebach-twin"; state.mask = 15; rebuildGeometry();
+    const em = new Map();
+    for (const f of GEO.faces) {
+      const L = f.loop;
+      for (let i = 0; i < L.length; i++) {
+        const a = L[i], b = L[(i + 1) % L.length];
+        const k = a < b ? a + "-" + b : b + "-" + a;
+        em.set(k, (em.get(k) || 0) + 1);
+      }
+    }
+    const h = DATA.minerals.find(x => x.id === "orthoclase").habits.find(x => x.id === "manebach-twin");
+    return { plane: h.twin.plane, mode: h.twin.mode,
+      closed: [...em.values()].every(c => c === 2), f: GEO.faces.length };
+  })())`);
+  const o = JSON.parse(r);
+  return o.mode === "contact" && o.plane.join() === "0,0,1" && o.closed === true;
+})(), `v=${run("JSON.stringify(DATA.minerals.find(x=>x.id==='orthoclase').habits.find(x=>x.id==='manebach-twin').forms.map(f=>f.idx))")}`);
+check("正长石卡斯巴：单体 A 闭合流形（完整体几何），并集无微碎片（最小面面积 > 0.05）", (() => {
+  const r = run(`JSON.stringify((() => {
+    selectMineral("orthoclase"); state.habitId = "carlsbad-twin"; state.mask = 15;
+    state.twinShow = "A"; rebuildGeometry();
+    const em = new Map();
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+    for (const f of GEO.faces) {
+      const L = f.loop;
+      for (let i = 0; i < L.length; i++) {
+        const a = L[i], b = L[(i + 1) % L.length];
+        const k = a < b ? a + "-" + b : b + "-" + a;
+        em.set(k, (em.get(k) || 0) + 1);
+      }
+    }
+    const closedA = [...em.values()].every(c => c === 2);
+    state.twinShow = "both"; rebuildGeometry();
+    const polyArea = pts => {
+      let nx=0, ny=0, nz=0;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i+1)%pts.length];
+        nx += (p[1]-q[1])*(p[2]+q[2]); ny += (p[2]-q[2])*(p[0]+q[0]); nz += (p[0]-q[0])*(p[1]+q[1]);
+      }
+      return Math.hypot(nx, ny, nz) / 2;
+    };
+    const minA = Math.min(...GEO.faces.map(f => polyArea(f.pts)));
+    const nan = GEO.faces.some(f => !isFinite(f.n[0]));
+    return { closedA, minA: +minA.toFixed(3), f: GEO.faces.length, nan };
+  })())`);
+  run(`selectMineral("quartz"); state.habitId = "japan-twin"; state.mask = 15; rebuildGeometry(); syncPanels();`);
+  const o = JSON.parse(r);
+  return o.closedA === true && o.nan === false && o.minA > 0.05;
+})(), `o=${run("JSON.stringify((() => { selectMineral('orthoclase'); state.habitId='carlsbad-twin'; state.mask=15; state.twinShow='A'; rebuildGeometry(); const em=new Map(); for (const f of GEO.faces) { const L=f.loop; for (let i=0;i<L.length;i++){const a=L[i],b=L[(i+1)%L.length]; const k=a<b?a+'-'+b:b+'-'+a; em.set(k,(em.get(k)||0)+1);} } return { closedA: [...em.values()].every(c=>c===2), f: GEO.faces.length }; })())")}`);
+check("正长石板状习性 {010} 占优（面距最近 → 薄板，几何面距断言）", (() => {
+  const r = run(`JSON.stringify((() => {
+    selectMineral("orthoclase"); state.habitId = "tabular"; state.mask = 7;
+    state.restPose = false; rebuildGeometry();
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const byForm = {};
+    for (const f of GEO.faces) {
+      const d = Math.abs(dot(f.n, f.pts[0]));
+      (byForm[f.form] ||= []).push(d);
+    }
+    const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+    selectMineral("quartz"); state.habitId = "japan-twin"; state.mask = 15; rebuildGeometry(); syncPanels();
+    return { forms: Object.keys(byForm), D0: mean(byForm[0]), D1: mean(byForm[1]), D2: mean(byForm[2]) };
+  })())`);
+  const o = JSON.parse(r);
+  return o.D0 > 0 && o.D0 * 3 < o.D1 && o.D0 * 3 < o.D2;
+})(), `o=${run("JSON.stringify(DATA.minerals.find(x=>x.id==='orthoclase').habits.find(x=>x.id==='tabular').forms.map(f=>f.idx))")}`);
 run(`state.habitId = "japan-twin"; rebuildGeometry(); syncPanels();;`);
 check("日本律底部被截平（有截断面 form=-2）", (() => {
   return run(`GEO.faces.some(f => f.form === -2)`) === true;
@@ -1414,7 +1502,7 @@ const glLastOptsOk = (glw, vw, vh) => {
                shown: document.getElementById("browse").style.display !== "none" };
     })())`);
     const o = JSON.parse(r);
-    return o.mode === true && o.shown === true && o.heads === 16
+    return o.mode === true && o.shown === true && o.heads === 17
       && o.cards === o.habitTotal && o.thumbs === o.habitTotal;
   })(), run(`JSON.stringify((() => { let h = 0, c = 0; for (const x of document.getElementById("browseGrid").children) { if (x.className === "bhead") h++; if (x.className === "bcard") c++; } return { h, c }; })())`));
   check("晶体卡点击：载入该晶体并回工作区（#/studio），矿物名进矿物页", (() => {
@@ -1780,9 +1868,9 @@ check("「认识它」面板存在且放在矿物旁（左栏，与「数据」�
   const secs = [...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]);
   return secs.includes("about") && secs.indexOf("about") === secs.indexOf("min") + 1;
 })(), `左栏顺序=${[...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]).slice(0, 7).join(",")}`);
-check("16 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
+check("17 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
   const bad = run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id)`);
-  return bad.length === 0 && run(`DATA.minerals.length`) === 16;
+  return bad.length === 0 && run(`DATA.minerals.length`) === 17;
 })(), `缺=${run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id).join(",")`)}`);
 check("renderAbout() 被 syncPanels() 调用（换矿物时刷新）", /renderAbout\(\);\s*\/\/[^\n]*认识它/.test(html) && /function renderAbout\(\)/.test(html));
 check("导出默认带「认识它」，且换矿物后内容跟着变", (() => {

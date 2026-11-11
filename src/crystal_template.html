@@ -4694,7 +4694,7 @@ function syncPanels() {
 function twinLawLabel(t) {
   if (t.mode === "mirror") return `镜面 {${t.plane.join("")}}`;
   if (t.mode === "axis") return `轴 [${t.axis.join("")}]`;
-  if (t.mode === "contact") return `${t.angle}°`;
+  if (t.mode === "contact") return t.angle != null ? `${t.angle}°` : `双晶面 {${t.plane.join("")}}`;
   return t.angle != null ? `${t.angle}°` : "";
 }
 
