@@ -582,11 +582,6 @@
           </div>
           <div class="swarning">接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开（萤石 [111]）。</div>
         </div>
-        <!-- 转变双晶（道芬/巴西律）：域界包在内部，只能"切开"才看得见 -->
-        <div id="domBox" style="display:none">
-          <label class="ck"><input type="checkbox" id="optDom" checked> 显示双晶域界 Twin domain</label>
-          <div class="swarning">道芬律与巴西律是「转变双晶 / 反射双晶」：两个体外部晶形完全相同，c 轴互相平行，从外面一点看不出来。关掉这条虚线，看到的就是肉眼所见的样子——真实研究要靠刻蚀或正交偏光。</div>
-        </div>
       </div>
     </div>
 
@@ -1205,7 +1200,6 @@ const state = {
   moveMode: false,     // 「拖动位置」：左键拖着选中的晶体在桌面上走
   groupLock: false,    // 锁定整组：锁上后左键转的是整组（刚体），拆开时才能逐颗摆位置
   groupYaw: 0,         // 整组绕 y 的转角：所有晶体（含主晶体）作为刚体一起转
-  showDomain: true,    // 转变双晶（道芬/巴西律）的域界虚线：纯示意，可关掉
   uniform: null,       // {hex}
   exp: { w: 1400, bg: "void", scale: 1, fields: {}, aspect: "4:3" },
   striations: true,
@@ -1253,7 +1247,8 @@ function rebuildGeometry() {
   // 贯穿双晶：并集把"被对方包住"的那几片面删掉了，单独看一个个体就是开壳
   // （萤石尖晶石律会露出满屏碎三角）。所以拆开或只看一个体时，切换成"完整个体"几何。
   const hasWhole = !!(v.hid && v.hid.some(x => x));
-  const useWhole = hasWhole && (!!off || keepIndiv !== null);
+  // 演示第 3 步（穿插视图）也用完整体：并集包络看不出"两体互咬"，半透明重叠才看得出
+  const useWhole = hasWhole && (!!off || keepIndiv !== null || state.twinStep === 2);
   const faces = [];
   v.f.forEach((loop, fi) => {
     if (hasWhole && !!v.hid[fi] !== useWhole) return;
@@ -1311,7 +1306,6 @@ function rebuildGeometry() {
     if (list.length === 2 && dot(faces[list[0]].n, faces[list[1]].n) < 0.9962) realEdges.add(k);
   }
   GEO = { P, faces, planes, realEdges, extent: Math.max(...P.map(p => Math.hypot(p[0], p[1], p[2]))),
-          domain: (v.domain && restRot) ? v.domain.map(p => mv(restRot, p)) : (v.domain || null),
           restRot,                        // 自然摆放的模型旋转（坐标轴/晶纹要跟着转）
           stamp: (GEO ? GEO.stamp + 1 : 1) };   // WebGL 层靠这个戳判断要不要重传顶点缓冲
   buildInclusions();
@@ -3474,29 +3468,7 @@ function paint(g, opts) {
   paintFaces(g, opts, project, M);
   lastProj = project;                     // 拖动用：把屏幕位移换算成世界位移
   paintInclusions(g, opts, project, M);   // 在晶体之上：半透明才看得见，越透明越清晰
-  drawTwinDomain(g, project);             // 转变双晶（道芬/巴西律）的域界：纯示意
   if (state.axes) drawAxes(g, project.R, project, opts.scale);
-}
-
-/* 转变双晶（道芬律/巴西律）的域界截面。
-   这两个律的双晶域完全包在晶体内部，外部晶形与单晶一模一样——所以不能画成两个晶体，
-   只能在内部画一层非常淡的域界面 + 虚线边界，并明确标注"这是切开来才看得见的"。
-   可以整体关掉（state.showDomain），关掉后就是肉眼所见的样子。 */
-function drawTwinDomain(g, project) {
-  if (!state.showDomain || !GEO || !GEO.domain || GEO.domain.length < 3) return;
-  const pts = GEO.domain.map(project);
-  g.save();
-  g.beginPath();
-  pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
-  g.closePath();
-  g.fillStyle = "rgba(255,246,214,0.085)";       // 极淡：它在晶体内部，不该抢晶面的戏
-  g.fill();
-  g.setLineDash([5, 5]);
-  g.lineWidth = 1.15;
-  g.strokeStyle = "rgba(255,238,190,0.52)";
-  g.stroke();
-  g.setLineDash([]);
-  g.restore();
 }
 
 function drawAxes(g, R, project, scale) {
@@ -4331,6 +4303,7 @@ function applyTwinStep() {
   else if (s === 1) { state.twinShow = "B"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
   else if (s === 2) { state.twinShow = "both"; state.twinTint = true; state.alpha = 0.5; state.transp = "custom"; }
   else { state.twinShow = "both"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
+  rebuildGeometry();   // twinShow 换个体必须重建：合体时画并集，只看单体时切成完整个体（否则过滤的是并集碎片）
   draw();
 }
 function renderMuseumRig() {
@@ -4439,7 +4412,7 @@ function renderMuseumRig() {
     const hasTw = !!(habit().twin);
     demoBox.style.display = hasTw ? "" : "none";
     if (hasTw) {
-      if (state.twinStep == null) state.twinStep = 0;
+      if (state.twinStep == null) { state.twinStep = 0; applyTwinStep(); }   // 进双晶习性默认第 1 步（单体 A），状态与画面同步
       // 字幕/按钮名从习性数据读取（每条双晶律自己的演示文案），无 demo 字段时退化为通用文案
       const DEMO = habit().twin.demo || {
         names: ["单体 A", "单体 B", "穿插视图", "双晶"],
@@ -4671,19 +4644,14 @@ function syncPanels() {
   if (twinRow) {
     twinRow.style.display = habit().twin ? "" : "none";
     document.getElementById("optTwin").checked = state.twinTint;
-  }  // 双晶拆解控件只在"能拆"的双晶习惯出现（转变双晶的两个体同名，拆了毫无意义）；
-  // 切到非双晶时复位，免得下次打开残留拆解状态
+  }  // 双晶拆解控件只在双晶习惯出现；切到非双晶时复位，免得下次打开残留拆解状态
   const tw = habit().twin;
-  const canSplit = !!tw && !tw.noSplit;
+  const canSplit = !!tw;
   const splitBox = document.getElementById("splitBox");
   if (splitBox) splitBox.style.display = canSplit ? "" : "none";
   if (!canSplit && (state.twinSplit || state.twinShow !== "both")) {
     state.twinSplit = 0; state.twinShow = "both";
   }
-  const domBox = document.getElementById("domBox");
-  if (domBox) domBox.style.display = (tw && tw.mode === "domain") ? "" : "none";
-  const optDom = document.getElementById("optDom");
-  if (optDom) optDom.checked = state.showDomain;
   document.getElementById("splitVal").textContent = Math.round((state.twinSplit || 0) * 100) + "%";
   document.getElementById("splitR").value = Math.round((state.twinSplit || 0) * 100);
   document.getElementById("spBoth").classList.toggle("on", state.twinShow === "both");
@@ -4721,13 +4689,12 @@ function syncPanels() {
 }
 
 /* 双晶律的 HUD 简标：按双晶操作类型给记号（mirror=镜面反射、axis=二次轴、
-   contact=c 轴夹角、domain=转变双晶）。旧版直接打 angle，mirror 律没有
-   angle 字段时会显示「双晶 undefined」。 */
+   contact=c 轴夹角）。旧版直接打 angle，mirror 律没有 angle 字段时会显示
+   「双晶 undefined」。 */
 function twinLawLabel(t) {
   if (t.mode === "mirror") return `镜面 {${t.plane.join("")}}`;
   if (t.mode === "axis") return `轴 [${t.axis.join("")}]`;
   if (t.mode === "contact") return `${t.angle}°`;
-  if (t.mode === "domain") return "（c 轴平行，转变双晶）";
   return t.angle != null ? `${t.angle}°` : "";
 }
 
@@ -4749,7 +4716,6 @@ document.getElementById("optSpin").onchange = (e) => { state.spin = e.target.che
 document.getElementById("optLMove").onchange = (e) => { state.lightMove = e.target.checked; };
 document.getElementById("optLightVis").onchange = (e) => { state.lightVis = e.target.checked; draw(); };
 document.getElementById("optTwin").onchange = (e) => { state.twinTint = e.target.checked; draw(); };
-document.getElementById("optDom").onchange = (e) => { state.showDomain = e.target.checked; draw(); };
 
 /* ── 面板折叠：点标题栏收起/展开，记忆在 localStorage ── */
 const FOLD_KEY = "crystalworld.folds";

@@ -1,0 +1,362 @@
+ 
+
+ The Quartz Page: Quartz Crystals - Twinning 
+
+ Quartz Crystals - Twinning 
+
+ Chapter's Topics 
+
+ Top 
+
+ Overview 
+ Identifying Twins 
+ A Common Misconception About Quartz Twins 
+ Dauphiné Law 
+ Brazil Law 
+ Japan Law 
+ La Gardette Law 
+ Liebisch Law 
+ Esterel Law 
+ Sardinia Law 
+ Breithaupt Law 
+
+ Chapter's Topics 
+ Top 
+
+ Overview 
+ Identifying Twins 
+ A Common Misconception About Quartz Twins 
+ Dauphiné Law 
+ Brazil Law 
+ Japan Law 
+ La Gardette Law 
+ Liebisch Law 
+ Esterel Law 
+ Sardinia Law 
+ Breithaupt Law 
+
+ Quartz 
+ Introduction 
+ Mineralogy 
+
+ Mineralogical Data 
+ Types of Quartz 
+ Formation and Growth 
+ Occurrence 
+ Quartz as a Rock-Forming Mineral 
+ Origin of Quartz 
+-->
+ The Silica Group 
+
+ Properties 
+
+ Chemical 
+ Physical 
+ Structure 
+
+ Crystals 
+
+ Introduction 
+ Basic Terms 
+ Forms 
+ Habits 
+ Twinning 
+ Macroscopic Structure 
+ Data and Renderings 
+
+ Special Topics 
+
+ Alpine-Type Fissures 
+ Inclusions 
+ Gwindel 
+ "Diamonds" 
+ Ouachita Mountains 
+ Herkimer 
+
+ Varieties 
+ Overview 
+ Macrocrystalline 
+
+ Amethyst 
+ Ametrine 
+ Aventurine 
+ Blue Quartz 
+ Cat's Eye 
+ Citrine 
+ Eisenkiesel 
+ Hawk's Eye 
+ Ferruginous Quartz 
+ Milky Quartz 
+ Morion 
+ Pink Quartz 
+ Prase 
+ Prasiolite 
+ Rock Crystal 
+ Rose Quartz 
+ Smoky Quartz 
+ Tiger's Eye 
+
+ Cryptocrystalline 
+
+ Agate 
+ Carnelian 
+ Chalcedony 
+ Chert 
+ Chrysoprase 
+ Flint 
+ Heliotrope 
+ Jasper 
+ Onyx 
+ Plasma 
+ Sard 
+ Silica Sinter 
+
+ Growth Forms 
+ Synonyms 
+
+ References 
+
+ Literature 
+ Specimen List 
+
+ Index 
+
+ Home 
+ Impressum 
+ Copyright 
+ About this Site 
+ News 
+
+ last modified: Sunday, 05-Jun-2016 02:03:08 CEST 
+
+ Document status: incomplete, images missing 
+
+ Overview of Twin Types 
+
+Quartz forms a number of different types of twins some of which are listed in the following table. Only three of them marked bold are generally accepted as twinning laws. These laws are either very common in crystals (Dauphiné Law, Brazil Law) or, although much rarer, have at least been found on a regular basis and in sufficient numbers, and are associated with certain growth forms and environmental conditions (Japan Law). There is some debate on whether some of the other twinning laws (marked italic ) in fact exist in nature, others have been shown to be not of law-like nature. 
+
+ Twinning Axis 
+ Twinning Plane 
+ Composition Plane 
+ Type 
+ Handedness of Subindividuals 
+
+   Dauphiné Law 
+ [ 0 0 0 1 ] 
+ - 
+ { 1 0 1 0 } 
+ Penetration 
+ R+R or L+L 
+
+   Brazil Law 
+ - 
+ { 1 1 2 0 } 
+ { 1 1 2 0 } 
+ Contact / Penetration 
+ L+R 
+
+   Japan Law 
+ - 
+ { 1 1 2 2 } 
+ { 1 1 2 2 } 
+ Contact 
+ all combinations 
+
+   "Liebisch Law" 
+or 
+"Combined Law" 
+ [ 0 0 0 1 ] 
+ { 1 1 2 0 } 
+ - 
+ "Mixed" 
+ L+R 
+
+   Esterel Law 
+ - 
+ { 1 0 1 1 } 
+ { 1 0 1 1 } 
+ Contact ? 
+ ? 
+
+   Sardinia Law 
+ - 
+ { 1 0 1 2 } 
+ { 1 0 1 2 } 
+ Contact ? 
+ ? 
+
+   Breithaupt Law 
+ - 
+ { 1 1 2 1 } 
+ { 1 1 2 1 } 
+ Contact ? 
+ ? 
+
+The data for this table have been taken mostly from Gault, 1949 , albeit with a few corrections.
+
+Although, for example, Japan Law twin is the correct nomenclature, I sometimes also use the term "Japanese Twin" and likewise "Brazil twin" and "Dauphiné Twin", as these terms are much more common among rockhounds.
+
+A single crystal can be twinned in many ways, parts of it may show Dauphiné twinning, other parts Brazil twinning. In fact combinations of Brazil and Dauphiné twin portions in a single crystal aren't that uncommon, and sometimes you see references to a   Liebisch or Combined Law . Although the shape of the crystals suggests the presence of a "Combined Twins", these combinations do not qualify as a twinning law by themselves, because it has been shown in electron microscopic studies that a left-handed part never borders a right-handed part that has been rotated around the c-axis. 
+
+ Identifying Twins 
+There are complex methods to determine if and how a crystal is twinned, but a rockhound has to rely solely on crystal morphology. The characteristics of each twinning type will be described below, but beforehand I will briefly mention the four general properties of quartz crystals that help identifying twins:
+
+ Position of x-faces 
+Reliable, but the x-face is not very common.
+
+ Position of s-faces 
+The s-face is more common than the x-face, but one can only identify its relative position when it shows a striation. Very often the s-face is a perfect plane.
+
+ Surface patterns caused by etching 
+This is very reliable, but it doesn't tell you the orientation of the crystal subindividuals. For example, you might identify a Dauphiné twin but can't tell if it's a left or right quartz.
+
+ Oriented indentations on the surface 
+Reliable, but difficult to interpret, because the form of the dents also depends on the type of face.
+
+Of course, if one relies only on these criteria one will miss many twinned crystals because of their "boring" morphology. Sometimes you can tell that a crystal is twinned, but it's impossible to tell how.
+
+Often you read that so called   sutures coincide with twin boundaries. Sutures are more or less irregular crack-like lines visible on the crystal faces. They often are the boundaries between slightly displaced crystal subindividuals of similar orientation, which lie almost parallel to each other. These sutures are most easily observed on the m-faces of crystals with macromosaic structure . 
+
+The sutures visible on the m-faces of Japanese twins are in fact the boundary between the two twin crystals oriented differently in a law-like manner. But sutures do not indicate twin boundary between left and right-handed crystals. Sutures can only form when the neighboring crystal subindividuals show a different orientation. Left and right handed quartz crystals do not differ in their orientation with respect to the a- and c-axes, so in a twinned crystal the subindividuals lie perfectly parallel to each other (but with their crystal lattice either rotated or mirrored with respect to each other). If you see a suture, you see a slight misorientation of the two subindividuals, and their boundaries cannot coincide with a twinning plane that corresponds to a specific, law-like intergrowth.
+
+ A Common Misconception About Quartz Twins 
+
+In newsgroups and Internet forums people sometimes ask if their quartz crystal might be some kind of twin. People not familiar with the topic frequently call intergrown pairs of lookalike crystals "twins", in particular when they have grown in parallel. A twin is a single crystal or a group of crystals that is composed of parts with different orientation that are intergrown in a law-like manner (check the chapter Basic Terms for an explanation). The twin components do not have to be visible as crystal individuals. Parallel grown quartz crystals can be twins if they show law-like intergrowth, but quite rarely are. 
+
+In theory, one could simply think out some twinning law of quartz by defining a twinning plane or axis that corresponds to the face of a crystal form in the trigonal-trapezohedral crystal class and "calculate" what such a crystal might look like. Then you would check if you find real world crystals that match the description. After looking at a few quartz crystal groups one would realize that there is a sheer endless number of ways crystals intergrow. How can one tell which of them are actual twins and which are not?
+
+Simply by looking and measuring a single crystal one cannot decide if this crystal is just the product of random intergrowth. Luckily we are past the times when one had to rely solely on the shapes of crystals and their large-scale physical properties to say something about their structure. But twinning has more to do with the structure than with the shapes of crystals.
+
+-->
+
+ Dauphiné Law Twins 
+
+H.264-movie, 256x256 px:
+
+ dauphine_twin_1.mp4 372kb
+
+In a Dauphiné Law twin either only right or only left handed quartz structures are combined in a crystal. The subindividuals are rotated around the c-axis by 60° relative to each other. In a Dauphiné Law twin the r and z rhombohedra cannot be distinguished, and accordingly Dauphiné Law twins often display a pseudohexagonal habit as a whole . Their shape obeys certain mathematical relations, so they all share certain geometrical properties, but only idealized crystals are symmetric. When one calls a mineral "isometric", for example, she does not mean to say that the mineral in all its occurrences is isometric, but that the structural elements that determine the external shape of the crystals show isometric symmetry. In that sense, a crystal is said to have pseudohexagonal habit when its external shape suggests the presence of an internal hexagonal structure, while, in fact, the crystal lattice possesses a different symmetry.')" 
+onMouseOut="tt_off()"> [1] . 
+
+Dauphiné Law twins are   electrical twins : their optical properties are similar to untwinned crystals, but mechanical pressure along the a axis does not cause an electrostatic polarization of the crystals. Dauphiné Law twin domains cannot be visualized in polarized light, because adjacent domains have the same handedness and rotate the light's polarization planes in the same direction. 
+
+Dauphiné Law twins are penetration twins : the twin domains are intensely intergrown in most cases. The boundary between the twin subindividuals appear irregular, as shown schematically in the right figure that depicts a cross section of a crystal. The size and shape of the twin domains can vary and the shares of the twin domains in a crystal don't have to be equal. Such a pattern can be visualized by etching a cross section. On a microscopical scale, the twin domains do not look irregular, but like complex polygons with straight boundaries ( Lang, 1965 , McLaren and Phakey, 1969 ).
+
+In many crystals the pattern of domains gets more complex and irregular towards the tips of the crystal, while the base is made of a few twin domains that may be arranged as roughly triangular sectors ( Friedlaender, 1951 ).
+
+10mm 
+
+ 720x968 73kb - 
+ 1440x1936 213kb
+
+A   right-handed smoky quartz Dauphiné twin with an almost ideal development of triangular x-faces. It is from the Val Giuv valley, Graubünden, Switzerland. 
+
+5mm 
+
+ 960x960 109kb - 
+ 1920x1920 298kb
+
+This   is a top view of a transparent smoky quartz crystal from the western Erongo mountains in Namibia. The crystal is from a miarole pocket and has been etched by aggressive hot fluids. The strange looking pattern on its surface developed because r- and z-rhombohedral faces were effected by the fluids to a different degree. Because the crystal is a Dauphiné twin, and Dauphiné twins are penetration twins, each of the faces represents a mosaic of irregular r- and z-rhombohedral parts (just like the entire crystal is an irregularly looking mosaic). Unfortunately, there is no simple method to determine if the bright patches correspond to r- or z-faces.
+
+ 960x960 122kb
+
+You will note that each irregular patch has a straight border at the edge of a crystal face. The reason is not that the twin domain ends there - just the opposite - it continues on the neighboring crystal face: if the surface of a patch belonging to a certain twin domain corresponds to a z-face, the continuation of that patch must correspond to an r-face on an adjacent crystal face, and as a consequence one surface is etched, the other one not. To show the geometry of the twin domains more clearly, the patches have been colored blue and golden in the image to the right. 
+To my knowledge, this etching is natural, and I have not enhanced the contrast of the image in any way. To see such a strong pattern, one normally needs to etch the crystal with hydrofluoric acid, but the hot fluids in a pegmatite or miarole pocket like the one the crystal probably came from are also very aggressive agents. 
+
+20mm 
+
+ 800x1000 97kb - 
+ 1600x2000 324kb
+
+On   this smoky quartz crystal from Morocco one can see two x-faces, one at the upper right corner of the left m-face, another at the upper right corner of the central m-face, so the crystal must be a Dauphiné Law twin. This can also be concluded from the etching pattern on the rhombohedral faces which is clearly visible on the upper left face: the patches have irregular boundaries that are typical for penetration twins like Dauphiné Law twins, and not straight ones as in contact twins like Brazil Law twins.
+
+Since the x-faces are on the right side of the prism faces, this is a right/right twin.
+
+In addition to the x-faces, there are also two types of steep rhombohedral faces that sit in between the prism and the (normal) rhombohedral faces.
+
+5mm  
+
+ 855x1006 108kb - 
+ 1710x2012 344kb
+
+This   rock crystal from Arkansas has 2 adjacent diamond-shaped s-faces, so it must be twinned. We are lucky: the s-faces are slightly striated, well visible on the left one. If the s-face shows a striation, it is always oriented parallel to the borders of the r-face, so the rhombohedral face in the center would be a z-face. However, the right s-face's stripes are oriented in the same direction (not visible on the image), which would make the central face an r-face - and that can't be, except the crystal is a right/right or Dauphiné Law twin. 
+
+ Brazil Law Twins 
+
+H.264-movie, 256x256px:
+
+ brazil_twin_1.mp4 376kb
+
+In a Brazil Law twin right and a left hand quartz structures are combined in a single crystal. Although Brazil Law twinning is very common in quartz crystals, morphological Brazil Law twins in which the twinning is reflected in the position of crystal faces are extremely rare. I don't own one and have never seen one in nature or in a museum, and there is not even a picture of one in Rykart's quartz monograph. To show you an image, I can only direct you to two other websites: 
+1.) www.faden.it presents images of Brazil Law twins 
+2.) on the website of Uniun Cristallina a very good image of a Brazil Law twin can be found.
+
+The tiny interlocked quartz grains that make up cryptocrystalline quartz varieties are mostly heavily twinned polysynthetically according to the Brazil Law on a microscopic scale. 
+
+Brazil Law twins can be viewed as contact twins , because the twinning boundaries of the subindividuals run parallel to the composition planes, which lie perpendicular to the 3 a-axes. But since the twin domains are intergrown and hidden in a single crystal that often looks indistinguishable from an untwinned crystal, Brazil Law twins are also penetration twins . In a cross-section of a crystal the twin domains of a Brazil Law twin form a characteristic pattern made of straight lines and triangles, as shown schematically in the figure to the right. This pattern can be made visible either by etching a cross section or with the aid of polarized light. As in Brazil Law twins, the size and shape of the twin domains can vary and the shares of left- and right-handed parts in a crystal don't have to be equal. 
+
+Brazil Law twins are   optical twins : Light waves that pass through a right or left quartz along its c axis change the orientation of their oscillation plane in either left or right direction. The effects of the right and left parts of the twinned crystal will at least partially cancel out each other, and if the left and right quartz portions are equal, the light will pass apparently unaltered. In a slice of a twinned crystal the left- and right-handed portions can still be made visible in polarized light, of course.
+
+Many amethysts are twinned polysynthetically according to the Brazil Law: Large parts of the amethyst crystals are composed of alternating layers of left- and right-handed quartz. The gauge of individual layers is normally less than 1 mm. This peculiar pattern develops primarily in sectors under the positive rhombohedral faces r which are usually larger, while the parts under the z faces remain untwinned. The fingerprint-like pattern can sometimes be directly observed on rhombohedral faces of amethysts, in particular in specimen from Uruguay, but most of the times it can only be made visible by etching cross sections of crystals. 
+
+20mm 
+
+ 800x960 52kb - 
+ 1600x1920 162kb
+
+Brazil   Law twins can usually only be visually identified by growth and etching patterns on crystal faces. This rock crystal shows typical triangular Brazil Law twinning domains at the central and lower parts of its prism faces, that are more shiny and more transparent than the rest of the prism face. The crystal is from Joaquim Felício, Minas Gerais, Brazil.
+
+10mm 
+
+ 720x800 101kb - 
+ 1440x1600 329kb
+
+A detail view of the Brazil Law twin domains of the same crystal from Joaquim Felício. Under a different illumination the twin domains stand out as shiny roughly triangular patches. This more regular pattern is very different from the irregular patches seen on Dauphiné Law twins.
+
+ Japan Law Twins 
+
+The Japan Law is the only common twinning law of quartz where the two twin crystals are visible as individuals. In a Japan Law twin the c-axis of two crystals meet at an angle of 84°33', with two of the m prism faces of both crystals being parallel. The result is usually a V-shaped twin, rarely a slightly oblique cross. Very often the Japan Law twin looks platy, because the crystal grows faster between the two arms. 
+
+Japan Law twin quartzes have initially been labeled as La Gardette twins , after the first locality in the French Alps where this type of twinning has been described before the large number of localities in Japan were discovered. Japanese twins are quite rare and a newly discovered locality will always be mentioned in collector's magazines. 
+
+Like   Brazil twins, Japan Law twins are contact twins . The twinning plane is { 1 1  2  2 }, corresponding to the form  ξ (the Greek letter xi ), a negative trigonal bipyramid , similar to the positive trigonal bipyramid and its s-face , but flatter. The form ξ is a very rare crystal face that lies between the r and z face. Interestingly, Japan Law twins can additionally be Brazil as well as Dauphiné Law twins. 
+
+20mm  
+
+ 1390x930 120kb -
+ 2780x1860 366kb
+
+Very   often Japan Law twins grew in between needle quartz, like this specimen from the Mondo Nuevo Mine, Conchucos, La Libertad, Peru. This makes for a stark contrast as the Japan Law twins are much larger and flattened. 
+
+10mm  
+
+ 960x925 116kb - 
+ 1920x1850 389kb
+
+Japan   Law twins tend to be platy, and can have an almost square shape or one that resembles a heart, like this one from Andilamena, Madagascar. 
+
+5mm 
+
+ 1360x1152 270kb - 
+ 2720x2304 742kb
+
+A   Japan Law twin amethyst from Lac Alaotra, Madagascar. This one has amethyst coloration well inside the Japanese twin, but phantom-like around a colorless core, Japan Law twins with amethyst-colored scepters on their tips seem to be a bit more common. Like many other amethyst, the specimen carries inclusions of iron oxides and hydroxides, small black spheres of either hematite or goethite as a phantom in the core and needle-like goethite inclusions in the outer parts. 
+
+ca.20mm 
+
+ 864x800 107kb - 
+ 1728x1600 323kb
+
+A   very nice smoky Japan Law twin from the Ortiz Mountains, Ortiz Land Grant, Santa Fe Country, New Mexico. Smoky quartz Japan Law twins are quite unusual, and this one even shows a nice zonar color distribution that indicates how the twin started with a stubby, almost quadrangular shape. The photo was taken at the Mineral Museum at Socorro in New Mexico, a state renown for its numerous Japan Law twin locations.
+
+ Footnotes 
+
+ 1 
+Some say that there is no "pseudosymmetry" and accordingly call the habit of such twins hexagonal. I disagree: natural crystals - twinned or untwinned - never show symmetry as a whole . Their shape obeys certain mathematical relations, so they all share certain geometrical properties, but only idealized crystals are symmetric. When one calls a mineral "isometric", for example, she does not mean to say that the mineral in all its occurrences is isometric, but that the structural elements that determine the external shape of the crystals show isometric symmetry. In that sense, a crystal is said to have pseudohexagonal habit when its external shape suggests the presence of an internal hexagonal structure, while, in fact, the crystal lattice possesses a different symmetry.
+
+ Printer Friendly Version 
+ Copyright © 2005-2016, A.C. A k h a v a n 
+
+ Impressum 
+    -    Source: http://www.quartzpage.de/crs_twins.html
+

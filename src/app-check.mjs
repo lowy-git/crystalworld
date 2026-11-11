@@ -617,29 +617,65 @@ check("包体全部落在晶体内部", run(`INC.every(f => f.pts.every(p => ins
 }
 run(`state.alpha = null; state.transp = null; state.luster = null; state.incDensity = 0.6; state.incSize = 1; state.inclusion = "none"; buildInclusions(); renderTransp(); draw();`);
 
-// ── 第八轮：石英道芬律 / 巴西律（第九轮改成"转变双晶"的正确表现）──
+// ── 第八轮：石英道芬律 / 巴西律（真实穿插双晶：绕 c 转 180° / {11-20} 镜面反射。
+//    quartzpage（crs_twins/crs_forms）：道芬律 R+R 穿插、r/z 锥面不可分辨 → 伪六方；
+//    巴西律 R+L 以 {11-20} 柱面为镜面；两者的并集都会把单晶的 r/z 交替抹平）──
 run(`selectMineral("quartz"); state.habitId = "dauphine-twin"; rebuildGeometry(); syncPanels();`);
-check("石英道芬律：转变双晶（mode=domain, 域界 ⟂c = 基面 [001]）", (() => {
+check("石英道芬律：绕 [0001] 转 180° 的穿插双晶（mode=axis, axis=[001]）", (() => {
   const t = run(`JSON.stringify(habit().twin)`);
-  return /"mode":"domain"/.test(t) && /"plane":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 0;
+  return /"mode":"axis"/.test(t) && /"axis":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 180;
 })(), run(`JSON.stringify(habit().twin)`));
-check("道芬律外形与单晶一致（不做两体复制，18 面）", run(`variant().counts.f`) === 18, `f=${run(`variant().counts.f`)}`);
-check("道芬律有域界截面（内部虚线，不参与面数）", (() => {
-  const d = run(`GEO.domain ? GEO.domain.length : 0`);
-  return d >= 3 && run(`variant().counts.f`) === 18;
-})(), `domain 点数=${run(`GEO.domain ? GEO.domain.length : 0`)}`);
-check("道芬律不可拆解（noSplit，拆解控件隐藏）", (() => {
-  run(`syncPanels(); syncPanels();`);
-  return run(`habit().twin.noSplit`) === true && run(`document.getElementById("splitBox").style.display`) === "none"
-    && run(`document.getElementById("domBox").style.display`) === "";
+check("道芬律并集：两体锥面同位共面合并——12 个锥面等面距（伪六方），共 18 面", (() => {
+  const r = run(`JSON.stringify((() => {
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const caps = GEO.faces.filter(f => Math.abs(f.n[2]) > 0.5);   // 锥面（法向竖直分量大）
+    return { n: GEO.faces.length, caps: caps.length,
+      uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size };
+  })())`);
+  const o = JSON.parse(r);
+  return o.n === 18 && o.caps === 12 && o.uni === 1;
+})(), `o=${run("JSON.stringify((() => { const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; const caps=GEO.faces.filter(f=>Math.abs(f.n[2])>0.5); return { n: GEO.faces.length, caps: caps.length, uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size }; })())")}`);
+check("道芬律并集是闭合流形（每条棱恰好属于两面，共享柱面已合并）", (() => {
+  return run(`(() => {
+    const cnt = new Map();
+    for (const f of GEO.faces) {
+      const L = f.loop;
+      for (let i = 0; i < L.length; i++) {
+        const a = L[i], b = L[(i + 1) % L.length];
+        const k = a < b ? a + "-" + b : b + "-" + a;
+        cnt.set(k, (cnt.get(k) || 0) + 1);
+      }
+    }
+    return [...cnt.values()].every(c => c === 2);
+  })()`) === true;
+})(), `f=${run("GEO.faces.length")}`);
+check("道芬律可拆解（splitDir = c 轴 [0,0,1]），拆开后个体是完整体", (() => {
+  run(`syncPanels();`);
+  return run(`document.getElementById("splitBox").style.display`) === ""
+    && run(`habit().twin.splitDir.join()`) === "0,0,1"
+    && run(`variant().hid.some(x => x)`) === true;
 })());
-run(`state.habitId = "brazil-twin"; rebuildGeometry(); syncPanels();;`);
-check("石英巴西律：{11-20} 镜面（mode=domain, plane=[11-20]）", (() => {
+run(`state.habitId = "brazil-twin"; rebuildGeometry(); syncPanels();`);
+check("石英巴西律：{11-20} 镜面反射（mode=mirror，R+L 左右形互生）", (() => {
   const t = run(`JSON.stringify(habit().twin)`);
-  return /"mode":"domain"/.test(t) && /"plane":\[1,1,-2,0\]/.test(t);
+  return /"mode":"mirror"/.test(t) && /"plane":\[1,1,-2,0\]/.test(t);
 })(), run(`JSON.stringify(habit().twin)`));
-check("巴西律 c 轴平行（夹角 0°，左右形互生）", run(`habit().twin.angle`) === 0);
-check("巴西律外形与单晶一致（18 面）", run(`variant().counts.f`) === 18, `f=${run(`variant().counts.f`)}`);
+check("巴西律：镜面含 c 轴（plane l=0 → 两体 c 轴平行）且并集锥面同样等面距（伪六方）", (() => {
+  const r = run(`JSON.stringify((() => {
+    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const caps = GEO.faces.filter(f => Math.abs(f.n[2]) > 0.5);
+    return { n: GEO.faces.length, caps: caps.length,
+      uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size };
+  })())`);
+  const o = JSON.parse(r);
+  return run(`habit().twin.plane[3]`) === 0 && o.n === 18 && o.caps === 12 && o.uni === 1;
+})(), `o=${run("JSON.stringify((() => { const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; const caps=GEO.faces.filter(f=>Math.abs(f.n[2])>0.5); return { n: GEO.faces.length, caps: caps.length }; })())")}`);
+check("单晶石英 r/z 交替可见（r 面 form=1 与 z 面 form=2 并存，r 大 z 小）", (() => {
+  run(`state.habitId = "prismatic"; rebuildGeometry();`);
+  const r = run(`JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })`);
+  const o = JSON.parse(r);
+  return o.forms.includes(1) && o.forms.includes(2) && o.f === 18;
+})(), `o=${run("JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })")}`);
 run(`state.habitId = "japan-twin"; rebuildGeometry(); syncPanels();;`);
 check("日本律底部被截平（有截断面 form=-2）", (() => {
   return run(`GEO.faces.some(f => f.form === -2)`) === true;

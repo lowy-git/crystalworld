@@ -1,0 +1,408 @@
+ 
+
+ The Quartz Page: Crystal Forms 
+
+ Crystal Forms 
+
+ Chapter's Topics 
+
+ Top 
+
+ Basic Forms of Quartz 
+ c Form 
+ m Form 
+ M Form 
+ r Form 
+ s Form 
+ x Form 
+ z Form 
+ Ψ Form 
+ Rhombohedra 
+ Prism 
+ Bipyramid 
+ Trapezohedron 
+ Steep Rhombohedra 
+ Other Forms 
+
+ Chapter's Topics 
+ Top 
+
+ Basic Forms of Quartz 
+ c Form 
+ m Form 
+ M Form 
+ r Form 
+ s Form 
+ x Form 
+ z Form 
+ Ψ Form 
+ Rhombohedra 
+ Prism 
+ Bipyramid 
+ Trapezohedron 
+ Steep Rhombohedra 
+ Other Forms 
+
+ Quartz 
+ Introduction 
+ Mineralogy 
+
+ Mineralogical Data 
+ Types of Quartz 
+ Formation and Growth 
+ Occurrence 
+ Quartz as a Rock-Forming Mineral 
+ Origin of Quartz 
+-->
+ The Silica Group 
+
+ Properties 
+
+ Chemical 
+ Physical 
+ Structure 
+
+ Crystals 
+
+ Introduction 
+ Basic Terms 
+ Forms 
+ Habits 
+ Twinning 
+ Macroscopic Structure 
+ Data and Renderings 
+
+ Special Topics 
+
+ Alpine-Type Fissures 
+ Inclusions 
+ Gwindel 
+ "Diamonds" 
+ Ouachita Mountains 
+ Herkimer 
+
+ Varieties 
+ Overview 
+ Macrocrystalline 
+
+ Amethyst 
+ Ametrine 
+ Aventurine 
+ Blue Quartz 
+ Cat's Eye 
+ Citrine 
+ Eisenkiesel 
+ Hawk's Eye 
+ Ferruginous Quartz 
+ Milky Quartz 
+ Morion 
+ Pink Quartz 
+ Prase 
+ Prasiolite 
+ Rock Crystal 
+ Rose Quartz 
+ Smoky Quartz 
+ Tiger's Eye 
+
+ Cryptocrystalline 
+
+ Agate 
+ Carnelian 
+ Chalcedony 
+ Chert 
+ Chrysoprase 
+ Flint 
+ Heliotrope 
+ Jasper 
+ Onyx 
+ Plasma 
+ Sard 
+ Silica Sinter 
+
+ Growth Forms 
+ Synonyms 
+
+ References 
+
+ Literature 
+ Specimen List 
+
+ Index 
+
+ Home 
+ Impressum 
+ Copyright 
+ About this Site 
+ News 
+
+ last modified: Monday, 16-Jul-2012 00:30:24 CEST 
+
+ Document status: almost complete 
+
+A crystal can be viewed as being composed of different regular geometrical bodies. These basic bodies are the forms of the crystal (see the Basic Terms section for an explanation). 
+
+Of the many possible crystallographic forms of quartz, about 40 can be found in nature. Each of the forms is given a descriptive name, a specific scientific numerical symbol that reflects its relation to the crystal lattice, and the corresponding faces on the crystal are given a specific greek or latin letter. Most of the forms (about 30) can rarely be observed, so I will focus mainly on those that are common and important. But even from these few forms a surprisingly large number of different shapes can be derived.
+
+ Basic Crystal Forms of Quartz 
+
+The following table lists the most important crystallographic forms in quartz. A more detailed description for each of them is given below. A comprehensive list of quartz crystallographic forms can be found in Rykart, 1995 , along with an estimate of their abundance.
+
+ Name of Form 
+ Symbol 
+ Miller-Bravais Indices hkil (left      right) 
+
+   Positive Rhombohedron 
+ r 
+ { 1 0 1 1 } 
+
+   Negative Rhombohedron 
+ z 
+ { 0 1 1 1 } 
+
+   Hexagonal Prism 
+ m 
+ { 1 0 1 0 } 
+
+   Basal Pinacoid 
+ c 
+ { 0 0 0 1 } 
+
+   Trigonal Bipyramid 
+ s 
+ { 2 1 1 1 }    { 1 1 2 1 } 
+
+   Positive Trapezohedron 
+ x 
+ { 6 1 5 1 }    { 5 1 6 1 } 
+
+   Steep Rhombohedra, for example 
+ -Ψ M 
+ { 0.11. 11 .1 }
+
+{ 3 0 3 1 } 
+
+H264-movie, 256x256px:
+
+ left_quartz.mp4 367kb
+
+The first picture shows an idealized rendering of a quartz crystal. There is a link to a H264-movie below this and all the other pictures, showing the crystal rotating around its c-axis. 
+
+The different faces correspond to different crystal lattice planes. They can be related to different forms, and accordingly the whole crystal can be viewed as the intersection of these forms. The rendered quartz crystal, for example, is the intersection of 5 forms: r, z, m, s, and x.
+
+ Rhombohedron - r and z 
+There are two common rhombohedral forms in quartz crystals, the positive rhombohedron r and the negative rhombohedron z . These forms, in particular the rhombohedron r , occur in almost all quartz crystals. The corresponding crystal faces are called the r-face and the z-face .
+
+H264-movie, 256x256 px:
+
+ form_r.mp4 166kb
+
+The geometry of these forms is identical, both look almost like cubes, but the angle at the corners of the parallelepipeds are 85.2° and 94.8°, and not 90°. 
+
+To the right you can see the r -rhombohedron or r-form , the next picture shows a z -rhombohedron or z-form .
+
+H264-movie, 256x256 px:
+
+ form_z.mp4 161kb
+
+What differs between the r and z-forms is their relative position to the crystal lattice: the z-form is rotated around the c-axis by 60° relative to the r-form.
+
+H264-movie, 256x256 px:
+
+ form_r+z.mp4 277kb
+
+A simple additive combination of both forms is depicted in the third picture. The shape might remind some of you of twinned crystals in pyrite or galena, but this is not a twin, and you never see an untwinned crystal shaped like that in quartz. 
+
+The shape of a crystal can be viewed as an intersection of forms. An intersection of bodies corresponds to the volume that all bodies share. In the right figure you would "cut off" everything that only belongs to one rhombohedron and you would get the intersection, in this case a hexagonal bipyramid .
+
+H264-movie, 256x256 px:
+
+ form_r+z_trans.mp4 256kb
+
+In the next picture the hexagonal bipyramid is shown together with a singe translucent rhombohedron to demonstrate which crystal faces it contributes to the overall shape.
+
+Quartz crystals tend to grow a bit faster on the z faces than the r faces. The first guess would be that because of that the z faces are larger, but the opposite is true. Growth occurs perpendicular to a face, so if one face grows faster than another, then its surface actually shrinks. Thus the r-faces on quartz crystals are usually larger, and sometimes z-faces are completely absent. Accordingly, the intersection of the r- and z-forms in quartz crystals is usually not a perfect hexagonal bipyramid but shows trigonal symmetry. In crystals that are twinned after the Dauphiné law r- and z-faces cannot be distinguished and the faces of the pyramid tend to be sized more equally.
+
+ Hexagonal Prism - m 
+
+H264-movie, 256x256 px:
+
+ form_m.mp4 192kb
+
+This   form is also present on most quartz crystals that grew freely into a pocket: because of their specific growth pattern quartz crystals grown in volcanic druses (e.g. amethyst geodes) often lack m-faces. Crystals with a so-called Cumberland habit are characterized by very small or missing m-faces.
+
+The hexagonal prism is actually an open form that only consists of the prism "walls", called m-faces . Its faces lie parallel to the walls of the quartz unit cell, as indicated in the figure below the rendering, with the unit cell tinted blue. In the figure and in the computer rendering it is terminated at its top and bottom by the so-called c-face , corresponding to the basal plane or basal pinacoid (see below for an introduction). 
+
+ Striation 
+
+The m-face very often shows a characteristic horizontal striation (perpendicular to the c-axis), a very distinctive feature of quartz crystals that helps identifying them even when crystal tips are missing. Often you read that these little steps in the prism faces are caused by rhythmic growth driven by external factors. This is not true, however. 
+
+First, one should keep in mind that striations are also observed in other minerals, tourmaline group minerals and pyrite being good examples, but no one suggests that these are caused by fluctuations in the environmental conditions. The idea that it is related to changes in growth speed in quartz is based on the fact that the steps run perpendicular to the direction of fastest growth, and that many quartz crystals tend to narrow towards the tips, but in fact rhythmic changes in the preferred habit should not lead to striations or narrowing. If striation in quartz was caused by external factors, it would be difficult to explain that it is usually missing completely on other crystal faces. 
+
+Second, one would expect to see similar step patterns on quartz crystals from the same pocket, but this is not the case, the striations do not even match on different m-faces of the same crystal. 
+
+ The strongest argument against an external cause of striations comes from experiments with industrially grown quartz. This quartz is grown under steady conditions in NaOH solutions and normally does not show striation. Instead, the m-faces show asymmetric growth hillocs on the surface (NaOH solution is chosen because it gives the high growth rates needed for a commercial production), which sounds as if the proponents of an external cause were right. But industrially grown quartz does develop striations when it is grown in a NaCl solution at relatively low speed (Hosaka and Taki, 1978, in Miyata et al., 1989 ). "Relatively low speed" means relative to the desired growth rates for industrial production - it is still very fast compared to growth under most natural conditions. From studies of fluid inclusions in quartz crystals it is known that a NaCl solution is much closer to natural brines than a NaOH solution. So it is an inherent property of the prism faces to develop striation under most natural conditions.
+
+Quartz crystals with certain growth forms sometimes lack striation. It is often absent on skeleton quartz and scepter quartz crystals. The striation is generally less pronounced on small crystals. 
+
+ Basal Pinacoid - c 
+The basal pinacoid, also called the basal plane is a common form in most minerals, but the corresponding face, the c-face , is extremely rare in quartz. Its presence is perhaps only caused by corrosive processes. The website Micro-Taunus presents amethyst crystals with a small c-face found at the Four Peaks Mine, Arizona. It has been shown that the faces from this locality have developed by dissolution on surfaces that were first mechanically broken and overgrown ( Kawasaki et al., 2006 ). Similar faces are seen on ametrine crystals from Bolivia, and these also seem to have developed by a dissolution process.
+
+Calling this form "basal" is somewhat redundant, that notion is already contained in the term pinacoid. 
+
+ Trigonal Bipyramid - s 
+
+H264-movie, 256x256 px:
+
+ form_s.mp4 140kb
+
+20mm  
+
+ 932x1006 93kb -
+ 1864x2012 298kb
+
+The   trigonal bipyramid is remarkable because the form is made of triangles, but on a crystal it is usually present as perfect rhombs, called the s-face . This form is by far not as common as the r, z, or m faces, and completely absent at many environments. It is unlikely to be found on amethyst, ferruginous, pink, or milky quartz. 
+
+The specimen on the second image from Amputofiamendia, Madagascar, shows an unusually large, almost diamond-shaped s-face. 
+
+10mm 
+
+ 1007x1520 98kb - 
+ 2014x3039 303kb
+
+On   crystals with a Dauphiné habit the s-face is typically an elongated parallelogram. These clear rock crystals are from Mount Ida, Arkansas. 
+
+0mm  
+
+ 1340x986 242kb - 
+ 2679x1971 692kb
+
+The   s-face is sometimes only visible as a thin line, as in this Herkimer diamond. Herkimer diamonds very often show the s-face, in fact each of the ca. 30 crystals I've collected has one or more of them.
+
+ Trapezohedron - x 
+
+ x-form 
+H264-movie, 256x256 px:
+
+ form_x.mp4 129kb
+
+A trapezohedron is a very irritating form, you need to see the movie to get an idea of its shape. It is made of six equal but distorted quadrangles (a crystallographic form is supposed to be enclosed by equally shaped planes). 
+
+The positive trapezohedron is the characteristic form of quartz, it reflects the symmetry properties of quartz crystals: 3-fold rotational symmetry around the c-axis, 2-fold rotational symmetry around the a-axes, and lack of mirror symmetry. The presence of this form is what makes quartz a member of the trigonal-trapezohedral crystal class, with the according Hermann-Maugin symbol 3 2 . The trapezohedron shows enantiomorphy , that is, it can be left- or right-handed, just like quartz crystals. The x-face is also the best crystal face to determine if a crystal is right-handed, left-handed, or twinned.
+
+The characteristics of the form can much better be grasped when a trapezohedron is wider than the very slim x-form, so there are two other images and movies for demonstration. 
+
+ Left Trapezohedron 
+H264-movie, 256x256 px: 
+ trapezo_left.mp4 129kb
+
+ Right Trapezohedron 
+H264-movie, 256x256 px: 
+ trapezo_right.mp4 129kb
+
+The form looks a bit like a badly twisted rhombohedron, one could say either twisted left- or rightward. In both movies the forms rotate clockwise, and they are illuminated from the left. Nevertheless the forms appear to be mirror images of each other. Once again, both "wide" trapezohedra in the left and right image are different from the slim x-form, and are only shown as an example of what trapezohedra look like. 
+
+The corresponding crystal face of the trapezohedron x is called x-face and, interestingly, very often manifests as a simple triangle at the upper left or right corner of an m-face. Although this is difficult to estimate, I would say it is even more rare than the s face. At some locations, like the Central Alps in Switzerland, it is quite common, however.
+
+There is also a negative trapezohedron , and a corresponding -x face , ( {  1  6  5  1 } for right and { 1 5  6  1 } for left-handed crystals), that is found at the same position as the positive trapezohedron, but under the z face. It is much rarer than the positive trapezohedron.
+
+The x-face seems to be indicative of very slow crystal growth. Like the s-face, it is unlikely to be found on amethyst, ferruginous, pink, milky quartz, or generally any quartz with a high content of impurities.
+
+10mm 
+
+ 750x960 102kb - 
+ 1500x1920 352kb
+
+A   small, clear smoky quartz crystal from the Val Giuv, Graubünden, Switzerland, with a large, but rough x-face. The x-face is on the right side, thus the crystal might be a "right quartz" (one would first have to check for the position of the other faces and other signs of twinning, but it is in fact untwinned). The dull surface of the x-face is not unusual, in this case the crystal has been partially covered by chlorite mica, so the effect is amplified. The brighter faces on the right side are another trapezohedral face (possibly the u-face) and a small s-face.
+
+10mm 
+
+ 800x1004 83kb - 
+ 1600x2008 280kb
+
+A   small, perfectly clear smoky quartz crystal from the same location as the former specimen that shows a very large x-face, along with an s-face (the small bright bar to the right), steep rhombohedra, and an additional, dull trapezohedral face, perhaps the u-face, between x and s.
+
+The crystal shows a number of irregular lines or "cracks" that run vertically through the frontal m- and x-face, so called sutures . Often you read that these indicate twin boundaries in a crystal, but as you can see, this is clearly not so (more on this can be found in the chapter Twinning ).
+
+10mm 
+
+ 1000x1000 103kb - 
+ 2000x2000 290kb
+
+If   x-faces get very large, their shape changes as they replace large portions of the prism faces. The x-faces on the three large rock crystals are the big, dull, relatively bright, and roughly trapezohedral faces on the frontal prism. The x-faces are on the left side of the central rhombohedral face, so all three large crystals are left-handed. The small crystal at the left end shows a dull x-face in its typical triangular shape, but on its right side. 
+
+These crystals also carry s-faces, visible as relatively dark narrow triangular faces left to the large rhombohedral faces. Their shape deviates from the typical diamond-shape because the hexagonal prism gets narrower to the tip.
+The specimen is from the Kullu Valley, Himachal Pradesh, India. 
+
+20mm 
+
+ 1007x1520 193kb - 
+ 2014x3039 660kb
+
+As   could also be seen in the former specimen, the crystal faces belonging to the various forms not only differ in their position but also in their surface properties. So certain faces can be more attractive for other minerals to settle on than others. This smoky quartz specimen has been selectively covered by green chlorite on the r-, z- and x-faces, whereas the prism faces remained mostly free and shiny. From Val Giuv, Tavetsch, Graubünden, Switzerland.
+
+Accessorial faces like the x- or s-face do not necessarily assume their "ideal" position at the rhombohedral face at the tip, but can also be found on the prism faces: there are 2 chlorite-covered x-faces at the left side and 1 at the right side of prism of the large crystal that look like triangular indentations. 
+
+ Steep Rhombohedra 
+
+H264-movie, 256x256 px:
+
+ form_M.mp4 129kb
+
+Steep rhombohedral forms are similar to the rhombohedra r and z, but are more elongated along the c-axis. Positive and negative rhombohedra are distinguished: those that are oriented like the rhombohedron r are called positive, and those that are oriented like the rhombohedron z are called negative. Their crystal faces are situated under the rhombohedron r and the rhombohedron z, respectively. There are a number of different steep rhombohedral forms and the respective faces are very difficult to distinguish without precise measurements, so most of the times, these faces are simply called "steep rhombohedral face" and no specific letter is assigned to them. The rendering shows the steep positive rhombohedron M , another common steep rhombohedral from is Ψ (the Greek letter "Psi").
+
+10mm  
+
+ 1242x1007 159kb - 
+ 2484x2014 537kb
+
+Smoky   quartz on microcline from Mount Malosa, Zomba District, Malawi, showing both large roughened x-faces and positive steep rhombohedral faces, possibly M-faces. 
+
+10mm  
+
+ 840x1006 113kb - 
+ 1680x2012 369kb
+
+The   picture shows a morion from Drammen, Norway, with a nice "Tessin" habit. The shiny faces are steep rhombohedral faces alternating with m-faces.
+
+10mm 
+
+ 1024x1496 180kb - 
+ 2048x2992 532kb
+
+On   these quartz crystals from Joaquim Felício, Minas Gerais, Brazil, very steep rhombohedral faces have almost completely replaced the m-faces under the z-faces and occupy three of the six sides of the prism. The thinner, darker prism face in the center of the large crystal is one of the three m-faces, and the two neighboring faces are steep negative rhombohedra called Ψ (the Greek letter "Psi") with their typical surface structure. 
+
+10mm 
+
+ 1007x1488 206kb - 
+ 2014x2976 589kb
+
+A   different view of the same specimen from Joaquim Felício, demonstrating the surface structure of the Ψ-faces. The Ψ-faces are typically covered with numerous arrowhead-shaped indentations that - depending on the handedness of the crystal - point either in the left of the right direction. These are growth patterns, not etching patterns - as you can see, the other faces are perfectly plane and do not show any signs of dissolution. 
+
+5mm 
+
+ 660x924 101kb - 
+ 1320x1848 321kb
+
+Another   crystal with steep rhombohedra Ψ from Minas Gerais, Brazil. The clear bottom part is the usual m-face, while the Ψ-face shows its typical rough surface structure caused by triangular dents. If you look at it on the larger image, you will note that they all point in the same direction. The face is interrupted by steps that correspond to the z-face and to other steep rhombohedral forms. The shiny face to the left is an s-face which is not a perfect rhomb as usual because its lower right side borders the Ψ-face. Note that this is a right-handed quartz, because the s-face is right of the r-face.
+
+ Other Forms 
+
+5mm 
+
+ 1000x1424 149kb - 
+ 2000x2848 448kb
+
+A   rock crystal with what appear to be the rarely observed a-faces . They can be found between the m-faces and lie perpendicular to the a-axes (or mathematically more exact, they lie normal to the axes), as if the m-faces had been rotated by 30°. One a-face can be seen to the left of the central m-face and another below the shiny diamond-shaped s-face. Here they are very rough and covered by dissolution patterns that can frequently seen in corroded specimen, so the faces might in fact have formed by selective dissolution. On the other hand, there were no other pronounced dissolution patterns on this crystal or others from the same pocket, but two other crystals showing similar faces, so it might as well be a growth pattern. From an alpine-type fissure at Storenuten mountain, north of the Ringedalsvatnet lake at Odda, Hordaland, Norway. 
+
+ Further Information, Literature, Links 
+
+To get a good overview of the many crystal forms and habits of quartz, Rudolf Rykart's Quartz Monographie is the best source I know, but it's written in German. 
+The standard book in English language is C. Frondel's introduction to Silica Minerals . 
+In the Internet, Marino Bignami's site www.faden.it is a very good source, albeit in Italian.
+
+ Printer Friendly Version 
+ Copyright © 2005-2013, A.C. A k h a v a n 
+
+ Impressum 
+    -    Source: http://www.quartzpage.de/crs_forms.html
+
