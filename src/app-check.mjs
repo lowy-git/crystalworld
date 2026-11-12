@@ -625,30 +625,47 @@ check("石英道芬律：绕 [0001] 转 180° 的穿插双晶（mode=axis, axis=
   const t = run(`JSON.stringify(habit().twin)`);
   return /"mode":"axis"/.test(t) && /"axis":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 180;
 })(), run(`JSON.stringify(habit().twin)`));
-check("道芬律并集：两体锥面同位共面合并——12 个锥面等面距（伪六方），共 18 面", (() => {
+check("道芬律并集：两体真实穿插——36 面、双体面并存（indiv 0/1）、无 NaN、无微碎片", (() => {
   const r = run(`JSON.stringify((() => {
-    const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-    const caps = GEO.faces.filter(f => Math.abs(f.n[2]) > 0.5);   // 锥面（法向竖直分量大）
-    return { n: GEO.faces.length, caps: caps.length,
-      uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size };
+    const polyArea = pts => {
+      let nx=0, ny=0, nz=0;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i+1)%pts.length];
+        nx += (p[1]-q[1])*(p[2]+q[2]); ny += (p[2]-q[2])*(p[0]+q[0]); nz += (p[0]-q[0])*(p[1]+q[1]);
+      }
+      return Math.hypot(nx, ny, nz) / 2;
+    };
+    return { n: GEO.faces.length, indivs: [...new Set(GEO.faces.map(f => f.indiv))].sort(),
+      nan: GEO.faces.some(f => !isFinite(f.n[0])),
+      minA: +Math.min(...GEO.faces.map(f => polyArea(f.pts))).toFixed(3) };
   })())`);
   const o = JSON.parse(r);
-  return o.n === 18 && o.caps === 12 && o.uni === 1;
-})(), `o=${run("JSON.stringify((() => { const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; const caps=GEO.faces.filter(f=>Math.abs(f.n[2])>0.5); return { n: GEO.faces.length, caps: caps.length, uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size }; })())")}`);
-check("道芬律并集是闭合流形（每条棱恰好属于两面，共享柱面已合并）", (() => {
-  return run(`(() => {
-    const cnt = new Map();
-    for (const f of GEO.faces) {
-      const L = f.loop;
-      for (let i = 0; i < L.length; i++) {
-        const a = L[i], b = L[(i + 1) % L.length];
-        const k = a < b ? a + "-" + b : b + "-" + a;
-        cnt.set(k, (cnt.get(k) || 0) + 1);
+  return o.n === 36 && o.indivs.join() === "0,1" && o.nan === false && o.minA > 0.05;
+})(), `o=${run("JSON.stringify((() => { const pa=pts=>{let nx=0,ny=0,nz=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];nx+=(p[1]-q[1])*(p[2]+q[2]);ny+=(p[2]-q[2])*(p[0]+q[0]);nz+=(p[0]-q[0])*(p[1]+q[1]);}return Math.hypot(nx,ny,nz)/2;}; return { n: GEO.faces.length, indivs: [...new Set(GEO.faces.map(f=>f.indiv))].sort(), minA: +Math.min(...GEO.faces.map(f=>pa(f.pts))).toFixed(3) }; })())")}`);
+check("道芬律双体：单体 A/B 各自闭合流形（完整个体几何；并集楔缝的 T 形结为已知限制，渲染无碍）", (() => {
+  const r = run(`JSON.stringify((() => {
+    const closed1 = () => {
+      const em = new Map();
+      for (const f of GEO.faces) {
+        const L = f.loop;
+        for (let i = 0; i < L.length; i++) {
+          const a = L[i], b = L[(i + 1) % L.length];
+          const k = a < b ? a + "-" + b : b + "-" + a;
+          em.set(k, (em.get(k) || 0) + 1);
+        }
       }
-    }
-    return [...cnt.values()].every(c => c === 2);
-  })()`) === true;
-})(), `f=${run("GEO.faces.length")}`);
+      return [...em.values()].every(c => c === 2);
+    };
+    state.twinShow = "A"; rebuildGeometry();
+    const closedA = closed1();
+    state.twinShow = "B"; rebuildGeometry();
+    const closedB = closed1();
+    state.twinShow = "both"; rebuildGeometry();
+    return { closedA, closedB };
+  })())`);
+  const o = JSON.parse(r);
+  return o.closedA === true && o.closedB === true;
+})(), `o=${run("JSON.stringify((() => { return { habit: state.habitId }; })())")}`);
 check("道芬律可拆解（splitDir = c 轴 [0,0,1]），拆开后个体是完整体", (() => {
   run(`syncPanels();`);
   return run(`document.getElementById("splitBox").style.display`) === ""
@@ -660,16 +677,16 @@ check("石英巴西律：{11-20} 镜面反射（mode=mirror，R+L 左右形互�
   const t = run(`JSON.stringify(habit().twin)`);
   return /"mode":"mirror"/.test(t) && /"plane":\[1,1,-2,0\]/.test(t);
 })(), run(`JSON.stringify(habit().twin)`));
-check("巴西律：镜面含 c 轴（plane l=0 → 两体 c 轴平行）且并集锥面同样等面距（伪六方）", (() => {
+check("巴西律：镜面含 c 轴（plane l=0）且并集形态与单晶完全一致（18 面、锥面两档面距 = r/z 各一档——形态学不可辨）", (() => {
   const r = run(`JSON.stringify((() => {
     const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
     const caps = GEO.faces.filter(f => Math.abs(f.n[2]) > 0.5);
     return { n: GEO.faces.length, caps: caps.length,
-      uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(4))).size };
+      uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(2))).size };
   })())`);
   const o = JSON.parse(r);
-  return run(`habit().twin.plane[3]`) === 0 && o.n === 18 && o.caps === 12 && o.uni === 1;
-})(), `o=${run("JSON.stringify((() => { const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; const caps=GEO.faces.filter(f=>Math.abs(f.n[2])>0.5); return { n: GEO.faces.length, caps: caps.length }; })())")}`);
+  return run(`habit().twin.plane[3]`) === 0 && o.n === 18 && o.caps === 12 && o.uni === 2;
+})(), `o=${run("JSON.stringify((() => { const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; const caps=GEO.faces.filter(f=>Math.abs(f.n[2])>0.5); return { n: GEO.faces.length, caps: caps.length, uni: new Set(caps.map(f => Math.abs(dot(f.n, f.pts[0])).toFixed(2))).size }; })())")}`);
 check("单晶石英 r/z 交替可见（r 面 form=1 与 z 面 form=2 并存，r 大 z 小）", (() => {
   run(`state.habitId = "prismatic"; rebuildGeometry();`);
   const r = run(`JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })`);

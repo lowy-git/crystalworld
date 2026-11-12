@@ -4302,7 +4302,7 @@ function applyTwinStep() {
   if (s === 0) { state.twinShow = "A"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
   else if (s === 1) { state.twinShow = "B"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
   else if (s === 2) { state.twinShow = "both"; state.twinTint = true; state.alpha = 0.5; state.transp = "custom"; }
-  else { state.twinShow = "both"; state.twinTint = false; state.alpha = 1; state.transp = "opaque"; }
+  else { state.twinShow = "both"; state.twinTint = true; state.alpha = 1; state.transp = "opaque"; }   // 最终步保留双色：并集锥面按个体相间着色，双晶可见
   rebuildGeometry();   // twinShow 换个体必须重建：合体时画并集，只看单体时切成完整个体（否则过滤的是并集碎片）
   draw();
 }
