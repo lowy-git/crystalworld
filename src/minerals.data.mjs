@@ -944,21 +944,21 @@ export const MINERALS = [
       },
       {   // SMORF Orthoclase_064「Karlsbad law twin」（Elbogen, Bohemia——卡斯巴双晶类型地）
         id: "carlsbad-twin", zh: "卡斯巴双晶", en: "Carlsbad twin",
-        note: "卡斯巴律：贯穿双晶，双晶轴 [001]（绕 c 转 180°），结合面 {010}。两个体以 {010} 面相邻、反向穿插，外形像两根并排的槽。正长石最著名的双晶，命名源自捷克 Karlovy Vary 旁的 Elbogen（今 Loket）；SMORF Orthoclase_064 即 Elbogen 的卡斯巴双晶实体。",
-        twin: { mode: "axis", axis: [0, 0, 1], angle: 180,
+        note: "卡斯巴律：贯穿双晶，双晶轴 [001]（绕 c 转 180°），结合面∥{010}。两个体沿 c 拉长并错位半格互插：顶部两个体端面相交成 V 形缺口、底部另一体端面伸出（Mindat：「twinning axis is the c axis, rotation of 180 degrees, contact surface parallel to the side pinacoid」）。正长石最著名的双晶，命名源自捷克 Karlovy Vary 旁的 Elbogen（今 Loket）；SMORF Orthoclase_064 即 Elbogen 的卡斯巴双晶实体。",
+        twin: { mode: "axis", axis: [0, 0, 1], angle: 180, axisShift: -1.2,
           demo: {
             names: ["单体 A", "单体 B", "穿插视图", "卡斯巴"],
             steps: [
-              "单体 A：正长石个体——{010} 板面 + {110} 柱面 + {001}/{101} 端面，单斜晶系经典面貌",
-              "单体 B：绕 c 轴 [001] 转 180°——两个体以 (010) 为结合面互相穿插",
-              "两体穿插结合——半透明视图：两套柱面互相咬合，共用一根板体",
-              "卡斯巴双晶：贯穿双晶（双晶轴 [001]，结合面 {010}）——正长石最著名的双晶",
+              "单体 A：正长石个体——{010} 板面 + {110} 柱面 + {001}/{101} 端面，沿 c 轴拉长",
+              "单体 B：绕 c 轴 [001] 转 180° 并沿 c 错位半格——两端面一高一低",
+              "两体穿插结合——顶部两个体端面相交成 V 形缺口，底部另一体端面伸出",
+              "卡斯巴双晶：贯穿双晶（双晶轴 [001]，结合面∥{010}）——正长石最著名的双晶",
             ],
           } },
         forms: [
           { hkl: [0, 1, 0], k: 1.025, idx: "{010}", zh: "b 轴面", en: "b pinacoid" },
           { hkl: [1, 1, 0], k: 1.406, idx: "{110}", zh: "m 柱面", en: "m prism" },
-          { hkl: [0, 0, 1], k: 2.4, idx: "{001}", zh: "c 轴面", en: "c pinacoid" },
+          { hkl: [0, 0, 1], k: 3.4, idx: "{001}", zh: "c 轴面", en: "c pinacoid" },
           { hkl: [1, 0, 1], k: 3.141, idx: "{101}", zh: "{101} 轴面", en: "{101} pinacoid" },
         ],
       },

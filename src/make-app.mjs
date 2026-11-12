@@ -292,7 +292,14 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
     const T = habit.twin.mode === "mirror"
       ? (() => { const hkl = habit.twin.plane; const h3 = hkl.length === 4 ? [hkl[0], hkl[1], hkl[3]] : hkl; return twinMatrix(h3, res.L); })()
       : twinAxisMatrix(habit.twin.axis, res.L);
-    const shift = [0, 0, 0];            // 贯穿双晶两个体同心，靠并集露出对方
+    // 贯穿双晶两个体默认同心；axisShift = 个体 B 沿双晶轴的错位（单位 = d_hkl(001) = 1/|c*|）。
+    // 卡斯巴双晶两体沿 c 错位约半格：端面一高一低，顶部成 V 形缺口、底部另一体端面伸出——照片实物如此。
+    let shift = [0, 0, 0];
+    if (habit.twin.mode === "axis" && habit.twin.axisShift) {
+      const cLen = Math.hypot(res.L.C[0], res.L.C[1], res.L.C[2]);
+      const csLen = Math.hypot(res.L.Cs[0], res.L.Cs[1], res.L.Cs[2]);
+      shift = res.L.C.map(x => x / cLen * habit.twin.axisShift / csLen);
+    }
 
     const polysB = polys.map(f => {
       const nB = applyM(T, f.n);

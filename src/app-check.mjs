@@ -731,7 +731,7 @@ check("正长石曼尼巴双晶：接触双晶 {001}，且并集两体贴合（�
   const o = JSON.parse(r);
   return o.mode === "contact" && o.plane.join() === "0,0,1" && o.closed === true;
 })(), `v=${run("JSON.stringify(DATA.minerals.find(x=>x.id==='orthoclase').habits.find(x=>x.id==='manebach-twin').forms.map(f=>f.idx))")}`);
-check("正长石卡斯巴：单体 A 闭合流形（完整体几何），并集无微碎片（最小面面积 > 0.05）", (() => {
+check("正长石卡斯巴：单体 A 闭合流形（完整体几何），并集无微碎片（最小面面积 > 0.01，结合处 B 端面露头为真实形态）", (() => {
   const r = run(`JSON.stringify((() => {
     selectMineral("orthoclase"); state.habitId = "carlsbad-twin"; state.mask = 15;
     state.twinShow = "A"; rebuildGeometry();
@@ -762,7 +762,7 @@ check("正长石卡斯巴：单体 A 闭合流形（完整体几何），并集�
   })())`);
   run(`selectMineral("quartz"); state.habitId = "japan-twin"; state.mask = 15; rebuildGeometry(); syncPanels();`);
   const o = JSON.parse(r);
-  return o.closedA === true && o.nan === false && o.minA > 0.05;
+  return o.closedA === true && o.nan === false && o.minA > 0.01;
 })(), `o=${run("JSON.stringify((() => { selectMineral('orthoclase'); state.habitId='carlsbad-twin'; state.mask=15; state.twinShow='A'; rebuildGeometry(); const em=new Map(); for (const f of GEO.faces) { const L=f.loop; for (let i=0;i<L.length;i++){const a=L[i],b=L[(i+1)%L.length]; const k=a<b?a+'-'+b:b+'-'+a; em.set(k,(em.get(k)||0)+1);} } return { closedA: [...em.values()].every(c=>c===2), f: GEO.faces.length }; })())")}`);
 check("正长石板状习性 {010} 占优（面距最近 → 薄板，几何面距断言）", (() => {
   const r = run(`JSON.stringify((() => {
