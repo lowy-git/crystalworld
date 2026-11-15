@@ -1634,6 +1634,34 @@ const glLastOptsOk = (glw, vw, vh) => {
     return o.fIron === false && o.fTwin.join() === "penetration-twin,spinel-twin"
       && o.pTwin.join() === "iron-cross,spinel-twin";
   })(), `twin=${run("JSON.stringify(DATA.minerals.filter(m=>['fluorite','pyrite'].includes(m.id)).map(m=>m.id+':'+m.habits.filter(h=>h.twin).map(h=>h.id).join(',')))")}`);
+  check("移动端抽屉：悬浮钮开合侧栏/矿物页面板，遮罩收起，开 A 关 B 互斥", (() => {
+    const r = run(`JSON.stringify((() => {
+      const body = document.body, has = (c) => body.classList.contains(c);
+      document.getElementById("mobFabL").onclick();
+      const a = has("mobL");
+      document.getElementById("mobFabR").onclick();
+      const b = has("mobR") && !has("mobL");          // 开 B 自动关 A
+      document.getElementById("mobFabM").onclick();
+      const c = has("mobM") && !has("mobR");
+      document.getElementById("mobScrim").onclick();
+      const d = !has("mobM") && !has("mobL") && !has("mobR");
+      document.getElementById("mobFabL").onclick();
+      document.getElementById("mobScrim").onclick();
+      const e = !has("mobL");
+      // 悬浮钮 on 态与抽屉同步（按钮高亮跟着走）
+      document.getElementById("mobFabR").onclick();
+      const f = document.getElementById("mobFabR").classList.contains("on");
+      document.getElementById("mobScrim").onclick();
+      const g = !document.getElementById("mobFabR").classList.contains("on");
+      return { a, b, c, d, e, f, g };
+    })())`);
+    const o = JSON.parse(r);
+    return o.a && o.b && o.c && o.d && o.e && o.f && o.g;
+  })(), `o=${run("JSON.stringify((()=>{const b=document.body;document.getElementById('mobFabL').onclick();const a=b.classList.contains('mobL');document.getElementById('mobScrim').onclick();return {a,closed:!b.classList.contains('mobL')};})())")}`);
+  check("移动端触屏默认：pointer:coarse 时 inputMode 自动切 touch（桩返回 false → 保持 mouse）", (() => {
+    const r = run(`JSON.stringify({ mode: state.inputMode })`);
+    return JSON.parse(r).mode === "mouse";
+  })(), `o=${run("JSON.stringify({mode:state.inputMode})")}`);
   check("「带当前组合去造型台」：mLoad 不还原快照，组合带进工作区", (() => {
     const r = run(`JSON.stringify((() => {
       location.hash = "#/m/pyrite/navajun"; applyRoute();

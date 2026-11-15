@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>晶体世界 · Crystal World</title>
 <style>
   /* ── 主题变量 ────────────────────────────────────────────────────────────
@@ -78,7 +78,8 @@
     font:14px/1.5 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     overflow:hidden;
   }
-  #app{display:grid;grid-template-columns:296px 1fr 250px;grid-template-rows:42px 1fr;height:100vh}
+  #app{display:grid;grid-template-columns:296px 1fr 250px;grid-template-rows:42px 1fr;
+       height:100vh;height:100dvh}   /* 100dvh：微信/手机浏览器工具栏不占视口，100vh 会被顶出屏 */
   /* ── 顶部标题条：软件名 + 主题 + 图标工具（视角/操作/导出/数据） ── */
   .topbar{
     grid-column:1/-1;display:flex;align-items:center;gap:10px;
@@ -105,7 +106,7 @@
   .pops{position:absolute;top:42px;right:8px;z-index:16;display:none}
   .pops.show{display:block}
   .pop{
-    width:308px;max-height:calc(100vh - 60px);overflow-y:auto;
+    width:308px;max-width:calc(100vw - 16px);max-height:calc(100vh - 60px);overflow-y:auto;
     background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:10px;box-shadow:0 18px 50px rgba(0,0,0,.28);scrollbar-width:thin;
     scrollbar-color:var(--scroll) transparent;
@@ -370,6 +371,64 @@
           display: flex; flex-direction: column; align-items: center; gap: 7px; }
   .prev canvas { max-width: 100%; border-radius: 6px; box-shadow: var(--shadow); }
   .prev .pi { font-size: 11px; color: var(--prevInk); letter-spacing: .04em; }
+
+  /* ══════ 移动端（微信浏览器等窄屏 ≤760px）══════
+     造型台三栏（296+250 固定）在手机上把画布挤到 0；矿物页 352px 覆盖层占满 94% 屏宽。
+     方案：两侧栏与矿物页信息栏改为可开合的抽屉（角落悬浮钮呼出 + 遮罩点击收起），
+     画布全屏。桌面端（>760px）完全不受影响。
+     注意优先级：body.museum-mode #app（1,1,1）仍压过这里 #app（1,0,0）——
+     矿物/一览模式沿用原 0 1fr 0 网格，不受本块影响，是刻意的。 */
+  @media (max-width:760px){
+    html,body{overscroll-behavior:none}          /* 边缘拖拽不触发下拉刷新 */
+    body{touch-action:manipulation}              /* 双击不缩放（画布仍是 none，可自由转） */
+    #app{grid-template-columns:1fr;grid-template-rows:42px 1fr}
+    .stage{grid-column:1;grid-row:2}
+    /* ── 两侧栏 → 抽屉 ── */
+    .panel{
+      position:fixed;top:42px;bottom:0;z-index:30;width:min(86vw,340px);
+      background:var(--panel);transition:transform .22s ease;overflow-y:auto;
+      box-shadow:0 14px 44px rgba(0,0,0,.38);
+    }
+    .panel.left{left:0;transform:translateX(-104%);border-right:1px solid var(--line)}
+    .panel.right{right:0;transform:translateX(104%);border-left:1px solid var(--line)}
+    body.mobL .panel.left{transform:none}
+    body.mobR .panel.right{transform:none}
+    /* ── 矿物页信息栏 → 抽屉 ── */
+    #museum{width:min(88vw,360px);transform:translateX(-104%);
+            transition:transform .22s ease;box-shadow:0 14px 44px rgba(0,0,0,.38)}
+    body.mobM #museum{transform:none}
+    body.museum-mode .hud, body.browse-mode .hud{left:14px}   /* 抽屉不再常驻，HUD 靠左即可 */
+    /* ── 抽屉遮罩 ── */
+    #mobScrim{position:fixed;inset:42px 0 0 0;z-index:25;background:rgba(0,0,0,.36);display:none}
+    body.mobL #mobScrim, body.mobR #mobScrim, body.mobM #mobScrim{display:block}
+    /* ── 角落悬浮钮（桌面隐藏；造型台=参数/外观，矿物页=矿物志）── */
+    .mobfab{
+      position:fixed;z-index:26;bottom:calc(14px + env(safe-area-inset-bottom,0px));
+      display:none;align-items:center;gap:5px;padding:9px 14px;border-radius:99px;
+      border:1px solid var(--line2);background:var(--panel);color:var(--ink);
+      font:600 12.5px/1 "Noto Sans SC",sans-serif;letter-spacing:.04em;
+      box-shadow:0 6px 22px rgba(0,0,0,.4);cursor:pointer;user-select:none;-webkit-user-select:none;
+    }
+    .mobfab.on{border-color:var(--acc);background:var(--acc);color:#fff}
+    #mobFabL{left:14px}
+    #mobFabR{right:14px}
+    #mobFabM{left:14px}
+    body:not(.museum-mode):not(.browse-mode) #mobFabL,
+    body:not(.museum-mode):not(.browse-mode) #mobFabR{display:flex}
+    body.museum-mode #mobFabM{display:flex}
+    /* ── 顶栏收紧（375px 预算：12+63+115+110+26+24 ≈ 350px）── */
+    .topbar{padding:0 6px;gap:6px}
+    .tb-brand{gap:5px}
+    .tb-brand span{display:none}                 /* 英文副标收起 */
+    .tb-sep{display:none}
+    .ptab{padding:4px 6px;font-size:12px}
+    .tbtn{width:26px}
+    /* 键盘/触屏提示抬到悬浮钮上方，不再重叠 */
+    .hint{max-width:calc(100vw - 40px);font-size:10px;
+          bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+    #browse{padding:12px 12px 40px}
+  }
+
 </style>
 </head>
 <body>
@@ -685,6 +744,13 @@
     </div>
   </div>
 </div>
+
+  <!-- 移动端抽屉：遮罩 + 角落悬浮钮（桌面 CSS 隐藏，≤760px 才显示）。
+       造型台两侧参数栏 → 「参数/外观」抽屉；矿物页信息栏 → 「矿物志」抽屉。 -->
+  <div id="mobScrim"></div>
+  <button class="mobfab" id="mobFabL" type="button">⚙ 参数</button>
+  <button class="mobfab" id="mobFabR" type="button">◈ 外观</button>
+  <button class="mobfab" id="mobFabM" type="button">矿物志</button>
 
 <script>
 const DATA = /*__DATA__*/ null;
@@ -5124,6 +5190,10 @@ document.getElementById("expDataUrl").onclick = async () => {
   catch { flash("剪贴板不可用，已打开新标签页"); window.open(url, "_blank"); }
 };
 
+/* 触屏设备（手机/平板，微信浏览器等）默认用触控灵敏度与触屏提示文案；
+   「操作」浮层里仍可手动切换。app-check 的桩 matchMedia 返回 false，不影响门禁。 */
+try { if (matchMedia("(pointer:coarse)").matches) state.inputMode = "touch"; } catch (err) { /* 无 matchMedia */ }
+
 /* ============ 启动 ============ */
 renderSystems();
 selectMineral(state.mineralId);
@@ -5132,6 +5202,36 @@ window.addEventListener("resize", resize);
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { document.getElementById("modal").classList.remove("show"); closePop(); }
 });
+
+/* ============ 移动端抽屉（≤760px：两侧栏/矿物页信息栏变抽屉，角落悬浮钮呼出） ============ */
+const mobSync = () => {
+  const b = document.body.classList;
+  document.getElementById("mobFabL").classList.toggle("on", b.contains("mobL"));
+  document.getElementById("mobFabR").classList.toggle("on", b.contains("mobR"));
+  document.getElementById("mobFabM").classList.toggle("on", b.contains("mobM"));
+};
+const mobClose = () => { document.body.classList.remove("mobL", "mobR", "mobM"); mobSync(); };
+const mobToggle = (cls) => {
+  const had = document.body.classList.contains(cls);
+  document.body.classList.remove("mobL", "mobR", "mobM");
+  if (!had) document.body.classList.add(cls);
+  mobSync();
+};
+document.getElementById("mobFabL").onclick = () => mobToggle("mobL");
+document.getElementById("mobFabR").onclick = () => mobToggle("mobR");
+document.getElementById("mobFabM").onclick = () => mobToggle("mobM");
+document.getElementById("mobScrim").onclick = mobClose;
+// 选矿/选晶形/选晶系/选产地后自动收起抽屉——用户要点的是晶体，不是再点一次遮罩
+const mobAutoClose = (rootId, sel) => {
+  const root = document.getElementById(rootId);
+  if (root) root.addEventListener("click", (e) => {
+    if (e.target && e.target.closest && e.target.closest(sel)) mobClose();
+  });
+};
+mobAutoClose("minerals", ".mitem");   // 矿物列表项是 div.mitem 不是 button
+mobAutoClose("habits", "button");
+mobAutoClose("systems", "button");
+mobAutoClose("mList", ".mitem");
 
 /* ============ 主题：亮 / 暗 / 跟随系统 ============
    默认「亮」——原来的深色配色在白天像一块黑屏。三态循环，存 localStorage。
