@@ -57,21 +57,38 @@ export const MINERALS = [
           { hkl: [1, 1, 1], k: 1.0, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
-      {
-        id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
-        note: "尖晶石律：两个立方体沿共有的 [111] 体对角线互相穿插。Handbook of Mineralogy：「Twinning: common on {111}, interpenetrant, flattened」。双晶操作是绕 [111] 的 180° 二次轴；因立方体自身绕该轴有 120° 对称，等价于两个体相对转动 60°。萤石是 centrosymmetric（m-3m），所以「{111} 镜面」与「[111] 二次轴」两种说法是同一个双晶（σ·C₂ = 反演，反演是 m-3m 的对称操作）。两个体的 <100> 棱方向夹角 arccos(−1/3) = 109°28′",
+      {   // SMORF Fluorite_D4 / MH103「Penetration twin on [111]」——两立方体沿 [111] 互插
+        id: "penetration-twin", zh: "贯穿双晶 [111]", en: "Penetration twin [111]",
+        note: "萤石最著名的双晶：两个立方体沿共有的 [111] 体对角线互相穿插（SMORF Fluorite_D4 / MH103「Penetration twin on [111]」）。双晶操作是绕 [111] 的 180° 二次轴；因立方体自身绕该轴有 120° 对称，等价于两个体相对转动 60°。两个体的 <100> 棱方向夹角 arccos(−1/3) = 109°28′。注意：这不是尖晶石律——尖晶石律是 {111} 面接触双晶（见钻石与尖晶石）。",
         twin: { mode: "axis", axis: [1, 1, 1], angle: 109.471,
           demo: {
-            names: ["单体 A", "单体 B", "穿插视图", "尖晶石律"],
+            names: ["单体 A", "单体 B", "穿插视图", "贯穿双晶"],
             steps: [
-              "单体 A：萤石立方体 {100}——尖晶石律双晶的第一个个体",
+              "单体 A：萤石立方体 {100}——贯穿双晶的第一个个体",
               "单体 B：绕 [111] 体对角线旋转 180°（等价于相对转 60°）后的同形晶体",
               "两晶体穿插结合——半透明视图显示穿插关系（<100> 棱夹角 109°28′）",
-              "尖晶石律双晶：两个立方体沿 [111] 互相穿插——萤石最常见的双晶",
+              "贯穿双晶 [111]：两个立方体沿 [111] 互相穿插——萤石最常见的双晶",
             ],
           } },
         forms: [
           { hkl: [1, 0, 0], k: 1, idx: "{100}", zh: "立方体", en: "Cube" },
+        ],
+      },
+      {   // 尖晶石律：{111} 面接触双晶——八面体沿 {111} 成分面切开、前半绕 [111] 法线转 180° 拼回
+        id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
+        note: "尖晶石律：{111} 面接触双晶——单八面体沿 {111} 成分面切开、前半绕 [111] 法线转 180° 拼回（Wikipedia Spinel_twin 图）。拼合体锥面角度改变、八面体轮廓上可见双晶结构。萤石、钻石、尖晶石中最常见。",
+        twin: { mode: "axis", axis: [1, 1, 1], angle: 180,
+          demo: {
+            names: ["单体 A", "单体 B", "穿插视图", "尖晶石律"],
+            steps: [
+              "单体 A：萤石八面体 {111}——尖晶石律双晶的第一个个体",
+              "单体 B：绕 [111] 法线旋转 180°——八面体沿 {111} 成分面切开、前半转 180° 拼回",
+              "两体穿插结合——拼合体锥面角度改变，八面体轮廓上可见双晶结构",
+              "尖晶石律双晶：{111} 面接触双晶——萤石、钻石、尖晶石中最常见",
+            ],
+          } },
+        forms: [
+          { hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
     ],
@@ -283,6 +300,23 @@ export const MINERALS = [
       {
         id: "octahedron", zh: "八面体", en: "Octahedron",
         forms: [{ hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" }],
+      },
+      {   // 尖晶石律：{111} 面接触双晶——钻石三角薄片双晶（macle）的 laws
+        id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
+        note: "尖晶石律：{111} 面接触双晶——八面体沿 {111} 成分面切开、前半绕 [111] 法线转 180° 拼回。钻石的三角薄片双晶（macle）即此律的扁平形态，三角面常见凹坑与生长纹。",
+        twin: { mode: "axis", axis: [1, 1, 1], angle: 180,
+          demo: {
+            names: ["单体 A", "单体 B", "穿插视图", "尖晶石律"],
+            steps: [
+              "单体 A：钻石八面体 {111}——尖晶石律双晶的第一个个体",
+              "单体 B：绕 [111] 法线旋转 180°——八面体沿 {111} 成分面切开、前半转 180° 拼回",
+              "两体穿插结合——拼合体锥面角度改变，八面体轮廓上可见双晶结构",
+              "尖晶石律双晶：{111} 面接触双晶——钻石（金刚石）的三角薄片双晶 macle 即此律",
+            ],
+          } },
+        forms: [
+          { hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" },
+        ],
       },
       {
         id: "dodecahedron", zh: "菱形十二面体", en: "Rhombic dodecahedron",
@@ -1164,6 +1198,52 @@ export const MINERALS = [
           { hkl: [0, 0, 1], k: 0.35, idx: "{0001}", zh: "底面", en: "Pinacoid" },
           { hkl: [1, 0, 1], k: 1.15, idx: "{10-11}", zh: "六方双锥（主锥面）", en: "Pyramid" },
           { hkl: [1, 0, 2], k: 1.5, idx: "{10-12}", zh: "六方双锥（缓锥面）", en: "Pyramid" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "spinel",
+  defColor: "#c8444c",
+  luster: "glass", transp: "transl", inclusion: "none",     // 玻璃光泽；透明宝石级八面体常见
+    zh: "尖晶石", en: "Spinel", formula: "MgAl₂O₄",
+    system: "cubic", pointGroup: "m-3m",
+    confidence: "high", source: "a = 8.083 Å（Dana, MgAl₂O₄）",
+    cell: { a: 8.083, b: 8.083, c: 8.083, alpha: 90, beta: 90, gamma: 90 },
+    cellText: "a = b = c = 8.083 Å，α = β = γ = 90°（尖晶石族）",
+    colors: [
+      { zh: "红", en: "Red", hex: "#c8444c" },
+      { zh: "蓝", en: "Blue", hex: "#4a6fb8" },
+      { zh: "粉", en: "Pink", hex: "#d98a94" },
+      { zh: "黑", en: "Black", hex: "#3a3a3e" },
+    ],
+    intro: {
+      zh: "尖晶石族的代表，立方晶系八面体是它的招牌。红尖晶石自古被误当红宝石（英国王室的两颗「黑太子红宝石」与「帖木儿红宝石」其实都是尖晶石）。{111} 面接触双晶极常见，就叫「尖晶石律」——尖晶石是这一双晶律的命名矿物。",
+      en: "The namesake of the spinel group: cubic octahedra, red spinels long mistaken for ruby (the Black Prince's Ruby and Timur Ruby are spinels). {111} contact twins are so common the law is named after this mineral.",
+    },
+    about: {
+      zh: "镁铝氧化物，变质岩与大理岩中与白云石、镁质矽卡岩共生。硬度 8、无双解理、颜色丰富，是宝石学界近年最大赢家——缅甸抹谷的「绝地武士」霓红尖晶石价格一路飙升。",
+      where: "缅甸抹谷（Mogok，绝地武士尖晶石）、越南陆安（Luc Yen，钴蓝尖晶石）；国内云南、江苏的接触带大理岩。",
+      hard: "8（小刀划不动，略软于刚玉）",
+      spot: "八面体 + {111} 接触双晶 + 玻璃光泽；红色品种在强光下荧光感十足。",
+    },
+    habits: [
+      { id: "octahedron", zh: "八面体", en: "Octahedron", forms: [{ hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" }] },
+      {   // 尖晶石律：{111} 面接触双晶——尖晶石是命名矿物
+        id: "spinel-twin", zh: "尖晶石律双晶", en: "Spinel-law twin",
+        note: "尖晶石律的命名矿物：{111} 面接触双晶——八面体沿 {111} 成分面切开、前半绕 [111] 法线转 180° 拼回，拼合体常呈扁平三角形板状。尖晶石、磁铁矿等尖晶石族矿物极常见。",
+        twin: { mode: "axis", axis: [1, 1, 1], angle: 180,
+          demo: {
+            names: ["单体 A", "单体 B", "穿插视图", "尖晶石律"],
+            steps: [
+              "单体 A：尖晶石八面体 {111}——尖晶石律双晶的第一个个体",
+              "单体 B：绕 [111] 法线旋转 180°——八面体沿 {111} 成分面切开、前半转 180° 拼回",
+              "两体穿插结合——拼合体锥面角度改变，八面体轮廓上可见双晶结构",
+              "尖晶石律双晶：{111} 面接触双晶——尖晶石是这条双晶律的命名矿物",
+            ],
+          } },
+        forms: [
+          { hkl: [1, 1, 1], k: 1, idx: "{111}", zh: "八面体", en: "Octahedron" },
         ],
       },
     ],

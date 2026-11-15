@@ -320,12 +320,12 @@ check("两个个体都存在", run(`new Set(GEO.faces.map(f=>f.indiv)).size`) ==
 check("日本律双晶夹角 = 84°33′（84.55°，文献值）", Math.abs(run(`habit().twin.angle`) - 84.55) < 1e-9, String(run(`habit().twin.angle`)));
 
 // 萤石尖晶石律：两个立方体沿 [111] 互相穿插（贯穿双晶，不是接触双晶）
-run(`selectMineral("fluorite"); state.habitId = "spinel-twin"; state.mask = 1; rebuildGeometry(); draw();`);
-check("萤石尖晶石律是贯穿双晶（mode=axis, axis=[111]）",
+run(`selectMineral("fluorite"); state.habitId = "penetration-twin"; state.mask = 1; rebuildGeometry(); draw();`);
+check("萤石贯穿双晶 [111]：mode=axis, axis=[111]",
   run(`habit().twin.mode`) === "axis" && JSON.stringify(run(`habit().twin.axis`)) === "[1,1,1]",
   JSON.stringify(run(`habit().twin`)));
-check("萤石尖晶石律双晶面数 ≥ 24（两块穿插后表面被切碎）", run(`GEO.faces.length`) >= 24, String(run(`GEO.faces.length`)));
-check("萤石尖晶石律 <100> 夹角 109°28′（arccos(−1/3)）", Math.abs(run(`habit().twin.angle`) - 109.4712) < 0.01, String(run(`habit().twin.angle`)));
+check("萤石贯穿双晶面数 ≥ 24（两块穿插后表面被切碎）", run(`GEO.faces.length`) >= 24, String(run(`GEO.faces.length`)));
+check("萤石贯穿双晶 <100> 夹角 109°28′（arccos(−1/3)）", Math.abs(run(`habit().twin.angle`) - 109.4712) < 0.01, String(run(`habit().twin.angle`)));
 
 // 「放在桌面上」：贴合桌面线 + 接触阴影（fitToTable 是纯函数，可直接单测）
 {
@@ -694,6 +694,16 @@ check("单晶石英 r/z 交替可见（r 面 form=1 与 z 面 form=2 并存，r 
   return o.forms.includes(1) && o.forms.includes(2) && o.f === 18;
 })(), `o=${run("JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })")}`);
 // ── 正长石三双晶（SMORF/Goldschmidt Atlas：Orthoclase_064 卡斯巴 / 174 巴温诺 / 165 曼尼巴）──
+check("尖晶石律三矿物（萤石/钻石/尖晶石）：{111} 八面体 + 轴 [111] 180° 贯穿双晶 + demo", (() => {
+  const r = run(`JSON.stringify(["fluorite", "diamond", "spinel"].map(id => {
+    const h = DATA.minerals.find(x => x.id === id).habits.find(x => x.id === "spinel-twin");
+    return { id, mode: h.twin.mode, axis: h.twin.axis.join(","), angle: h.twin.angle,
+      forms: h.forms.map(f => f.idx).join(","), demo: !!h.twin.demo };
+  }))`);
+  const o = JSON.parse(r);
+  return o.every(x => x.mode === "axis" && x.axis === "1,1,1" && x.angle === 180
+    && x.forms === "{111}" && x.demo === true);
+})(), `o=${run("JSON.stringify(['fluorite','diamond','spinel'].map(id => { const h = DATA.minerals.find(x=>x.id===id).habits.find(x=>x.id==='spinel-twin'); return { id, mode: h.twin.mode, angle: h.twin.angle }; }))")}`);
 check("正长石卡斯巴双晶：绕 c [001] 转 180° 的贯穿双晶（mode=axis），有 demo 文案", (() => {
   const r = run(`JSON.stringify((() => {
     const m = DATA.minerals.find(x => x.id === "orthoclase");
@@ -829,7 +839,7 @@ check("拆解后两个体各自仍是闭合体（欧拉数 1 + 1）", (() => {
   return chi === 2;
 })(), `χ=${run(`(() => { const vs = new Set(); let E = 0; for (const f of GEO.faces) { for (const i of f.loop) vs.add(i); E += f.loop.length; } return vs.size - E/2 + GEO.faces.length; })()`)}`);
 check("贯穿双晶拆开后每个个体都是完整体（萤石：两个闭合立方体）", (() => {
-  run(`selectMineral("fluorite"); state.habitId = "spinel-twin"; state.twinSplit = 0; state.twinShow = "both"; rebuildGeometry();`);
+  run(`selectMineral("fluorite"); state.habitId = "penetration-twin"; state.twinSplit = 0; state.twinShow = "both"; rebuildGeometry();`);
   const togetherF = run(`GEO.faces.length`);
   run(`state.twinSplit = 1; rebuildGeometry();`);
   const chiEach = run(`(() => {
@@ -854,7 +864,7 @@ check("贯穿双晶拆开后每个个体都是完整体（萤石：两个闭合�
   run(`selectMineral("quartz"); state.habitId = "japan-twin"; rebuildGeometry(); syncPanels();`);
   // 每个个体各是一个闭合体（χ=2）；拆开后两块在 x 方向不再重叠；面数回到"完整个体"的数量
   return chiEach[0][0] === 2 && chiEach[1][0] === 2 && apart > 1.0 && splitF < togetherF;
-})(), `并集=${run(`selectMineral("fluorite"); state.habitId="spinel-twin"; state.twinSplit=0; rebuildGeometry(); const n=GEO.faces.length; selectMineral("quartz"); state.habitId="japan-twin"; rebuildGeometry(); syncPanels(); n`)}`);
+})(), `并集=${run(`selectMineral("fluorite"); state.habitId="penetration-twin"; state.twinSplit=0; rebuildGeometry(); const n=GEO.faces.length; selectMineral("quartz"); state.habitId="japan-twin"; rebuildGeometry(); syncPanels(); n`)}`);
 check("只看 A / 只看 B 会过滤个体", (() => {
   run(`state.twinShow = "A"; rebuildGeometry();`);
   const nA = run(`GEO.faces.filter(f => f.indiv === 0).length`);
@@ -1519,7 +1529,7 @@ const glLastOptsOk = (glw, vw, vh) => {
                shown: document.getElementById("browse").style.display !== "none" };
     })())`);
     const o = JSON.parse(r);
-    return o.mode === true && o.shown === true && o.heads === 17
+    return o.mode === true && o.shown === true && o.heads === 18
       && o.cards === o.habitTotal && o.thumbs === o.habitTotal;
   })(), run(`JSON.stringify((() => { let h = 0, c = 0; for (const x of document.getElementById("browseGrid").children) { if (x.className === "bhead") h++; if (x.className === "bcard") c++; } return { h, c }; })())`));
   check("晶体卡点击：载入该晶体并回工作区（#/studio），矿物名进矿物页", (() => {
@@ -1619,7 +1629,7 @@ const glLastOptsOk = (glw, vw, vh) => {
         pTwin: p.habits.filter(h => h.twin && h.twin.demo).map(h => h.id) };
     })())`);
     const o = JSON.parse(r);
-    return o.fIron === false && o.fTwin.join() === "spinel-twin"
+    return o.fIron === false && o.fTwin.join() === "penetration-twin,spinel-twin"
       && o.pTwin.join() === "iron-cross,spinel-twin";
   })(), `twin=${run("JSON.stringify(DATA.minerals.filter(m=>['fluorite','pyrite'].includes(m.id)).map(m=>m.id+':'+m.habits.filter(h=>h.twin).map(h=>h.id).join(',')))")}`);
   check("「带当前组合去造型台」：mLoad 不还原快照，组合带进工作区", (() => {
@@ -1885,9 +1895,9 @@ check("「认识它」面板存在且放在矿物旁（左栏，与「数据」�
   const secs = [...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]);
   return secs.includes("about") && secs.indexOf("about") === secs.indexOf("min") + 1;
 })(), `左栏顺序=${[...html.matchAll(/<div class="sec" data-sec="([a-z]+)">/g)].map(x => x[1]).slice(0, 7).join(",")}`);
-check("17 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
+check("18 种矿物每种都有 about 四段科普（zh/where/hard/spot）", (() => {
   const bad = run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id)`);
-  return bad.length === 0 && run(`DATA.minerals.length`) === 17;
+  return bad.length === 0 && run(`DATA.minerals.length`) === 18;
 })(), `缺=${run(`DATA.minerals.filter(m => !m.about || !m.about.zh || !m.about.where || !m.about.hard || !m.about.spot).map(m => m.id).join(",")`)}`);
 check("renderAbout() 被 syncPanels() 调用（换矿物时刷新）", /renderAbout\(\);\s*\/\/[^\n]*认识它/.test(html) && /function renderAbout\(\)/.test(html));
 check("导出默认带「认识它」，且换矿物后内容跟着变", (() => {
