@@ -693,17 +693,19 @@ check("单晶石英 r/z 交替可见（r 面 form=1 与 z 面 form=2 并存，r 
   const o = JSON.parse(r);
   return o.forms.includes(1) && o.forms.includes(2) && o.f === 18;
 })(), `o=${run("JSON.stringify({ forms: [...new Set(GEO.faces.map(f => f.form))], f: GEO.faces.length })")}`);
-// ── 正长石三双晶（SMORF/Goldschmidt Atlas：Orthoclase_064 卡斯巴 / 174 巴温诺 / 165 曼尼巴）──
-check("尖晶石律三矿物（萤石/钻石/尖晶石）：{111} 八面体 + 轴 [111] 180° 贯穿双晶 + demo", (() => {
+// ── 尖晶石律切转模型（Wikipedia Spinel_twin 图）：成分面截断、前半转 180° 拼回 ──
+check("尖晶石律三矿物（萤石/钻石/尖晶石）：{111} 八面体 + 切转模型（halfTwin，无 axisShift）+ demo", (() => {
   const r = run(`JSON.stringify(["fluorite", "diamond", "spinel"].map(id => {
     const h = DATA.minerals.find(x => x.id === id).habits.find(x => x.id === "spinel-twin");
-    return { id, mode: h.twin.mode, plane: (h.twin.plane || []).join(","),
+    return { id, mode: h.twin.mode, halfTwin: h.twin.halfTwin === true, noShift: !h.twin.axisShift,
+      plane: (h.twin.plane || []).join(","),
       forms: h.forms.map(f => f.idx).join(","), demo: !!h.twin.demo };
   }))`);
   const o = JSON.parse(r);
-  return o.every(x => x.mode === "axis"
+  return o.every(x => x.mode === "axis" && x.halfTwin && x.noShift
     && x.forms === "{111}" && x.demo === true);
-})(), `o=${run("JSON.stringify(['fluorite','diamond','spinel'].map(id => { const h = DATA.minerals.find(x=>x.id===id).habits.find(x=>x.id==='spinel-twin'); return { id, mode: h.twin.mode, plane: (h.twin.plane||[]).join(',') }; }))")}`);
+})(), `o=${run("JSON.stringify(['fluorite','diamond','spinel'].map(id => { const h = DATA.minerals.find(x=>x.id===id).habits.find(x=>x.id==='spinel-twin'); return { id, mode: h.twin.mode, halfTwin: h.twin.halfTwin, plane: (h.twin.plane||[]).join(',') }; }))")}`);
+// ── 正长石三双晶（SMORF/Goldschmidt Atlas：Orthoclase_064 卡斯巴 / 174 巴温诺 / 165 曼尼巴）──
 check("正长石卡斯巴双晶：绕 c [001] 转 180° 的贯穿双晶（mode=axis），有 demo 文案", (() => {
   const r = run(`JSON.stringify((() => {
     const m = DATA.minerals.find(x => x.id === "orthoclase");
@@ -1575,7 +1577,7 @@ const glLastOptsOk = (glw, vw, vh) => {
   })(), `back=${run("JSON.stringify({ e: state.extras.length, bg: state.bg, base: state.base, gy: state.groupYaw })")}`);
   const twinO = JSON.parse(run(`JSON.stringify((() => {
       const out = {};
-      // 萤石 · 尖晶石律：进页 → 点习性按钮 → 点第 3 步（穿插视图）
+      // 萤石 · 尖晶石律：进页 → 点习性按钮 → 点第 3 步（切转视图）
       location.hash = "#/m/fluorite"; applyRoute();
       [...document.getElementById("mrHabits").children].find(b => b.textContent === "尖晶石律双晶").onclick();
       out.fDemo = document.getElementById("twinDemoBox").style.display !== "none";
@@ -1607,7 +1609,7 @@ const glLastOptsOk = (glw, vw, vh) => {
     })())`));
   check("双晶演示：四步按钮逐个真实点击，字幕=该双晶律自己的 demo 文案（数据驱动，非硬编码）",
     twinO.fDemo === true && twinO.fStep === 2 && twinO.psStep === 0 && twinO.restStep === null
-      && twinO.fNames.join() === "单体 A,单体 B,穿插视图,尖晶石律"
+      && twinO.fNames.join() === "单体 A,单体 B,切转视图,尖晶石律"
       && twinO.fCap === twinO.fExp && twinO.fCap.indexOf("黄铁矿") < 0
       && twinO.pNames.join() === "单体 A,单体 B,穿插视图,铁十字"
       && twinO.pCap === twinO.pExp

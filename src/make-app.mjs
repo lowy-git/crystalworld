@@ -294,7 +294,6 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       : twinAxisMatrix(habit.twin.axis, res.L);
     // 贯穿双晶两个体默认同心；axisShift = 个体 B 沿双晶轴的错位（单位 = 该轴法向面族的 d_hkl）。
     // 卡斯巴双晶：轴 [001]，两体沿 c 错位约半格——端面一高一低、顶部 V 形缺口（照片实物）。
-    // 尖晶石律：轴 [111]，两八面体沿 [111] 错位 ~0.9·d(111)——尖端从对方两端伸出、真实互插。
     let shift = [0, 0, 0];
     if (habit.twin.mode === "axis" && habit.twin.axisShift) {
       const ax = habit.twin.axis;
@@ -317,83 +316,114 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       shift = [shift[0] + add[0], shift[1] + add[1], shift[2] + add[2]];
     }
 
-    const polysB = polys.map(f => {
-      const nB = applyM(T, f.n);
-      return {
-        pts: f.pts.map(v => { const w = applyM(T, v); return [w[0] + shift[0], w[1] + shift[1], w[2] + shift[2]]; }),
-        n: nB,
-        form: f.form,
-        indiv: 1,
-        clip: f.clip,
-      };
-    });
-    const planesB = planesA.map(pl => {
-      const nB = applyM(T, pl.n);
-      return { n: nB, D: pl.D + dot(nB, shift) };
-    });
+    // ── 尖晶石律（Wikipedia Spinel_twin 图的切转模型）──
+    // 单晶沿成分面（⊥双晶轴、过中心的中心截面）切成背/前两半：背半保留原取向，
+    // 前半绕双晶轴转 180°（面内旋转）拼回。两半只在成分面处相接——轴式并集里
+    // 互插而过的"晶尖"被成分面截掉，不再存在；合成体轮廓 = 原八面体六边形截面，
+    // 赤道接缝一周是锯齿状凹入棱（尖晶石律双晶的经典识别特征）。
+    // 前提：中心截面在 180° 旋转下自映射——纯 {111} 八面体的截面是正六边形，满足。
+    if (habit.twin.halfTwin) {
+      const polysBFull = polys.map(f => {
+        const nB = applyM(T, f.n);
+        return { pts: orient(f.pts.map(v => applyM(T, v)), nB), n: nB, form: f.form, indiv: 1, clip: f.clip };
+      });
+      // 拆解/只看个体/第 3 步用完整体：两个完整八面体半透明叠置，看清 180° 取向差
+      wholeFaces = [...polys.map(f => ({ ...f, indiv: 0 })), ...polysBFull];
+      const ax = habit.twin.axis;
+      const adir = norm([ax[0]*res.L.A[0] + ax[1]*res.L.B[0] + ax[2]*res.L.C[0],
+                         ax[0]*res.L.A[1] + ax[1]*res.L.B[1] + ax[2]*res.L.C[1],
+                         ax[0]*res.L.A[2] + ax[1]*res.L.B[2] + ax[2]*res.L.C[2]]);
+      // 背半（adir·x ≤ 0）与前半（adir·x ≥ 0）——cutWithCap 自带切面帽
+      const back = cutWithCap(polys, [-adir[0], -adir[1], -adir[2]], 0);
+      const front = cutWithCap(polys, adir, 0);
+      // 成分面是两半的公共界面：两片帽都埋在并集内部，删掉（同接触双晶 δ=0 的结合面）
+      const onCap = (f) => f.pts.every(p => Math.abs(dot(adir, p)) < 1e-6);
+      polys = [
+        ...back.filter(f => !onCap(f)),
+        ...front.filter(f => !onCap(f)).map(f => {
+          const nB = applyM(T, f.n);
+          return { pts: orient(f.pts.map(v => applyM(T, v)), nB), n: nB, form: f.form, indiv: 1, clip: f.clip };
+        }),
+      ];
+    } else {
+      const polysB = polys.map(f => {
+        const nB = applyM(T, f.n);
+        return {
+          pts: f.pts.map(v => { const w = applyM(T, v); return [w[0] + shift[0], w[1] + shift[1], w[2] + shift[2]]; }),
+          n: nB,
+          form: f.form,
+          indiv: 1,
+          clip: f.clip,
+        };
+      });
+      const planesB = planesA.map(pl => {
+        const nB = applyM(T, pl.n);
+        return { n: nB, D: pl.D + dot(nB, shift) };
+      });
 
-    // 并集边界 = (∂A 去掉 B 内部) ∪ (∂B 去掉 A 内部)
-    // 但"拆开 / 只看一个个体"要的是**完整个体**：并集把对方内部的那几片面删掉了，
-    // 单独看就是一个开壳（萤石尖晶石律会露出满天碎三角）。所以把完整个体也带上，
-    // 打 hid 标记——合在一起时不画，拆解时才画。
-    const whole = [...polys.map(f => ({ ...f, indiv: 0 })), ...polysB];
-    // ── 共享面合并：石英道芬律（绕 c 转 180°）与巴西律（{11-20} 镜面）里，m 柱面
-    //    在双晶操作下自映射——A/B 的柱面完全共面。并集边界上这片区域只留一份，
-    //    且并集区域是两片多边形的外包（A 的柱面片上端高下端矮、B 相反，合起来
-    //    才是完整的柱面）——取两片顶点在该平面上的凸包合成一片。不合并的话
-    //    subtractConvex 的边界判定会把两片都整片保留（共面 ≠ 严格内部），
-    //    得到两片重合的柱面，棱拓扑翻倍、闭合性检查崩掉。 ──
-    const planeKeyOf = (n, d) => [n[0], n[1], n[2], d].map(x => (Math.abs(x) < 1e-9 ? 0 : +x.toFixed(7))).join("|");
-    const planeKeysA = new Set(planesA.map(pl => planeKeyOf(pl.n, pl.D)));
-    const sharedMerged = new Map();    // 平面 key → { n, pts: [...A/B 的顶点], ref: A 的面 }
-    const onShared = (f) => {
-      const k = planeKeyOf(f.n, dot(f.n, f.pts[0]));
-      if (!planeKeysA.has(k)) return null;
-      return k;
-    };
-    const out = [];
-    for (const f of polys) {
-      const k = onShared(f);
-      if (k !== null) {
-        if (!sharedMerged.has(k)) sharedMerged.set(k, { n: f.n, pts: [...f.pts], ref: f });
-        else sharedMerged.get(k).pts.push(...f.pts);
-        continue;
+      // 并集边界 = (∂A 去掉 B 内部) ∪ (∂B 去掉 A 内部)
+      // 但"拆开 / 只看一个个体"要的是**完整个体**：并集把对方内部的那几片面删掉了，
+      // 单独看就是一个开壳（萤石贯穿双晶会露出满天碎三角）。所以把完整个体也带上，
+      // 打 hid 标记——合在一起时不画，拆解时才画。
+      const whole = [...polys.map(f => ({ ...f, indiv: 0 })), ...polysB];
+      // ── 共享面合并：石英道芬律（绕 c 转 180°）与巴西律（{11-20} 镜面）里，m 柱面
+      //    在双晶操作下自映射——A/B 的柱面完全共面。并集边界上这片区域只留一份，
+      //    且并集区域是两片多边形的外包（A 的柱面片上端高下端矮、B 相反，合起来
+      //    才是完整的柱面）——取两片顶点在该平面上的凸包合成一片。不合并的话
+      //    subtractConvex 的边界判定会把两片都整片保留（共面 ≠ 严格内部），
+      //    得到两片重合的柱面，棱拓扑翻倍、闭合性检查崩掉。 ──
+      const planeKeyOf = (n, d) => [n[0], n[1], n[2], d].map(x => (Math.abs(x) < 1e-9 ? 0 : +x.toFixed(7))).join("|");
+      const planeKeysA = new Set(planesA.map(pl => planeKeyOf(pl.n, pl.D)));
+      const sharedMerged = new Map();    // 平面 key → { n, pts: [...A/B 的顶点], ref: A 的面 }
+      const onShared = (f) => {
+        const k = planeKeyOf(f.n, dot(f.n, f.pts[0]));
+        if (!planeKeysA.has(k)) return null;
+        return k;
+      };
+      const out = [];
+      for (const f of polys) {
+        const k = onShared(f);
+        if (k !== null) {
+          if (!sharedMerged.has(k)) sharedMerged.set(k, { n: f.n, pts: [...f.pts], ref: f });
+          else sharedMerged.get(k).pts.push(...f.pts);
+          continue;
+        }
+        for (const pts of subtractConvex(f.pts, planesB)) {
+          out.push({ ...f, pts: orient(pts, f.n) });
+        }
       }
-      for (const pts of subtractConvex(f.pts, planesB)) {
-        out.push({ ...f, pts: orient(pts, f.n) });
+      for (const f of polysB) {
+        const k = onShared(f);
+        if (k !== null) {                       // B 的共面副本：顶点并入共享面，本体不输出
+          if (sharedMerged.has(k)) sharedMerged.get(k).pts.push(...f.pts);
+          else sharedMerged.set(k, { n: f.n, pts: [...f.pts], ref: f });
+          continue;
+        }
+        for (const pts of subtractConvex(f.pts, planesA)) {
+          out.push({ ...f, pts: orient(pts, f.n) });
+        }
       }
+      // 共享面凸包：投影到平面局部 2D → hull2D → 映回 3D。
+      // 注意必须把面距 d 加回去：flat 是过原点平面上的投影，直接映回会把整片面
+      // 拉到过原点的平面上（几何整体内移、顶点焊不上、渲染碎裂）。
+      // 投影前先按 2D 坐标聚类去重：A/B 两体的公共角点是各自独立算出来的，相差 ~1e-15，
+      // hull 的叉积容差不掉这种"几乎重合"点，会留出零长度边（法向 NaN、拓扑破碎）。
+      // 不能用 toFixed 做键：坐标恰好卡在舍入边界时两份会拿到不同键（本条 bug 实锤过）。
+      for (const { n, pts, ref } of sharedMerged.values()) {
+        const u = Math.abs(n[0]) < 0.9 ? norm(cross(n, [1, 0, 0])) : norm(cross(n, [0, 1, 0]));
+        const v = cross(n, u);
+        const d = dot(ref.n, ref.pts[0]);
+        const flat = [];
+        for (const p of pts) {
+          const a = dot(p, u), b = dot(p, v);
+          if (!flat.some(q => Math.abs(q[0] - a) < 1e-6 && Math.abs(q[1] - b) < 1e-6)) flat.push([a, b]);
+        }
+        const h = hull2D(flat);
+        out.push({ ...ref, pts: h.map(([a, b]) => [u[0] * a + v[0] * b + n[0] * d, u[1] * a + v[1] * b + n[1] * d, u[2] * a + v[2] * b + n[2] * d]) });
+      }
+      polys = out;
+      wholeFaces = whole;
     }
-    for (const f of polysB) {
-      const k = onShared(f);
-      if (k !== null) {                       // B 的共面副本：顶点并入共享面，本体不输出
-        if (sharedMerged.has(k)) sharedMerged.get(k).pts.push(...f.pts);
-        else sharedMerged.set(k, { n: f.n, pts: [...f.pts], ref: f });
-        continue;
-      }
-      for (const pts of subtractConvex(f.pts, planesA)) {
-        out.push({ ...f, pts: orient(pts, f.n) });
-      }
-    }
-    // 共享面凸包：投影到平面局部 2D → hull2D → 映回 3D。
-    // 注意必须把面距 d 加回去：flat 是过原点平面上的投影，直接映回会把整片面
-    // 拉到过原点的平面上（几何整体内移、顶点焊不上、渲染碎裂）。
-    // 投影前先按 2D 坐标聚类去重：A/B 两体的公共角点是各自独立算出来的，相差 ~1e-15，
-    // hull 的叉积容差不掉这种"几乎重合"点，会留出零长度边（法向 NaN、拓扑破碎）。
-    // 不能用 toFixed 做键：坐标恰好卡在舍入边界时两份会拿到不同键（本条 bug 实锤过）。
-    for (const { n, pts, ref } of sharedMerged.values()) {
-      const u = Math.abs(n[0]) < 0.9 ? norm(cross(n, [1, 0, 0])) : norm(cross(n, [0, 1, 0]));
-      const v = cross(n, u);
-      const d = dot(ref.n, ref.pts[0]);
-      const flat = [];
-      for (const p of pts) {
-        const a = dot(p, u), b = dot(p, v);
-        if (!flat.some(q => Math.abs(q[0] - a) < 1e-6 && Math.abs(q[1] - b) < 1e-6)) flat.push([a, b]);
-      }
-      const h = hull2D(flat);
-      out.push({ ...ref, pts: h.map(([a, b]) => [u[0] * a + v[0] * b + n[0] * d, u[1] * a + v[1] * b + n[1] * d, u[2] * a + v[2] * b + n[2] * d]) });
-    }
-    polys = out;
-    wholeFaces = whole;
   }
 
   // 顶点去重 + 归一化：包围盒居中，最长边缩到 2
@@ -534,9 +564,10 @@ for (const m of MINERALS) {
       note: h.note ?? null,
       twin: h.twin ? {
         angle: h.twin.angle, mode: h.twin.mode,
-        axis: h.twin.axis ?? null,     // 贯穿双晶：二次轴方向（萤石尖晶石律 [111]）
+        axis: h.twin.axis ?? null,     // 贯穿双晶：二次轴方向（卡斯巴 [001] / 尖晶石律 [111]）
         plane: h.twin.plane ?? null,   // 接触双晶：结合面（石英日本律 {11-22}）
         delta: h.twin.delta ?? null,
+        halfTwin: h.twin.halfTwin ?? null,   // 切转模型：成分面截断两半、前半转 180° 拼回（尖晶石律）
         splitDir,   // 拆解方向（晶体坐标）：接触型沿结合面法向，贯穿型沿双晶轴
         demo: h.twin.demo ?? null,   // 演示文案（每条双晶律自己的 names/steps），丢掉就只剩通用兜底
       } : null,
