@@ -300,6 +300,15 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       const csLen = Math.hypot(res.L.Cs[0], res.L.Cs[1], res.L.Cs[2]);
       shift = res.L.C.map(x => x / cLen * habit.twin.axisShift / csLen);
     }
+    // shiftB：个体 B 沿 b*（结合面 {010} 法向）的侧移（单位 d(010)）。
+    // 卡斯巴双晶的结合面是竖直 {010} 接触面——两体各在一侧并排（穿插于接触面附近），
+    // 再叠加 c 向错位 → 两个屋顶一高一低、中间深 V 形凹角（照片实态）。
+    if (habit.twin.mode === "axis" && habit.twin.shiftB) {
+      const bs = res.L.Bs;                       // b* 笛卡尔向量（未归一）
+      const bsLen = Math.hypot(bs[0], bs[1], bs[2]);
+      const add = bs.map(x => x / bsLen * habit.twin.shiftB / bsLen);   // |b*|=1/d010 → 位移 = shiftB·d010
+      shift = [shift[0] + add[0], shift[1] + add[1], shift[2] + add[2]];
+    }
 
     const polysB = polys.map(f => {
       const nB = applyM(T, f.n);
