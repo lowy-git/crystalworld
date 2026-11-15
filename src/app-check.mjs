@@ -701,7 +701,7 @@ check("尖晶石律三矿物（萤石/钻石/尖晶石）：{111} 八面体 + �
       forms: h.forms.map(f => f.idx).join(","), demo: !!h.twin.demo };
   }))`);
   const o = JSON.parse(r);
-  return o.every(x => x.mode === "contact" && x.plane === "1,1,1"
+  return o.every(x => x.mode === "axis"
     && x.forms === "{111}" && x.demo === true);
 })(), `o=${run("JSON.stringify(['fluorite','diamond','spinel'].map(id => { const h = DATA.minerals.find(x=>x.id===id).habits.find(x=>x.id==='spinel-twin'); return { id, mode: h.twin.mode, plane: (h.twin.plane||[]).join(',') }; }))")}`);
 check("正长石卡斯巴双晶：绕 c [001] 转 180° 的贯穿双晶（mode=axis），有 demo 文案", (() => {
@@ -1607,7 +1607,7 @@ const glLastOptsOk = (glw, vw, vh) => {
     })())`));
   check("双晶演示：四步按钮逐个真实点击，字幕=该双晶律自己的 demo 文案（数据驱动，非硬编码）",
     twinO.fDemo === true && twinO.fStep === 2 && twinO.psStep === 0 && twinO.restStep === null
-      && twinO.fNames.join() === "单体 A,单体 B,接触视图,尖晶石律"
+      && twinO.fNames.join() === "单体 A,单体 B,穿插视图,尖晶石律"
       && twinO.fCap === twinO.fExp && twinO.fCap.indexOf("黄铁矿") < 0
       && twinO.pNames.join() === "单体 A,单体 B,穿插视图,铁十字"
       && twinO.pCap === twinO.pExp

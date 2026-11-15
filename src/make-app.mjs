@@ -292,13 +292,20 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
     const T = habit.twin.mode === "mirror"
       ? (() => { const hkl = habit.twin.plane; const h3 = hkl.length === 4 ? [hkl[0], hkl[1], hkl[3]] : hkl; return twinMatrix(h3, res.L); })()
       : twinAxisMatrix(habit.twin.axis, res.L);
-    // 贯穿双晶两个体默认同心；axisShift = 个体 B 沿双晶轴的错位（单位 = d_hkl(001) = 1/|c*|）。
-    // 卡斯巴双晶两体沿 c 错位约半格：端面一高一低，顶部成 V 形缺口、底部另一体端面伸出——照片实物如此。
+    // 贯穿双晶两个体默认同心；axisShift = 个体 B 沿双晶轴的错位（单位 = 该轴法向面族的 d_hkl）。
+    // 卡斯巴双晶：轴 [001]，两体沿 c 错位约半格——端面一高一低、顶部 V 形缺口（照片实物）。
+    // 尖晶石律：轴 [111]，两八面体沿 [111] 错位 ~0.9·d(111)——尖端从对方两端伸出、真实互插。
     let shift = [0, 0, 0];
     if (habit.twin.mode === "axis" && habit.twin.axisShift) {
-      const cLen = Math.hypot(res.L.C[0], res.L.C[1], res.L.C[2]);
-      const csLen = Math.hypot(res.L.Cs[0], res.L.Cs[1], res.L.Cs[2]);
-      shift = res.L.C.map(x => x / cLen * habit.twin.axisShift / csLen);
+      const ax = habit.twin.axis;
+      const adir = norm([ax[0]*res.L.A[0] + ax[1]*res.L.B[0] + ax[2]*res.L.C[0],
+                         ax[0]*res.L.A[1] + ax[1]*res.L.B[1] + ax[2]*res.L.C[1],
+                         ax[0]*res.L.A[2] + ax[1]*res.L.B[2] + ax[2]*res.L.C[2]]);
+      const rn = [ax[0]*res.L.As[0] + ax[1]*res.L.Bs[0] + ax[2]*res.L.Cs[0],
+                  ax[0]*res.L.As[1] + ax[1]*res.L.Bs[1] + ax[2]*res.L.Cs[1],
+                  ax[0]*res.L.As[2] + ax[1]*res.L.Bs[2] + ax[2]*res.L.Cs[2]];
+      const dh = 1 / Math.hypot(rn[0], rn[1], rn[2]);
+      shift = adir.map(x => x * habit.twin.axisShift * dh);
     }
     // shiftB：个体 B 沿 b*（结合面 {010} 法向）的侧移（单位 d(010)）。
     // 卡斯巴双晶的结合面是竖直 {010} 接触面——两体各在一侧并排（穿插于接触面附近），
