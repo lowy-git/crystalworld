@@ -625,7 +625,7 @@ check("石英道芬律：绕 [0001] 转 180° 的穿插双晶（mode=axis, axis=
   const t = run(`JSON.stringify(habit().twin)`);
   return /"mode":"axis"/.test(t) && /"axis":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 180;
 })(), run(`JSON.stringify(habit().twin)`));
-check("道芬律并集：两体真实穿插——36 面、双体面并存（indiv 0/1）、无 NaN、无微碎片", (() => {
+check("道芬律并集：两体真实穿插——42 面（m6+z12+r楔条24）、双体面并存、无 NaN、无微碎片", (() => {
   const r = run(`JSON.stringify((() => {
     const polyArea = pts => {
       let nx=0, ny=0, nz=0;
@@ -635,13 +635,18 @@ check("道芬律并集：两体真实穿插——36 面、双体面并存（indi
       }
       return Math.hypot(nx, ny, nz) / 2;
     };
-    return { n: GEO.faces.length, indivs: [...new Set(GEO.faces.map(f => f.indiv))].sort(),
+    const byForm = {};
+    for (const f of GEO.faces) byForm[f.form] = (byForm[f.form] || 0) + 1;
+    return { n: GEO.faces.length, byForm, indivs: [...new Set(GEO.faces.map(f => f.indiv))].sort(),
       nan: GEO.faces.some(f => !isFinite(f.n[0])),
       minA: +Math.min(...GEO.faces.map(f => polyArea(f.pts))).toFixed(3) };
   })())`);
   const o = JSON.parse(r);
-  return o.n === 36 && o.indivs.join() === "0,1" && o.nan === false && o.minA > 0.05;
-})(), `o=${run("JSON.stringify((() => { const pa=pts=>{let nx=0,ny=0,nz=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];nx+=(p[1]-q[1])*(p[2]+q[2]);ny+=(p[2]-q[2])*(p[0]+q[0]);nz+=(p[0]-q[0])*(p[1]+q[1]);}return Math.hypot(nx,ny,nz)/2;}; return { n: GEO.faces.length, indivs: [...new Set(GEO.faces.map(f=>f.indiv))].sort(), minA: +Math.min(...GEO.faces.map(f=>pa(f.pts))).toFixed(3) }; })())")}`);
+  // 正确并集包络（quartzpage 伪六方）：六个同法线平行对取更远的 z 面 → z 全 12 张保留、
+  // r 面被对方 z 面截成边缘楔条（24 片）、m 柱面合并 6 张。A 面未裁剪的旧 bug 是 36 面。
+  return o.n === 42 && o.byForm["0"] === 6 && o.byForm["1"] === 24 && o.byForm["2"] === 12
+    && o.indivs.join() === "0,1" && o.nan === false && o.minA > 0.05;
+})(), `o=${run("JSON.stringify((() => { const pa=pts=>{let nx=0,ny=0,nz=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];nx+=(p[1]-q[1])*(p[2]+q[2]);ny+=(p[2]-q[2])*(p[0]+q[0]);nz+=(p[0]-q[0])*(p[1]+q[1]);}return Math.hypot(nx,ny,nz)/2;}; const bf={}; for (const f of GEO.faces) bf[f.form]=(bf[f.form]||0)+1; return { n: GEO.faces.length, byForm: bf, indivs: [...new Set(GEO.faces.map(f=>f.indiv))].sort(), minA: +Math.min(...GEO.faces.map(f=>pa(f.pts))).toFixed(3) }; })())")}`);
 check("道芬律双体：单体 A/B 各自闭合流形（完整个体几何；并集楔缝的 T 形结为已知限制，渲染无碍）", (() => {
   const r = run(`JSON.stringify((() => {
     const closed1 = () => {

@@ -374,6 +374,7 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       //    得到两片重合的柱面，棱拓扑翻倍、闭合性检查崩掉。 ──
       const planeKeyOf = (n, d) => [n[0], n[1], n[2], d].map(x => (Math.abs(x) < 1e-9 ? 0 : +x.toFixed(7))).join("|");
       const planeKeysA = new Set(planesA.map(pl => planeKeyOf(pl.n, pl.D)));
+      const planeKeysB = new Set(planesB.map(pl => planeKeyOf(pl.n, pl.D)));
       const sharedMerged = new Map();    // 平面 key → { n, pts: [...A/B 的顶点], ref: A 的面 }
       const onShared = (f) => {
         const k = planeKeyOf(f.n, dot(f.n, f.pts[0]));
@@ -382,8 +383,11 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       };
       const out = [];
       for (const f of polys) {
+        // A 的面：只有当 B 也有真正同位共面面（自映射面，如道芬/巴西律的 m 柱面）
+        // 才并入共享面。此前只查 planeKeysA——A 面自己的平面必然在里面，导致 A 的
+        // 每张面都跳过 subtractConvex、整片凸出在 B 之外（道芬律并集成 36 面碎团块的根因）。
         const k = onShared(f);
-        if (k !== null) {
+        if (k !== null && planeKeysB.has(k)) {
           if (!sharedMerged.has(k)) sharedMerged.set(k, { n: f.n, pts: [...f.pts], ref: f });
           else sharedMerged.get(k).pts.push(...f.pts);
           continue;
