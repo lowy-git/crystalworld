@@ -212,7 +212,7 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
     indiv: 0,
     clip: !!res.planes[f.planeIdx].clip,
   }));
-  const planesA = res.planes.map(pl => ({ n: pl.n, D: pl.D }));
+  const planesA = res.planes.map(pl => ({ n: pl.n, D: pl.D, formIdx: pl.formIdx }));
 
   // 双晶：整体做双晶操作得到个体 B，然后求并集（共享部分只留外表面）
   if (habit.twin && habit.twin.mode === "contact") {
@@ -366,13 +366,51 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
       // 单独看就是一个开壳（萤石贯穿双晶会露出满天碎三角）。所以把完整个体也带上，
       // 打 hid 标记——合在一起时不画，拆解时才画。
       const whole = [...polys.map(f => ({ ...f, indiv: 0 })), ...polysB];
-      // ── 共享面合并：石英道芬律（绕 c 转 180°）与巴西律（{11-20} 镜面）里，m 柱面
-      //    在双晶操作下自映射——A/B 的柱面完全共面。并集边界上这片区域只留一份，
-      //    且并集区域是两片多边形的外包（A 的柱面片上端高下端矮、B 相反，合起来
-      //    才是完整的柱面）——取两片顶点在该平面上的凸包合成一片。不合并的话
-      //    subtractConvex 的边界判定会把两片都整片保留（共面 ≠ 严格内部），
-      //    得到两片重合的柱面，棱拓扑翻倍、闭合性检查崩掉。 ──
-      const planeKeyOf = (n, d) => [n[0], n[1], n[2], d].map(x => (Math.abs(x) < 1e-9 ? 0 : +x.toFixed(7))).join("|");
+
+      // ── 伪六方扫平（道芬律的理想化并集）──
+      // 两体的锥面互为同法线平行对（A 的 r 面 ∥ B 的 z 面，面距不同）。严格并集
+      // 会在锥面上留下台阶状的 r 楔条带——那是「理想刚性个体」模型的 artifact；
+      // 真实双晶的两域共生长，宏观表面平滑：六个锥方位的宏观面位平均到同一面距，
+      // 六张近等大锥面（Gault 1949 实测重道芬双晶：「all six terminal rhombohedral
+      // faces ... nearly equal in size」；quartzpage：pseudohexagonal habit）。
+      // 实现：并集不用严格并集，改用「每个单形取平行对面距较大者」的扫平平面组
+      // 重建晶体；被抬面距的单形 = 对方个体的域（r 形面方位上是 B 的 z 面），
+      // 供双色相间着色。单体（拆解/只看个体/穿插视图）仍用原始三方面貌。
+      if (habit.twin.sweepHex) {
+        const dSweep = new Map();            // sub-formIdx → 平行对的更大面距
+        for (const pa of planesA) for (const pb of planesB) {
+          if (dot(pa.n, pb.n) > 0.99999 && pb.D > pa.D + 1e-9) {
+            const cur = dSweep.get(pa.formIdx);
+            if (cur === undefined || pb.D > cur) dSweep.set(pa.formIdx, pb.D);
+          }
+        }
+        if (dSweep.size) {
+          const sweptForms = sub_forms.map((f, i) => {
+            const D = dSweep.get(i);
+            if (D === undefined) return f;
+            const h3 = f.hkl.length === 4 ? [f.hkl[0], f.hkl[1], f.hkl[3]] : f.hkl;
+            return { ...f, k: +(D / faceNormal(h3, res.L).d).toFixed(4) };
+          });
+          const sw = combination(mineral.cell, mineral.pointGroup, sweptForms, boxHalf ? { boxHalf } : {});
+          polys = sw.poly.faces.map(f => {
+            const pl = sw.planes[f.planeIdx];
+            return {
+              pts: f.loop.map(i2 => sw.poly.verts[i2]),
+              n: pl.n,
+              form: idxMap[pl.formIdx],
+              indiv: dSweep.has(pl.formIdx) ? 1 : 0,
+              clip: !!pl.clip,
+            };
+          });
+        }
+      } else {
+        // ── 共享面合并：石英道芬律（绕 c 转 180°）与巴西律（{11-20} 镜面）里，m 柱面
+        //    在双晶操作下自映射——A/B 的柱面完全共面。并集边界上这片区域只留一份，
+        //    且并集区域是两片多边形的外包（A 的柱面片上端高下端矮、B 相反，合起来
+        //    才是完整的柱面）——取两片顶点在该平面上的凸包合成一片。不合并的话
+        //    subtractConvex 的边界判定会把两片都整片保留（共面 ≠ 严格内部），
+        //    得到两片重合的柱面，棱拓扑翻倍、闭合性检查崩掉。 ──
+        const planeKeyOf = (n, d) => [n[0], n[1], n[2], d].map(x => (Math.abs(x) < 1e-9 ? 0 : +x.toFixed(7))).join("|");
       const planeKeysA = new Set(planesA.map(pl => planeKeyOf(pl.n, pl.D)));
       const planeKeysB = new Set(planesB.map(pl => planeKeyOf(pl.n, pl.D)));
       const sharedMerged = new Map();    // 平面 key → { n, pts: [...A/B 的顶点], ref: A 的面 }
@@ -426,9 +464,10 @@ function buildGeometry(mineral, habit, mask, boxHalf) {
         out.push({ ...ref, pts: h.map(([a, b]) => [u[0] * a + v[0] * b + n[0] * d, u[1] * a + v[1] * b + n[1] * d, u[2] * a + v[2] * b + n[2] * d]) });
       }
       polys = out;
-      wholeFaces = whole;
-    }
-  }
+      }                       // sweepHex else 收尾
+      wholeFaces = whole;     // 两种并集共用：单体/拆解视图 = 原始两完整体
+    }                         // halfTwin else 收尾
+  }                           // 贯穿双晶分支收尾
 
   // 顶点去重 + 归一化：包围盒居中，最长边缩到 2
   const all = polys.flatMap(f => f.pts);
@@ -572,6 +611,7 @@ for (const m of MINERALS) {
         plane: h.twin.plane ?? null,   // 接触双晶：结合面（石英日本律 {11-22}）
         delta: h.twin.delta ?? null,
         halfTwin: h.twin.halfTwin ?? null,   // 切转模型：成分面截断两半、前半转 180° 拼回（尖晶石律）
+        sweepHex: h.twin.sweepHex ?? null,   // 伪六方扫平：同法线平行对面取较大面距重建并集（道芬律）
         splitDir,   // 拆解方向（晶体坐标）：接触型沿结合面法向，贯穿型沿双晶轴
         demo: h.twin.demo ?? null,   // 演示文案（每条双晶律自己的 names/steps），丢掉就只剩通用兜底
       } : null,

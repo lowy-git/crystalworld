@@ -625,7 +625,7 @@ check("石英道芬律：绕 [0001] 转 180° 的穿插双晶（mode=axis, axis=
   const t = run(`JSON.stringify(habit().twin)`);
   return /"mode":"axis"/.test(t) && /"axis":\[0,0,1\]/.test(t) && run(`habit().twin.angle`) === 180;
 })(), run(`JSON.stringify(habit().twin)`));
-check("道芬律并集：两体真实穿插——42 面（m6+z12+r楔条24）、双体面并存、无 NaN、无微碎片", (() => {
+check("道芬律并集：伪六方扫平——18 面（m6+r6+z6 等距）、域体交替标注、无 NaN、无微碎片", (() => {
   const r = run(`JSON.stringify((() => {
     const polyArea = pts => {
       let nx=0, ny=0, nz=0;
@@ -635,18 +635,23 @@ check("道芬律并集：两体真实穿插——42 面（m6+z12+r楔条24）、
       }
       return Math.hypot(nx, ny, nz) / 2;
     };
-    const byForm = {};
-    for (const f of GEO.faces) byForm[f.form] = (byForm[f.form] || 0) + 1;
-    return { n: GEO.faces.length, byForm, indivs: [...new Set(GEO.faces.map(f => f.indiv))].sort(),
+    const byForm = {}, byIndiv = {};
+    for (const f of GEO.faces) {
+      byForm[f.form] = (byForm[f.form] || 0) + 1;
+      byIndiv[f.indiv] = (byIndiv[f.indiv] || 0) + 1;
+    }
+    return { n: GEO.faces.length, byForm, byIndiv,
       nan: GEO.faces.some(f => !isFinite(f.n[0])),
       minA: +Math.min(...GEO.faces.map(f => polyArea(f.pts))).toFixed(3) };
   })())`);
   const o = JSON.parse(r);
-  // 正确并集包络（quartzpage 伪六方）：六个同法线平行对取更远的 z 面 → z 全 12 张保留、
-  // r 面被对方 z 面截成边缘楔条（24 片）、m 柱面合并 6 张。A 面未裁剪的旧 bug 是 36 面。
-  return o.n === 42 && o.byForm["0"] === 6 && o.byForm["1"] === 24 && o.byForm["2"] === 12
-    && o.indivs.join() === "0,1" && o.nan === false && o.minA > 0.05;
-})(), `o=${run("JSON.stringify((() => { const pa=pts=>{let nx=0,ny=0,nz=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];nx+=(p[1]-q[1])*(p[2]+q[2]);ny+=(p[2]-q[2])*(p[0]+q[0]);nz+=(p[0]-q[0])*(p[1]+q[1]);}return Math.hypot(nx,ny,nz)/2;}; const bf={}; for (const f of GEO.faces) bf[f.form]=(bf[f.form]||0)+1; return { n: GEO.faces.length, byForm: bf, indivs: [...new Set(GEO.faces.map(f=>f.indiv))].sort(), minA: +Math.min(...GEO.faces.map(f=>pa(f.pts))).toFixed(3) }; })())")}`);
+  // 扫平并集（SMORF Quartz_009/012 道芬双晶图版：锥面等距、两域交织）：
+  // 每个同法线平行对（A-r ∥ B-z）取更大面距重建 → 六张等大锥面 + 六棱柱，
+  // 被抬面距的 r 形面 = B 域（indiv 1），m/z 形面 = A 域（indiv 0）。
+  return o.n === 18 && o.byForm["0"] === 6 && o.byForm["1"] === 6 && o.byForm["2"] === 6
+    && o.byIndiv["0"] === 12 && o.byIndiv["1"] === 6
+    && o.nan === false && o.minA > 0.05;
+})(), `o=${run("JSON.stringify((() => { const pa=pts=>{let nx=0,ny=0,nz=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];nx+=(p[1]-q[1])*(p[2]+q[2]);ny+=(p[2]-q[2])*(p[0]+q[0]);nz+=(p[0]-q[0])*(p[1]+q[1]);}return Math.hypot(nx,ny,nz)/2;}; const bf={},bi={}; for (const f of GEO.faces) { bf[f.form]=(bf[f.form]||0)+1; bi[f.indiv]=(bi[f.indiv]||0)+1; } return { n: GEO.faces.length, byForm: bf, byIndiv: bi, minA: +Math.min(...GEO.faces.map(f=>pa(f.pts))).toFixed(3) }; })())")}`);
 check("道芬律双体：单体 A/B 各自闭合流形（完整个体几何；并集楔缝的 T 形结为已知限制，渲染无碍）", (() => {
   const r = run(`JSON.stringify((() => {
     const closed1 = () => {
