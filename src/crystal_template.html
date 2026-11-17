@@ -640,6 +640,8 @@
             <button class="btn" id="spB">只看 B</button>
           </div>
           <div class="swarning">接触双晶沿结合面法向分开；贯穿双晶沿双晶轴分开（萤石 [111]）。</div>
+          <button class="btn" id="genDemoBtn" type="button" style="width:100%;margin-top:4px;display:none">▶ 生成演示：切割 → 拼合</button>
+          <div class="swarning" id="genCaption" style="display:none;margin-top:4px;font-size:12px;line-height:1.6;color:var(--ink)"></div>
         </div>
       </div>
     </div>
@@ -1314,11 +1316,21 @@ function rebuildGeometry() {
   // （萤石尖晶石律会露出满屏碎三角）。所以拆开或只看一个体时，切换成"完整个体"几何。
   const hasWhole = !!(v.hid && v.hid.some(x => x));
   // 演示第 3 步（穿插视图）也用完整体：并集包络看不出"两体互咬"，半透明重叠才看得出
-  const useWhole = hasWhole && (!!off || keepIndiv !== null || state.twinStep === 2);
+  // 生成演示（尖晶石律切割拼合）：阶段显式控制完整体/切半体——GEN.half=false 且只看
+  // 单体时用 hid 完整体；GEN.half=true 用并集半体（切剩的一半）。
+  const useWhole = hasWhole && (GEN ? (keepIndiv !== null && !GEN.half)
+                                    : (!!off || keepIndiv !== null || state.twinStep === 2));
+  // 相向移动：演示阶段两半各走一半路程（A −off/2、B +off/2），日常拆解仍只移 B
+  const offHalf = off ? off.map(x => x * 0.5) : null;
+  const offNeg = offHalf ? offHalf.map(x => -x) : null;
   const faces = [];
   v.f.forEach((loop, fi) => {
     if (hasWhole && !!v.hid[fi] !== useWhole) return;
-    const shift = (off && v.indiv[fi] === 1) ? off : null;
+    let shift = null;
+    if (off) {
+      if (v.indiv[fi] === 1) shift = GEN ? offHalf : off;
+      else if (GEN && v.indiv[fi] === 0) shift = offNeg;
+    }
     const pts = loop.map(i => {
       const p = P[i];
       return shift ? [p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]] : p;
@@ -4353,6 +4365,7 @@ function renderMuseum() {
    初值 = 产地预设（bg/base/rig/restPose/transp 都来自 setup），用户可在此覆盖；
    透明度滑杆与晶体台右面板同一语义（滑杆=透明度，state.alpha=不透明度）。 */
 let TWIN_DEMO_SAVE = null;   // 进演示前的状态存档（alpha/transp/twinTint/twinShow），退出时恢复
+let GEN = null;              // 生成演示状态（syncPanels 初始化期就会判空，声明必须在前）
 function applyTwinStep() {
   const s = state.twinStep;
   if (s == null) {
@@ -4723,6 +4736,10 @@ function syncPanels() {
   document.getElementById("spBoth").classList.toggle("on", state.twinShow === "both");
   document.getElementById("spA").classList.toggle("on", state.twinShow === "A");
   document.getElementById("spB").classList.toggle("on", state.twinShow === "B");
+  // 生成演示按钮只在切转模型双晶（尖晶石律）出现；演示中切走则停止还原
+  const genBtn = document.getElementById("genDemoBtn");
+  if (genBtn) genBtn.style.display = (tw && tw.halfTwin) ? "" : "none";
+  if (GEN && !(tw && tw.halfTwin)) genDemoStop();
   renderLusters();
   renderTransp();
   renderInclusions();
@@ -5232,6 +5249,81 @@ mobAutoClose("minerals", ".mitem");   // 矿物列表项是 div.mitem 不是 but
 mobAutoClose("habits", "button");
 mobAutoClose("systems", "button");
 mobAutoClose("mList", ".mitem");
+
+/* ============ 尖晶石律双晶 · 生成演示 ============
+   阶段化动画：完整八面体 → 沿 {111} 成分面切半 → 另一个体切半（绕 [111] 转 180°
+   的孪晶取向）→ 两半相向移动 → 成分面上拼合。仅切转模型（halfTwin）双晶支持；
+   动画驱动现有的拆解位移机制（twinSplit），演示中两半各走一半路程。 */
+const GEN_PHASES = [
+  { half: false, show: "A",    split: 0, dt: 1500, cap: "① 个体 A：完整八面体 {111}" },
+  { half: true,  show: "A",    split: 0, dt: 1500, cap: "② 沿 {111} 成分面切开——留下背半" },
+  { half: false, show: "B",    split: 0, dt: 1500, cap: "③ 个体 B：完整八面体" },
+  { half: true,  show: "B",    split: 0, dt: 1500, cap: "④ 同样切开取前半——绕 [111] 转 180° 的孪晶取向" },
+  { half: true,  show: "both", split: 1, anim: true, dt: 1900, cap: "⑤ 两半相向移动，在成分面上拼合" },
+  { half: true,  show: "both", split: 0, dt: 1e9,  cap: "⑥ 尖晶石律双晶拼合完成——赤道接缝一周锯齿状凹入棱" },
+];
+// GEN 声明在 TWIN_DEMO_SAVE 旁（syncPanels 初始化期先于本块执行，避免 TDZ）
+
+function genDemoPhase(i) {
+  if (!GEN) return;
+  if (i >= GEN_PHASES.length) {          // 收尾：停在最终形态，等用户手动停止
+    GEN.phase = GEN_PHASES.length - 1;
+    GEN.half = GEN_PHASES[GEN.phase].half;
+    GEN.t0 = Date.now();
+    document.getElementById("genCaption").textContent = GEN_PHASES[GEN.phase].cap;
+    document.getElementById("genDemoBtn").textContent = "⏹ 停止演示";
+    return;
+  }
+  GEN.phase = i;
+  const ph = GEN_PHASES[i];
+  GEN.half = ph.half;
+  GEN.t0 = Date.now();
+  state.twinShow = ph.show;
+  state.twinSplit = ph.split;
+  document.getElementById("genCaption").textContent = ph.cap;
+  rebuildGeometry(); draw();
+  GEN.timer = setTimeout(genDemoTick, 40);
+}
+
+function genDemoTick() {
+  if (!GEN) return;
+  const h = habit();
+  if (!h || !h.twin || !h.twin.halfTwin) { genDemoStop(); return; }   // 演示中切走双晶：停
+  const ph = GEN_PHASES[GEN.phase];
+  const t = (Date.now() - GEN.t0) / ph.dt;
+  if (ph.anim) {                          // 相向移动插值：twinSplit 1 → 0
+    state.twinSplit = Math.max(0, Math.min(1, 1 - t));
+    rebuildGeometry(); draw();
+  }
+  if (t >= 1) { genDemoPhase(GEN.phase + 1); return; }
+  GEN.timer = setTimeout(genDemoTick, 40);
+}
+
+function genDemoStart() {
+  if (GEN) { genDemoStop(); return; }
+  const h = habit();
+  if (!h || !h.twin || !h.twin.halfTwin) { flash("生成演示仅支持切转模型双晶（尖晶石律）"); return; }
+  GEN = { phase: 0, t0: 0, timer: null, half: false,
+    saved: { alpha: state.alpha, transp: state.transp, twinTint: state.twinTint,
+             twinShow: state.twinShow, twinSplit: state.twinSplit } };
+  state.alpha = 1; state.transp = "opaque"; state.twinTint = true;   // 域体着色可见
+  document.getElementById("genCaption").style.display = "";
+  document.getElementById("genDemoBtn").textContent = "⏹ 停止演示";
+  genDemoPhase(0);
+}
+
+function genDemoStop() {
+  if (!GEN) return;
+  if (GEN.timer) clearTimeout(GEN.timer);
+  const sv = GEN.saved;
+  state.alpha = sv.alpha; state.transp = sv.transp; state.twinTint = sv.twinTint;
+  state.twinShow = sv.twinShow; state.twinSplit = sv.twinSplit;
+  GEN = null;
+  document.getElementById("genCaption").style.display = "none";
+  document.getElementById("genDemoBtn").textContent = "▶ 生成演示：切割 → 拼合";
+  syncPanels(); rebuildGeometry(); draw();
+}
+document.getElementById("genDemoBtn").onclick = () => genDemoStart();
 
 /* ============ 主题：亮 / 暗 / 跟随系统 ============
    默认「亮」——原来的深色配色在白天像一块黑屏。三态循环，存 localStorage。

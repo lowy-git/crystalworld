@@ -1672,6 +1672,37 @@ const glLastOptsOk = (glw, vw, vh) => {
     const r = run(`JSON.stringify({ mode: state.inputMode })`);
     return JSON.parse(r).mode === "mouse";
   })(), `o=${run("JSON.stringify({mode:state.inputMode})")}`);
+  const genScript = `JSON.stringify((() => {
+      location.hash = "#/studio"; applyRoute();
+      selectMineral("fluorite");
+      const hbList = [...document.getElementById("habits").children].map(b => b.textContent.slice(0, 12));
+      const hi = DATA.minerals.find(m => m.id === "fluorite").habits.findIndex(h => h.id === "spinel-twin");
+      const hb = [...document.getElementById("habits").children][hi];   // 桩的 innerHTML 不产 textContent，按索引定位
+      if (!hb) return { noHabits: hbList, hi, mineral: state.mineralId, mode: document.body.className };
+      hb.onclick();
+      const btn = document.getElementById("genDemoBtn");
+      const vis = btn.style.display !== "none";
+      const tint0 = state.twinTint, alpha0 = state.alpha, show0 = state.twinShow;
+      btn.onclick();                                    // 开演：阶段 0 = 完整个体 A
+      const p0 = { cap: document.getElementById("genCaption").textContent.slice(0, 1),
+                   show: state.twinShow, faces: GEO.faces.length,
+                   alpha: state.alpha, tint: state.twinTint,
+                   capShown: document.getElementById("genCaption").style.display !== "none" };
+      btn.onclick();                                    // 停止还原
+      const off = { hidden: document.getElementById("genCaption").style.display === "none",
+                    label: btn.textContent.indexOf("生成演示") >= 0,
+                    tint: state.twinTint, alpha: state.alpha, show: state.twinShow,
+                    tint0, alpha0, show0 };
+      return { vis, p0, off };
+    })())`;
+  check("生成演示（尖晶石律切割拼合）：点击开演→阶段字幕+完整单体几何→再点停止还原", (() => {
+    const o = JSON.parse(run(genScript));
+    if (o.noHabits) return false;
+    return o.vis && o.p0.cap === "①" && o.p0.show === "A" && o.p0.faces === 8
+      && o.p0.alpha === 1 && o.p0.tint === true && o.p0.capShown
+      && o.off.hidden && o.off.label
+      && o.off.tint === o.off.tint0 && o.off.alpha === o.off.alpha0 && o.off.show === o.off.show0;
+  })(), `o=${run(genScript)}`);
   check("「带当前组合去造型台」：mLoad 不还原快照，组合带进工作区", (() => {
     const r = run(`JSON.stringify((() => {
       location.hash = "#/m/pyrite/navajun"; applyRoute();
